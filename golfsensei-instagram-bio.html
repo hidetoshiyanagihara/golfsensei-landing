@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ゴルフせんせい - オンラインゴルフレッスン講師募集中。全国対応、手数料10%、自由なスケジュール。">
+  <meta property="og:title" content="ゴルフせんせい — 講師募集">
+  <meta property="og:description" content="あなたのゴルフ知識を全国の生徒に。オンラインレッスン講師募集。">
+  <meta property="og:image" content="https://golfsensei.jp/og-image.png">
+  <title>ゴルフせんせい — 講師募集 | オンラインレッスンプラットフォーム</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Arial, sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: #333;
+      padding: 15px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 450px;
+      margin: 0 auto;
+    }
+
+    /* ヘッダー */
+    .header {
+      text-align: center;
+      color: white;
+      padding: 30px 0;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      margin: -15px -15px 0 -15px;
+      padding: 40px 20px;
+    }
+
+    .logo {
+      font-size: 60px;
+      margin-bottom: 15px;
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .subheading {
+      font-size: 14px;
+      opacity: 0.9;
+      font-weight: 500;
+    }
+
+    /* カード */
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .card h2 {
+      font-size: 18px;
+      color: #1e3c72;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+    }
+
+    .card-icon {
+      font-size: 24px;
+      margin-right: 10px;
+    }
+
+    .card p {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* 特徴リスト */
+    .features {
+      background: white;
+      border-radius: 16px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .features h2 {
+      font-size: 18px;
+      color: #1e3c72;
+      margin-bottom: 18px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .feature-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .feature-check {
+      font-size: 20px;
+      color: #22c55e;
+      margin-right: 12px;
+      flex-shrink: 0;
+      font-weight: bold;
+    }
+
+    .feature-text {
+      flex: 1;
+    }
+
+    .feature-text strong {
+      display: block;
+      color: #1e3c72;
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+
+    .feature-text small {
+      font-size: 12px;
+      color: #999;
+    }
+
+    /* CTA ボタン */
+    .cta-button {
+      display: block;
+      width: 100%;
+      padding: 18px;
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      color: white;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 15px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 5px 15px rgba(34, 197, 94, 0.3);
+      border: none;
+      cursor: pointer;
+    }
+
+    .cta-button:active {
+      transform: translateY(2px);
+      box-shadow: 0 3px 10px rgba(34, 197, 94, 0.2);
+    }
+
+    .cta-button:hover {
+      transform: translateY(-2px);
+    }
+
+    /* セカンダリボタン */
+    .secondary-button {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: white;
+      color: #1e3c72;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 15px;
+      border: 2px solid #1e3c72;
+      transition: background 0.2s;
+    }
+
+    .secondary-button:active {
+      background: #f8f9fa;
+    }
+
+    /* スタッツ */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #22c55e;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #999;
+      font-weight: 500;
+    }
+
+    /* フッター */
+    footer {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.7);
+      padding: 20px;
+      font-size: 12px;
+      margin-bottom: 20px;
+    }
+
+    footer a {
+      color: white;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    /* タブ表示（今後のプラットフォーム状態） */
+    .beta-badge {
+      display: inline-block;
+      background: #fbbf24;
+      color: #78350f;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 15px;
+    }
+
+    /* フォーム セクション */
+    .form-preview {
+      background: white;
+      border-radius: 16px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .form-preview h3 {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+
+    .form-field {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .form-field:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .form-label {
+      font-size: 12px;
+      color: #999;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .form-value {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    /* モーダル背景 */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      animation: fadeIn 0.3s;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 16px;
+      padding: 30px 20px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      animation: slideUp 0.3s;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal h2 {
+      font-size: 20px;
+      color: #1e3c72;
+      margin-bottom: 10px;
+    }
+
+    .modal p {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .modal-close {
+      background: #1e3c72;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    /* Instagram シェア用バッジ */
+    .insta-share {
+      background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: center;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+
+    @media (max-width: 600px) {
+      .card, .features, .form-preview {
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="logo">⛳</div>
+      <h1>ゴルフせんせい</h1>
+      <p class="subheading">オンラインゴルフレッスンプラットフォーム</p>
+    </div>
+
+    <!-- Instagram ユーザー向けメッセージ -->
+    <div class="insta-share">
+      📱 Instagram からアクセスいただきありがとうございます！
+    </div>
+
+    <!-- ベータバッジ -->
+    <div style="text-align: center; margin-bottom: 15px;">
+      <span class="beta-badge">準備中</span>
+    </div>
+
+    <!-- メインメッセージ -->
+    <div class="card">
+      <h2><span class="card-icon">💡</span>こんなお悩みありませんか？</h2>
+      <p>
+        ✓ ゴルフの知識をもっと活かしたい<br>
+        ✓ 自分のペースで副業がしたい<br>
+        ✓ オンラインで全国の生徒に教えたい
+      </p>
+    </div>
+
+    <!-- 解決方法 -->
+    <div class="card">
+      <h2><span class="card-icon">✨</span>ゴルフせんせいなら</h2>
+      <p>
+        あなたのゴルフスキルを、全国の生徒に届けられます。<br>
+        完全オンライン、自由なスケジュール、低い手数料。
+      </p>
+    </div>
+
+    <!-- 特徴 -->
+    <div class="features">
+      <h2>なぜゴルフせんせいなのか？</h2>
+      
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>手数料10%</strong>
+          <small>業界相場より低い手数料で、あなたの売上を最大化</small>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>全国対応</strong>
+          <small>地域制限なし。日本全国の生徒にリーチ</small>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>自由なスケジュール</strong>
+          <small>あなたのペースで予約受付。兼業も対応</small>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>登録料ゼロ</strong>
+          <small>登録から運用まで完全無料。売上だけで手数料が発生</small>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div class="feature-text">
+          <strong>月1回自動振込</strong>
+          <small>売上は安心して月1回ご指定口座にお振込</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- スタッツ -->
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-number">100%</div>
+        <div class="stat-label">オンラインレッスン</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-number">0円</div>
+        <div class="stat-label">登録料</div>
+      </div>
+    </div>
+
+    <!-- CTA ボタン -->
+    <button class="cta-button" onclick="scrollToForm()">
+      ✉️ 講師として登録（フォーム記入）
+    </button>
+
+    <a href="https://x.com/golfsensei_jp" class="secondary-button">
+      🐦 公式X（Twitter）をフォロー
+    </a>
+
+    <!-- よくある質問 -->
+    <div class="card">
+      <h2><span class="card-icon">❓</span>よくある質問</h2>
+      <p>
+        <strong style="color: #1e3c72;">Q: 初心者でも講師になれますか？</strong><br>
+        A: ゴルフへの情熱があれば大丈夫。初心者向け指導も需要があります。
+      </p>
+      <p style="margin-top: 12px;">
+        <strong style="color: #1e3c72;">Q: どのくらい稼げますか？</strong><br>
+        A: あなたの料金設定次第。1時間 5,000円で月10人教えれば月45,000円の売上です。
+      </p>
+      <p style="margin-top: 12px;">
+        <strong style="color: #1e3c72;">Q: 使い方は難しい？</strong><br>
+        A: シンプル設計です。スケジュール登録と受け取り口座設定だけ。
+      </p>
+    </div>
+
+    <!-- 登録フォーム（簡易版） -->
+    <div class="form-preview" id="formSection">
+      <h3>📝 事前登録（30秒で完了）</h3>
+      <form id="quickSignupForm" onsubmit="handleQuickSignup(event)">
+        <div class="form-field">
+          <div class="form-label">お名前 *</div>
+          <input
+            type="text"
+            placeholder="山田太郎"
+            required
+            style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+          >
+        </div>
+
+        <div class="form-field">
+          <div class="form-label">メールアドレス *</div>
+          <input
+            type="email"
+            placeholder="your-email@example.com"
+            required
+            style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+          >
+        </div>
+
+        <div class="form-field">
+          <div class="form-label">ハンディキャップ</div>
+          <input
+            type="number"
+            placeholder="例: 5"
+            step="0.1"
+            style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+          >
+        </div>
+
+        <button type="submit" class="cta-button" style="margin-top: 15px;">
+          事前登録する
+        </button>
+      </form>
+    </div>
+
+    <!-- サポート -->
+    <div class="card">
+      <h2><span class="card-icon">💬</span>ご質問・ご相談</h2>
+      <p>
+        何かご不明な点があれば、<br>
+        お気軽にお問い合わせください。
+      </p>
+      <a href="https://x.com/golfsensei_jp" style="color: #22c55e; font-weight: 600; text-decoration: none;">
+        → 公式 X アカウントへ
+      </a>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>ゴルフせんせい | オンラインゴルフレッスンマッチングプラットフォーム</p>
+      <p style="margin-top: 10px;">
+        <a href="https://golfsensei.jp">golfsensei.jp</a>
+      </p>
+    </footer>
+  </div>
+
+  <!-- 成功モーダル -->
+  <div class="modal-backdrop" id="successModal">
+    <div class="modal">
+      <div style="font-size: 40px; margin-bottom: 15px;">✓</div>
+      <h2>登録ありがとうございます！</h2>
+      <p>
+        プラットフォーム公開時に、登録いただいたメールアドレスへお知らせを送信します。<br><br>
+        詳しいお話は公式 X で随時更新しています。
+      </p>
+      <button class="modal-close" onclick="closeModal()">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+    function scrollToForm() {
+      const formSection = document.getElementById('formSection');
+      formSection.scrollIntoView({ behavior: 'smooth' });
+      // フォームの最初のインプットにフォーカス
+      setTimeout(() => {
+        formSection.querySelector('input').focus();
+      }, 500);
+    }
+
+    function handleQuickSignup(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      
+      const data = {
+        name: formData.get('name') || form.querySelector('input[type="text"]').value,
+        email: form.querySelector('input[type="email"]').value,
+        handicap: form.querySelector('input[type="number"]').value || null,
+        registeredAt: new Date().toISOString(),
+        source: 'instagram-bio',
+      };
+
+      // データ保存（ブラウザローカルストレージ）
+      localStorage.setItem('golfsensei_quick_signup', JSON.stringify(data));
+
+      // 成功モーダル表示
+      showModal();
+
+      // フォーム リセット
+      form.reset();
+    }
+
+    function showModal() {
+      document.getElementById('successModal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('successModal').classList.remove('show');
+    }
+
+    // 外側クリックでモーダル閉じる
+    document.getElementById('successModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeModal();
+      }
+    });
+  </script>
+</body>
+</html>
