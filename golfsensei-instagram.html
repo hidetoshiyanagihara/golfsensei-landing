@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ゴルフせんせい — 指導者募集</title>
+<title>ゴルフせんせい</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@200;300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -19,7 +19,7 @@
   }
 
   .frame {
-    max-width: 720px;
+    max-width: 460px;
     margin: 0 auto;
   }
 
@@ -28,30 +28,30 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 32px 56px;
+    padding: 24px 28px;
     border-bottom: 1px solid #ececea;
   }
 
   nav .brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
   }
 
   nav img {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
   }
 
   nav .brand-name {
     font-family: 'EB Garamond', serif;
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 500;
     color: #14140f;
   }
 
   nav .nav-link {
-    font-size: 11px;
+    font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #a8a8a8;
@@ -60,128 +60,112 @@
 
   /* ヒーロー */
   .hero {
-    padding: 120px 56px 0;
+    padding: 88px 32px 0;
     text-align: center;
   }
 
   .hero .en {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
-    letter-spacing: 0.32em;
+    letter-spacing: 0.3em;
     text-transform: uppercase;
     color: #a8a8a8;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }
 
   .hero h1 {
     font-family: 'EB Garamond', serif;
-    font-size: 52px;
+    font-size: 32px;
     font-weight: 500;
     color: #14140f;
     letter-spacing: 0.01em;
-    line-height: 1.3;
-    margin-bottom: 32px;
+    line-height: 1.4;
+    margin-bottom: 24px;
   }
 
   .hero .lede {
-    font-size: 15px;
+    font-size: 13.5px;
     line-height: 2;
     color: #6b6b64;
     font-weight: 300;
-    max-width: 460px;
-    margin: 0 auto;
   }
 
   .rule {
-    width: 32px;
+    width: 28px;
     height: 1px;
     background: #c9a961;
-    margin: 96px auto;
+    margin: 72px auto;
   }
 
-  /* プリンシプル */
-  .principles-wrap {
-    padding: 0 56px;
+  /* セクション見出し */
+  .principles-wrap,
+  .process-wrap,
+  .form-wrap {
+    padding: 0 32px;
   }
 
   .section-eyebrow {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     letter-spacing: 0.28em;
     text-transform: uppercase;
     color: #a8a8a8;
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
 
   .section-title {
     font-family: 'EB Garamond', serif;
-    font-size: 30px;
+    font-size: 24px;
     font-weight: 500;
     color: #14140f;
     text-align: center;
-    margin-bottom: 72px;
+    margin-bottom: 56px;
   }
 
-  .principles-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0;
-  }
-
+  /* プリンシプル（1カラム、罫線区切り） */
   .principle {
-    padding: 40px 32px;
+    padding: 30px 0;
     border-top: 1px solid #ececea;
-    border-right: 1px solid #ececea;
+    display: flex;
+    gap: 20px;
+    align-items: baseline;
   }
 
-  .principle:nth-child(2n) {
-    border-right: none;
-  }
-
-  .principle:nth-last-child(-n+2) {
+  .principle:last-child {
     border-bottom: 1px solid #ececea;
   }
 
   .principle .index {
     font-family: 'EB Garamond', serif;
     font-style: italic;
-    font-size: 17px;
+    font-size: 15px;
     color: #c9a961;
-    margin-bottom: 18px;
-    display: block;
+    width: 22px;
+    flex-shrink: 0;
   }
 
   .principle h3 {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 500;
     letter-spacing: 0.06em;
     color: #14140f;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     text-transform: uppercase;
   }
 
   .principle p {
-    font-size: 13px;
+    font-size: 12.5px;
     line-height: 1.8;
     color: #8a8a82;
     font-weight: 300;
   }
 
   /* プロセス */
-  .process-wrap {
-    padding: 0 56px;
-  }
-
-  .process-list {
-    max-width: 480px;
-    margin: 0 auto;
-  }
-
   .process-row {
     display: flex;
-    gap: 28px;
-    padding: 32px 0;
+    gap: 22px;
+    padding: 28px 0;
     border-top: 1px solid #ececea;
     align-items: baseline;
   }
@@ -193,14 +177,14 @@
   .process-row .num {
     font-family: 'EB Garamond', serif;
     font-style: italic;
-    font-size: 15px;
+    font-size: 14px;
     color: #c9a961;
-    width: 20px;
+    width: 18px;
     flex-shrink: 0;
   }
 
   .process-row h4 {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 500;
     letter-spacing: 0.04em;
     color: #14140f;
@@ -208,35 +192,20 @@
   }
 
   .process-row p {
-    font-size: 13px;
+    font-size: 12.5px;
     line-height: 1.75;
     color: #8a8a82;
     font-weight: 300;
   }
 
   /* フォーム */
-  .form-wrap {
-    padding: 0 56px;
-  }
-
-  .form-inner {
-    max-width: 480px;
-    margin: 0 auto;
-  }
-
   .field {
-    margin-bottom: 30px;
-  }
-
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 28px;
+    margin-bottom: 26px;
   }
 
   .field label {
     display: block;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -245,7 +214,6 @@
   }
 
   .field input,
-  .field select,
   .field textarea {
     width: 100%;
     border: none;
@@ -256,7 +224,6 @@
     color: #14140f;
     background: transparent;
     transition: border-color 0.3s ease;
-    appearance: none;
   }
 
   .field input::placeholder,
@@ -266,7 +233,6 @@
   }
 
   .field input:focus,
-  .field select:focus,
   .field textarea:focus {
     outline: none;
     border-color: #c9a961;
@@ -274,41 +240,14 @@
 
   .field textarea {
     resize: none;
-    min-height: 70px;
-  }
-
-  .check-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px 20px;
-    margin-top: 4px;
-  }
-
-  .check-item {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-  }
-
-  .check-item input {
-    width: 15px;
-    height: 15px;
-    accent-color: #14140f;
-  }
-
-  .check-item label {
-    font-size: 13px;
-    color: #4a4a44;
-    font-weight: 300;
-    text-transform: none;
-    letter-spacing: 0;
+    min-height: 64px;
   }
 
   .agree {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    margin: 40px 0 0;
+    margin: 32px 0 0;
   }
 
   .agree input {
@@ -320,22 +259,22 @@
   }
 
   .agree label {
-    font-size: 12px;
+    font-size: 11.5px;
     color: #8a8a82;
     line-height: 1.6;
   }
 
   .submit {
     width: 100%;
-    padding: 18px;
+    padding: 17px;
     background: #14140f;
     color: #fff;
     border: none;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    margin-top: 40px;
+    margin-top: 36px;
     cursor: pointer;
     transition: background 0.4s ease;
   }
@@ -345,7 +284,7 @@
   .success {
     display: none;
     text-align: center;
-    padding: 60px 0;
+    padding: 48px 0;
   }
 
   .success.show { display: block; }
@@ -353,23 +292,23 @@
   .success p {
     font-family: 'EB Garamond', serif;
     font-style: italic;
-    font-size: 19px;
+    font-size: 16px;
     color: #14140f;
     line-height: 1.8;
   }
 
   /* フッター */
   footer {
-    padding: 120px 56px 64px;
+    padding: 96px 32px 56px;
     text-align: center;
   }
 
   footer .contact {
-    font-size: 13px;
+    font-size: 12.5px;
     color: #6b6b64;
     font-weight: 300;
     line-height: 1.9;
-    margin-bottom: 40px;
+    margin-bottom: 36px;
   }
 
   footer .contact a {
@@ -378,10 +317,10 @@
     border-bottom: 1px solid #c9a961;
   }
 
-  footer .rule { margin: 0 auto 28px; }
+  footer .rule { margin: 0 auto 26px; }
 
   footer .en {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 500;
     letter-spacing: 0.24em;
     text-transform: uppercase;
@@ -390,26 +329,13 @@
   }
 
   footer .copyright {
-    font-size: 11px;
+    font-size: 10.5px;
     color: #c4c4c0;
   }
 
   footer .copyright a {
     color: #a8a8a8;
     text-decoration: none;
-  }
-
-  @media (max-width: 640px) {
-    nav { padding: 24px 24px; }
-    .hero { padding: 80px 24px 0; }
-    .hero h1 { font-size: 36px; }
-    .principles-wrap, .process-wrap, .form-wrap { padding: 0 24px; }
-    .principles-grid { grid-template-columns: 1fr; }
-    .principle { border-right: none !important; }
-    .principle:last-child { border-bottom: 1px solid #ececea; }
-    .field-row { grid-template-columns: 1fr; gap: 0; }
-    .check-list { grid-template-columns: 1fr; }
-    footer { padding: 80px 24px 48px; }
   }
 </style>
 </head>
@@ -428,8 +354,9 @@
     <div class="en">Instructor Application</div>
     <h1>一流の指導に、<br>正当な評価を。</h1>
     <p class="lede">
-      あなたの指導には、それに見合う価値がある。
-      オンラインだからこそ、その価値を全国の生徒へ届けられます。
+      あなたの指導には、それに見合う価値がある。<br>
+      オンラインだからこそ、その価値を<br>
+      全国の生徒へ届けられます。
     </p>
   </div>
 
@@ -438,24 +365,31 @@
   <div class="principles-wrap">
     <div class="section-eyebrow">Principles</div>
     <div class="section-title">四つの前提</div>
-    <div class="principles-grid">
-      <div class="principle">
-        <span class="index">01</span>
+
+    <div class="principle">
+      <div class="index">01</div>
+      <div>
         <h3>手数料 10%</h3>
         <p>業界水準を大きく上回る還元率。指導の対価は、正しくあなたのものに。</p>
       </div>
-      <div class="principle">
-        <span class="index">02</span>
+    </div>
+    <div class="principle">
+      <div class="index">02</div>
+      <div>
         <h3>全国という舞台</h3>
         <p>場所を選ばないからこそ、日本全国の生徒との出会いがあります。</p>
       </div>
-      <div class="principle">
-        <span class="index">03</span>
+    </div>
+    <div class="principle">
+      <div class="index">03</div>
+      <div>
         <h3>裁量ある時間</h3>
         <p>移動のない指導だから、スケジュールはあなたが自由に定められます。</p>
       </div>
-      <div class="principle">
-        <span class="index">04</span>
+    </div>
+    <div class="principle">
+      <div class="index">04</div>
+      <div>
         <h3>月次精算</h3>
         <p>毎月一度、指定口座へお振込みします。</p>
       </div>
@@ -467,27 +401,26 @@
   <div class="process-wrap">
     <div class="section-eyebrow">Process</div>
     <div class="section-title">登録までの流れ</div>
-    <div class="process-list">
-      <div class="process-row">
-        <div class="num">01</div>
-        <div>
-          <h4>登録フォームへの入力</h4>
-          <p>下記フォームより、お名前と連絡先、指導内容をお知らせください。</p>
-        </div>
+
+    <div class="process-row">
+      <div class="num">01</div>
+      <div>
+        <h4>フォームへの入力</h4>
+        <p>お名前と連絡先、指導内容をお知らせください。</p>
       </div>
-      <div class="process-row">
-        <div class="num">02</div>
-        <div>
-          <h4>審査と受理</h4>
-          <p>内容確認の後、プラットフォーム公開に合わせてご連絡いたします。</p>
-        </div>
+    </div>
+    <div class="process-row">
+      <div class="num">02</div>
+      <div>
+        <h4>審査と受理</h4>
+        <p>公開に合わせて、あらためてご連絡いたします。</p>
       </div>
-      <div class="process-row">
-        <div class="num">03</div>
-        <div>
-          <h4>指導の開始</h4>
-          <p>プロフィールの公開とともに、生徒との出会いが始まります。</p>
-        </div>
+    </div>
+    <div class="process-row">
+      <div class="num">03</div>
+      <div>
+        <h4>指導の開始</h4>
+        <p>プロフィール公開とともに、生徒との出会いが始まります。</p>
       </div>
     </div>
   </div>
@@ -498,84 +431,31 @@
     <div class="section-eyebrow">Application</div>
     <div class="section-title">事前登録</div>
 
-    <div class="form-inner">
-      <form id="detailedForm" onsubmit="handleSubmit(event)">
-        <div class="field-row">
-          <div class="field">
-            <label>お名前</label>
-            <input type="text" placeholder="山田 太郎" required>
-          </div>
-          <div class="field">
-            <label>メールアドレス</label>
-            <input type="email" placeholder="you@example.com" required>
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label>電話番号（任意）</label>
-            <input type="tel" placeholder="090-0000-0000">
-          </div>
-          <div class="field">
-            <label>ハンディキャップ（任意）</label>
-            <input type="number" step="0.1" placeholder="例　5.0">
-          </div>
-        </div>
-
-        <div class="field">
-          <label>実績・経歴（任意）</label>
-          <textarea placeholder="指導歴、公式ハンディキャップ、受賞歴など"></textarea>
-        </div>
-
-        <div class="field">
-          <label>指導内容</label>
-          <div class="check-list">
-            <div class="check-item">
-              <input type="checkbox" id="c1"><label for="c1">スイング指導</label>
-            </div>
-            <div class="check-item">
-              <input type="checkbox" id="c2"><label for="c2">アプローチ・パッティング</label>
-            </div>
-            <div class="check-item">
-              <input type="checkbox" id="c3"><label for="c3">コースマネジメント</label>
-            </div>
-            <div class="check-item">
-              <input type="checkbox" id="c4"><label for="c4">初心者指導</label>
-            </div>
-            <div class="check-item">
-              <input type="checkbox" id="c5"><label for="c5">メンタル面の指導</label>
-            </div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>想定するレッスン料金（任意）</label>
-          <select>
-            <option value="">選択してください</option>
-            <option>3,000円未満</option>
-            <option>3,000〜5,000円</option>
-            <option>5,000〜8,000円</option>
-            <option>8,000〜10,000円</option>
-            <option>10,000円以上</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>自己紹介（任意）</label>
-          <textarea placeholder="指導方針、大切にしていることなど"></textarea>
-        </div>
-
-        <div class="agree">
-          <input type="checkbox" id="agree" required>
-          <label for="agree">利用規約およびプライバシーポリシーに同意します</label>
-        </div>
-
-        <button type="submit" class="submit">登録する</button>
-      </form>
-
-      <div class="success" id="success">
-        <p>登録を承りました。<br>公開に合わせて、あらためてご連絡いたします。</p>
+    <form id="signupForm" onsubmit="handleSubmit(event)">
+      <div class="field">
+        <label>お名前</label>
+        <input type="text" name="fullName" placeholder="山田 太郎" required>
       </div>
+      <div class="field">
+        <label>メールアドレス</label>
+        <input type="email" name="email" placeholder="you@example.com" required>
+      </div>
+      <div class="field">
+        <label>ハンディキャップ（任意）</label>
+        <input type="number" name="handicap" step="0.1" placeholder="例　5.0">
+      </div>
+      <div class="field">
+        <label>自己紹介（任意）</label>
+        <textarea name="bio" placeholder="指導の方針、実績など"></textarea>
+      </div>
+      <div class="agree">
+        <input type="checkbox" id="agree" required>
+        <label for="agree">利用規約およびプライバシーポリシーに同意します</label>
+      </div>
+      <button type="submit" class="submit" id="submitBtn">事前登録する</button>
+    </form>
+    <div class="success" id="success">
+      <p>登録を承りました。<br>公開時に、あらためてご連絡いたします。</p>
     </div>
   </div>
 
@@ -592,10 +472,45 @@
 </div>
 
 <script>
-function handleSubmit(e) {
+const SUPABASE_URL = 'https://rppjsjckhfwznsgdiehe.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwcGpzamNraGZ3em5zZ2RpZWhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MzgxNTMsImV4cCI6MjEwNDMxNDE1M30.MaoxoFRa202rUzuvQoKNWJI_-LFsTpAiZE0HDbHYijA';
+
+async function handleSubmit(e) {
   e.preventDefault();
-  document.getElementById('detailedForm').style.display = 'none';
-  document.getElementById('success').classList.add('show');
+  const form = e.target;
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+
+  const payload = {
+    full_name: form.fullName.value,
+    email: form.email.value,
+    handicap: form.handicap.value ? parseFloat(form.handicap.value) : null,
+    bio: form.bio.value || null,
+    source: 'instagram',
+  };
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/teacher_pre_registrations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) throw new Error('送信に失敗しました');
+
+    form.style.display = 'none';
+    document.getElementById('success').classList.add('show');
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = '事前登録する';
+    alert('送信できませんでした。お手数ですが、時間をおいて再度お試しください。');
+  }
 }
 </script>
 </body>
