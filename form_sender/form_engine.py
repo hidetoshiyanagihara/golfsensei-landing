@@ -179,6 +179,7 @@ RULES = [
     ("email_confirm", r"(メール|mail).*(確認|再入力|もう一度|再度|confirm|again|check|conf|2)|(確認|再入力|もう一度|再度|confirm|re_?)[^a-z]*(メール|mail)"),
     ("email", r"メール|e-?mail|mail"),
     ("kana", r"フリガナ|ふりがな|ﾌﾘｶﾞﾅ|カナ|かな|ｶﾅ|kana|furigana|ruby|yomi|読み"),
+    ("address", r"番地|丁目"),  # 「番地・屋号等」の「屋号」で会社名欄と誤認しないよう先に判定
     ("company", r"会社|御社|貴社|法人|団体|組織|勤務先|企業|社名|屋号|店名|company|corp|organization|organisation|kaisya|kaisha|firm"),
     ("department", r"部署|所属|department|busho|division"),
     ("position", r"役職|肩書|position|yakushoku|post_?title|job_?title"),
@@ -479,11 +480,16 @@ def _fill_split(fs, full, last, first, put, kana: bool):
 
 
 # ------------------------------------------------------------------ page helpers
+def _frames(page: Page) -> list[Frame]:
+    """操作できるフレームだけを返す。URL が空のフレームは中のスクリプト実行が永久に止まることがあるため除く。"""
+    return [fr for fr in page.frames if fr.url and not fr.is_detached()]
+
+
 def page_text(page: Page) -> str:
     texts = []
-    for fr in page.frames:
+    for fr in _frames(page):
         try:
-            texts.append(fr.evaluate("() => document.body ? document.body.innerText : ''"))
+            texts.append(fr.locator("body").inner_text(timeout=3000))
         except Exception:
             pass
     return nfkc("\n".join(texts))
@@ -499,7 +505,7 @@ def find_refusal(text: str) -> str | None:
 
 
 def has_captcha(page: Page) -> str | None:
-    for fr in page.frames:
+    for fr in _frames(page):
         if re.search(r"recaptcha|hcaptcha|challenges\.cloudflare", fr.url or "", re.I):
             return "reCAPTCHA等の認証あり"
         for sel in CAPTCHA_SELECTORS:
@@ -516,7 +522,7 @@ def has_captcha(page: Page) -> str | None:
 def _form_frames(page: Page) -> list[Frame]:
     """textarea を含むフレーム（iframe 埋め込みフォーム対応）を優先順に返す。"""
     frames = []
-    for fr in page.frames:
+    for fr in _frames(page):
         try:
             if fr.locator("textarea").count() > 0:
                 frames.append(fr)
@@ -645,7 +651,7 @@ def _click_submit(fr: Frame, root, phase: str) -> str | None:
 def judge_completion(page: Page, before_url: str, before_text: str) -> tuple[bool | None, str]:
     """(True=完了 / False=エラー表示 / None=不明, 根拠)。送信前から出ていた文言は根拠にしない。"""
     text = page_text(page)
-    for fr in page.frames:
+    for fr in _frames(page):
         try:
             status = fr.evaluate("() => { const f = document.querySelector('form.wpcf7-form'); return f ? (f.getAttribute('data-status') || '') : ''; }")
         except Exception:
@@ -671,7 +677,7 @@ def judge_completion(page: Page, before_url: str, before_text: str) -> tuple[boo
 
 def _input_form_visible(page: Page) -> bool:
     """入力した本文欄がまだ編集可能な状態で見えているか（確認画面かどうかの判定用）。"""
-    for fr in page.frames:
+    for fr in _frames(page):
         try:
             if fr.locator("textarea[data-axion-idx]:visible").count() > 0:
                 return True
@@ -743,7 +749,7 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
         # 入力欄が消えた＝確認画面とみなし、「送信」ボタンを押す（確認画面の「入力内容に誤りが…」等は無視）
         confirm_url, confirm_text = page.url, page_text(page)
         clicked2 = None
-        for f2 in page.frames:
+        for f2 in _frames(page):
             try:
                 clicked2 = _click_submit(f2, None, "send")
             except Exception:

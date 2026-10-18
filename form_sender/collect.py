@@ -347,14 +347,38 @@ def _site_root(url: str) -> str:
     return f"{p.scheme}://{p.netloc}/"
 
 
+GENERIC_PAGE_TITLES = {"ホーム", "home", "トップ", "top", "トップページ", "お問い合わせ", "会社概要", "会社案内", "企業情報"}
+_CORP = r"(?:株式会社|有限会社|合同会社|合資会社|合名会社)"
+
+
 def _clean_name(s: str) -> str:
+    """タイトル等から取った文字列を社名だけに整える。社名と言えなければ空文字。"""
     s = nfkc(s).strip()
     s = re.sub(r"^(?:©|\(c\)|copyright)\s*(?:\d{4}[\s\-–~]*\d{0,4})?\s*", "", s, flags=re.I)
-    s = re.sub(r"(公式(ホームページ|サイト|HP)|ホームページ|オフィシャルサイト|official site|トップページ|TOP|ホーム)$", "", s, flags=re.I)
     s = re.sub(r"\s*(all rights reserved|inc\.?|co\.,? ?ltd\.?).*$", "", s, flags=re.I).strip(" .,|-")
-    s = re.sub(r"^(名古屋市?の?|愛知県?の?)\S*?[|｜]\s*", "", s)
+    s = re.sub(r"\s*[|｜].*$", "", s)                                   # 「社名 | ROKUGO」
+    s = re.sub(r"[\s・\-]+(公式(ホームページ|サイト|HP)|ホームページ|オフィシャルサイト|official site|トップページ|TOP)$", "", s, flags=re.I)
+    # 「名古屋市北区で…なら【株式会社X】」「…の株式会社X」→ 株式会社X
+    m = re.match(rf"^.*(?:なら|の)\s*【?({_CORP}[^】]+)】?$", s) or re.match(rf"^.*【(.*{_CORP}.*)】.*$", s)
+    if m:
+        s = m.group(1)
+    elif "なら" in s:
+        s = s.rsplit("なら", 1)[1]
+    s = re.sub(r"\s*[(（][^)）]*[)）]?\s*$", "", s)                    # 末尾の（読み・英文名）
+    s = re.sub(r"[!！。].*$", "", s)                                     # 宣伝文句
+    m = re.match(rf"^(\S+?{_CORP})\s+\S.*$", s)                          # 「X株式会社 X一級建築士事務所」
+    if m:
+        s = m.group(1)
+    m = re.match(r"^(.*[ぁ-んァ-ヶ一-龥])\s+[A-Za-z][A-Za-z .,&'-]*$", s)  # 「株式会社X ASAI CONSTRUCTION」
+    if m:
+        s = m.group(1)
+    s = s.strip(" 【】「」")
+    if s.lower() in GENERIC_PAGE_TITLES:
+        return ""
     if not (2 <= len(s) <= 40) or "\n" in s:
         return ""
+    if "名古屋市" in s or re.search(r"(会社|業者)$", s) and not re.search(_CORP, s):
+        return ""  # 「名古屋市中区 不動産会社」など社名でないもの
     return s
 
 
