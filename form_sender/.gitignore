@@ -1,0 +1,5 @@
+result.csv
+screenshots/
+.collect_state.json
+__pycache__/
+*.pyc
