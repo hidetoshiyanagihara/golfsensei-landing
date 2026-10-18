@@ -57,6 +57,7 @@ document.getElementById('send').onclick = async () => {
   const fd = new URLSearchParams();
   document.querySelectorAll('#f input, #f select, #f textarea').forEach(e => { if (e.type !== 'checkbox' || e.checked) fd.append(e.name, e.value); });
   if (!document.getElementById('pp').checked) { document.getElementById('out').innerText = '同意が必要です。入力してください'; return; }
+  await new Promise(res => setTimeout(res, 15000));  // 送信処理に時間がかかるサイト
   const r = await fetch('/ajax', {method: 'POST', body: fd});
   document.getElementById('out').innerText = r.ok ? '送信が完了しました。担当者よりご連絡いたします。' : 'エラーが発生しました';
 };

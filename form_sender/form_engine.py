@@ -1,5 +1,6 @@
 """【2〜4】問い合わせフォームの検出・送信前チェック・入力・送信・完了判定（Playwright）。"""
 import re
+import time
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse
 
@@ -730,6 +731,31 @@ def _input_form_visible(page: Page) -> bool:
     return False
 
 
+def _rejected(page: Page, base_text: str, why: str = "") -> str | None:
+    """サイト側のスパム判定で拒否された表示があれば、その文言を返す。"""
+    text = page_text(page) + "\n" + why
+    for pat in config.REJECTED_PATTERNS:
+        m = re.search(pat, text, re.I)
+        if m and not re.search(pat, base_text, re.I):
+            return m.group(0)
+    return None
+
+
+def _await_result(page: Page, base_url: str, base_text: str, timeout_s: int = 30) -> tuple[bool | None, str, bool]:
+    """送信ボタンを押した後、完了/エラー表示・確認画面・画像認証のどれかが出るまで最大 timeout_s 秒待つ。
+    戻り値は (judge_completion の結果, 根拠, 画像認証が表示されたか)。"""
+    _wait_settle(page)
+    deadline = time.monotonic() + timeout_s
+    while True:
+        if _challenge_shown(page):
+            return None, "", True
+        ok, why = judge_completion(page, base_url, base_text)
+        if (ok is not None or not _input_form_visible(page) or _rejected(page, base_text, why)
+                or time.monotonic() > deadline):
+            return ok, why, False
+        page.wait_for_timeout(2000)  # Ajax 送信の処理中（くるくる表示など）
+
+
 def _wait_settle(page: Page):
     try:
         page.wait_for_load_state("networkidle", timeout=10000)
@@ -787,10 +813,9 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
         return Outcome("失敗", f"送信ボタンを押せない: {str(e).splitlines()[0][:100]}")
     if not clicked:
         return Outcome("失敗", "送信ボタンが見つからない")
-    _wait_settle(page)
-    if _challenge_shown(page):
+    ok, why, challenged = _await_result(page, before_url, before_text)
+    if challenged:
         return Outcome("スキップ", "送信時に画像認証が表示された（回避せず未送信）")
-    ok, why = judge_completion(page, before_url, before_text)
     if ok is not True and not _input_form_visible(page):
         # 入力欄が消えた＝確認画面とみなし、「送信」ボタンを押す（確認画面の「入力内容に誤りが…」等は無視）
         confirm_url, confirm_text = page.url, page_text(page)
@@ -803,10 +828,9 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
             if clicked2:
                 break
         if clicked2:
-            _wait_settle(page)
-            if _challenge_shown(page):
+            ok, why, challenged = _await_result(page, confirm_url, confirm_text)
+            if challenged:
                 return Outcome("スキップ", "送信時に画像認証が表示された（回避せず未送信）")
-            ok, why = judge_completion(page, confirm_url, confirm_text)
             if ok is None and page.url != confirm_url:
                 ok, why = judge_completion(page, before_url, before_text)
     try:
@@ -815,11 +839,9 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
         shot_path = ""
     if ok:
         return Outcome("成功", why, shot_path)
-    after_text = page_text(page) + "\n" + why
-    for pat in config.REJECTED_PATTERNS:
-        m = re.search(pat, after_text, re.I)
-        if m and not re.search(pat, before_text, re.I):
-            return Outcome("失敗", f"{REJECTED_PREFIX}: サイト側でスパム判定（「{m.group(0)}」・reCAPTCHA等）", shot_path)
+    rejected = _rejected(page, before_text, why)
+    if rejected:
+        return Outcome("失敗", f"{REJECTED_PREFIX}: サイト側でスパム判定（「{rejected}」・reCAPTCHA等）", shot_path)
     if ok is False and _input_form_visible(page):
         return Outcome("失敗", f"入力エラーで送信されず: {why}", shot_path)
     return Outcome("失敗", f"{SUBMITTED_PREFIX}: {why}（送信された可能性あり・再送しない）", shot_path)
