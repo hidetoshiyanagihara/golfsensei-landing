@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 from playwright.sync_api import Frame, Page, TimeoutError as PWTimeout
 
 import config
-from common import REJECTED_PREFIX, SUBMITTED_PREFIX, nfkc
+from common import REJECTED_PREFIX, STALLED_PREFIX, SUBMITTED_PREFIX, nfkc
 
 CONTACT_LINK_RE = re.compile(
     r"お問い?合わ?せ|問い?合わ?せ|お問合せ|ご相談|ご依頼|お見積|contact|inquiry|enquiry|toiawase|otoiawase|(?<![a-z])form(?![a-z])", re.I
@@ -676,6 +676,10 @@ SUBMIT_JS = r"""
 """
 
 
+SEND_LABEL_RE = re.compile(r"送信|送る|この内容で|submit|send|申し?込|問い?合わ?せる", re.I)
+CONFIRM_LABEL_RE = re.compile(r"確認|次へ|進む|next|confirm", re.I)
+
+
 def _click_submit(fr: Frame, root, phase: str) -> str | None:
     fr.evaluate("() => document.querySelectorAll('[data-axion-submit]').forEach(e => e.removeAttribute('data-axion-submit'))")
     label = fr.evaluate(SUBMIT_JS, [root, phase])
@@ -813,13 +817,15 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
         return Outcome("失敗", f"送信ボタンを押せない: {str(e).splitlines()[0][:100]}")
     if not clicked:
         return Outcome("失敗", "送信ボタンが見つからない")
+    # 最初に押したのが「確認画面へ」等なら、確認画面で「送信」を押すまでは何も送られていない
+    confirm_only = bool(CONFIRM_LABEL_RE.search(clicked)) and not SEND_LABEL_RE.search(clicked)
+    clicked2 = None
     ok, why, challenged = _await_result(page, before_url, before_text)
     if challenged:
         return Outcome("スキップ", "送信時に画像認証が表示された（回避せず未送信）")
     if ok is not True and not _input_form_visible(page):
         # 入力欄が消えた＝確認画面とみなし、「送信」ボタンを押す（確認画面の「入力内容に誤りが…」等は無視）
         confirm_url, confirm_text = page.url, page_text(page)
-        clicked2 = None
         for f2 in _frames(page):
             try:
                 clicked2 = _click_submit(f2, None, "send")
@@ -839,6 +845,8 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
         shot_path = ""
     if ok:
         return Outcome("成功", why, shot_path)
+    if confirm_only and not clicked2:
+        return Outcome("失敗", f"{STALLED_PREFIX}未送信: {why}", shot_path)
     rejected = _rejected(page, before_text, why)
     if rejected:
         return Outcome("失敗", f"{REJECTED_PREFIX}: サイト側でスパム判定（「{rejected}」・reCAPTCHA等）", shot_path)
