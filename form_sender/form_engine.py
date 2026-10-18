@@ -180,7 +180,7 @@ def to_katakana(s: str) -> str:
 # ------------------------------------------------------------------ field classification
 # (種別, 正規表現) を上から順に評価する。ラベル/グループ名/name/id/placeholder を対象。
 RULES = [
-    ("agree", r"同意|承諾|個人情報|プライバシー|privacy|policy|規約|agree|accept|acceptance|確認しました"),
+    ("agree", r"同意|承諾|個人情報|プライバシー|privacy|policy|規約|agree|accept|acceptance|確認しました|送信確認|内容を?確認|確認済"),
     ("email_confirm", r"(メール|mail).*(確認|再入力|もう一度|再度|confirm|again|check|conf|2)|(確認|再入力|もう一度|再度|confirm|re_?)[^a-z]*(メール|mail)"),
     ("email", r"メール|e-?mail|mail"),
     ("kana", r"フリガナ|ふりがな|ﾌﾘｶﾞﾅ|カナ|かな|ｶﾅ|kana|furigana|ruby|yomi|読み"),
