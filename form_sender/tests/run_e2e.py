@@ -63,6 +63,7 @@ common.append_rows(config.COMPANIES_CSV, common.COMPANY_FIELDS, [
     {"社名": "フォーム無し電気", "URL": f"http://127.0.0.14:{P}/"},
     {"社名": "必須多すぎ不動産", "URL": f"http://127.0.0.15:{P}/"},
     {"社名": "株式会社ディブ空調", "URL": f"http://127.0.0.16:{P}/"},
+    {"社名": "見えない認証住宅", "URL": f"http://127.0.0.17:{P}/"},
     {"社名": "NG登録株式会社", "URL": "http://ng.example.invalid/"},
 ])
 common.append_rows(config.NG_LIST_CSV, common.NG_FIELDS, [{"社名": "NG登録", "URL": "", "理由": "test"}])
@@ -81,12 +82,13 @@ check(res["株式会社ディブ空調"]["結果"] == "成功", "div形式フォ
 check("営業お断り" in res["お断り建設"]["理由"], "営業お断り → スキップ")
 check("reCAPTCHA" in res["キャプチャ設備"]["理由"] or "認証" in res["キャプチャ設備"]["理由"], "reCAPTCHA → スキップ")
 check("フォームが見つからない" in res["フォーム無し電気"]["理由"], "フォーム無し → スキップ")
+check(res["見えない認証住宅"]["結果"] == "成功", "見えない reCAPTCHA v3 は入力対象")
 check("必須欄" in res["必須多すぎ不動産"]["理由"], "埋められない必須欄 → スキップ")
 check(res.get("NG登録株式会社", {}).get("理由") == "NGリスト", "NGリスト → スキップ")
 posts = json.loads(urllib.request.urlopen(f"http://127.0.0.11:{P}/__posts").read())
 check(posts == [], "テストモードでは送信しない")
 shots = list(config.SCREENSHOT_DIR.glob("*.png"))
-check(len(shots) == 2, f"スクリーンショット保存 ({len(shots)}枚)")
+check(len(shots) == 3, f"スクリーンショット保存 ({len(shots)}枚)")
 
 print("== 3. 本番モード（疑似サイトへ送信）")
 args.mode, args.no_wait = "live", False
@@ -99,6 +101,7 @@ a = next((p["data"] for p in posts if p["host"] == "127.0.0.11"), {})
 f = next((p["data"] for p in posts if p["host"] == "127.0.0.16"), {})
 check(live["株式会社テスト工務店"]["結果"] == "成功", "確認画面→送信→完了画面を判定")
 check(live["株式会社ディブ空調"]["結果"] == "成功", "Ajax送信の完了表示を判定")
+check(live["見えない認証住宅"]["結果"] == "成功", "見えない reCAPTCHA v3 のサイトに送信")
 v = lambda d, k: d.get(k, [""])[0]
 check(v(a, "sei") == "柳原" and v(a, "mei") == "秀俊", "姓/名の分割入力")
 check(v(a, "sei_kana") == "ヤナギハラ" and v(a, "mei_kana") == "ヒデトシ", "フリガナ（カタカナ）")

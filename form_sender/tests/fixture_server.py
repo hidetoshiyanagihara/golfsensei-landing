@@ -75,7 +75,11 @@ SITES = {
     },
     "127.0.0.13": {
         "/": H("キャプチャ設備", '<a href="/contact/">CONTACT</a>'),
-        "/contact/": H("contact", "<form><input name='name'><input type='email' name='mail'><textarea name='b'></textarea><div class='g-recaptcha' data-sitekey='x'></div></form>"),
+        "/contact/": H("contact", "<form><input name='name'><input type='email' name='mail'><textarea name='b'></textarea><div class='g-recaptcha' data-sitekey='x' style='width:304px;height:78px'></div></form>"),
+    },
+    "127.0.0.17": {  # 見えない reCAPTCHA v3 のみ → 送信対象
+        "/": H("見えない認証住宅", '<a href="/contact/">お問い合わせ</a>'),
+        "/contact/": H("contact", "<form method='post' action='/thanks'><table><tr><th>お名前</th><td><input name='name' required></td></tr><tr><th>メール</th><td><input type='email' name='mail' required></td></tr><tr><th>内容</th><td><textarea name='b' required></textarea></td></tr></table><input type='submit' value='送信'></form><script src='https://www.google.com/recaptcha/api.js?render=xxx' async></script><div class='grecaptcha-badge' data-style='bottomright'>reCAPTCHA</div>"),
     },
     "127.0.0.14": {
         "/": H("フォーム無し電気", "<p>お問い合わせはお電話で 052-000-0000</p><a href='/about'>about</a>"),

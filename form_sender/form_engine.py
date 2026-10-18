@@ -14,13 +14,16 @@ CONTACT_LINK_RE = re.compile(
 CONTACT_LINK_NG_RE = re.compile(r"採用|求人|recruit|entry|資料請求|tel:|mailto:|line\.me|instagram|facebook", re.I)
 COMMON_CONTACT_PATHS = ["contact/", "contact.html", "inquiry/", "toiawase/", "otoiawase/", "form/", "contact.php"]
 
+# 画面に表示される認証（チェックボックス・画像選択・文字入力）。見えない reCAPTCHA v3 / invisible はここに含めない
 CAPTCHA_SELECTORS = [
-    "iframe[src*='recaptcha']", "iframe[src*='hcaptcha']", "iframe[src*='challenges.cloudflare.com']",
-    ".g-recaptcha", ".h-captcha", ".cf-turnstile", "[data-sitekey]", ".grecaptcha-badge",
-    "script[src*='recaptcha']", "script[src*='hcaptcha']", "script[src*='turnstile']",
-    "img[src*='captcha' i]", "img[alt*='captcha' i]", "input[name*='captcha' i]", "img[src*='securimage' i]",
+    "iframe[src*='hcaptcha']", "iframe[src*='challenges.cloudflare.com']", ".h-captcha", ".cf-turnstile",
+    "script[src*='hcaptcha']", "script[src*='turnstile']",
+    ".g-recaptcha:not([data-size='invisible']):visible",
+    # CF7 の _wpcf7_recaptcha_response 等の非表示欄は見えない reCAPTCHA 用なので :visible で除く
+    "img[src*='captcha' i]:visible", "img[alt*='captcha' i]:visible", "input[name*='captcha' i]:visible",
+    "img[src*='securimage' i]:visible",
 ]
-CAPTCHA_TEXT_RE = re.compile(r"画像認証|画像に表示され|表示されている文字|認証コード|captcha|私はロボットではありません", re.I)
+CAPTCHA_TEXT_RE = re.compile(r"画像認証|画像に表示され|表示されている文字|認証コード|私はロボットではありません")
 
 # ページ内の入力欄を列挙するスクリプト。各欄に data-axion-idx を振り、ラベル等の手がかりを返す。
 EXTRACT_JS = r"""
@@ -69,6 +72,7 @@ EXTRACT_JS = r"""
           if (level > 0 && cs.some(c => key(c) !== key(el))) return '';  // 前の行に到達
           continue;  // 同じ行内の他の欄（姓/名の分割など）は飛ばす
         }
+        if (sib.nodeType !== 1 && sib.nodeType !== 3) continue;  // コメント等
         const t = sib.nodeType === 3 ? clean(sib.textContent) : textOf(sib);
         if (t) return t;
       }
@@ -198,8 +202,13 @@ RULES = [
 ]
 LAST_RE = re.compile(r"(^|[^名])姓|せい|セイ|苗字|名字|last|family|sei\b|_sei|sei_|name_?1|name\[0\]|\(sei\)|sei$", re.I)
 FIRST_RE = re.compile(r"(^|[^氏姓お])名(?!前)|めい|メイ|first|given|mei\b|_mei|mei_|name_?2|name\[1\]|mei$", re.I)
+# 上から順に優先。「(新規)その他工事」のような工事依頼の選択肢より「その他のお問合せ」を選ぶ
 OTHER_CHOICE_RE = [
-    re.compile(r"^その他$"), re.compile(r"その他"), re.compile(r"一般|お問い?合わ?せ|ご相談|ご質問|ご意見|ご提案|お知らせ|その他"),
+    re.compile(r"^その他$"),
+    re.compile(r"その他.{0,3}(お?問い?合わ?せ|ご?相談|ご?質問|ご?意見|ご?用件)"),
+    re.compile(r"その他(?!.*(工事|依頼|見積|施工))"),
+    re.compile(r"その他"),
+    re.compile(r"一般|お問い?合わ?せ|ご相談|ご質問|ご意見|ご提案|お知らせ"),
 ]
 INQUIRY_GROUP_RE = re.compile(r"種別|種類|項目|区分|内容|用件|お問い?合わ?せ|カテゴリ|category|type|kind|subject", re.I)
 CHOICE_NG_RE = re.compile(r"採用|求人|応募|見積|資料請求|苦情|クレーム|修理|故障|入居|物件|購入|売却|賃貸")
@@ -239,6 +248,8 @@ def classify(f: dict) -> str:
         return "tel"
     if t == "url":
         return "url"
+    if re.search(dict(RULES)["kana"], _signals(f, with_group=False), re.I):
+        return "kana"  # autocomplete="name" が付いたフリガナ欄もある
     ac = f["autocomplete"].lower()
     ac_map = {"organization": "company", "email": "email", "tel": "tel", "postal-code": "zip",
               "address-level1": "pref", "address-level2": "city", "family-name": "name", "given-name": "name",
@@ -316,12 +327,24 @@ class Plan:
     has_message: bool = False
 
 
-def choose_option(texts: list[str]) -> int | None:
+# 「その他」が無い必須の選択欄で、見出しに応じて選ぶ無難な選択肢
+FALLBACK_CHOICES = [
+    (re.compile(r"連絡方法|返信方法|返信先|連絡手段|ご希望の連絡|回答方法"), re.compile(r"メール|e-?mail", re.I)),
+    (re.compile(r"先|拠点|店舗|営業所|支店|支社|窓口|宛先|事業所|部署"), re.compile(r"名古屋|本社|本店|愛知")),
+]
+
+
+def choose_option(texts: list[str], group: str = "") -> int | None:
     """「その他」等の無難な選択肢のインデックスを返す。"""
     for rx in OTHER_CHOICE_RE:
         for i, t in enumerate(texts):
             if rx.search(nfkc(t)) and not CHOICE_NG_RE.search(nfkc(t)):
                 return i
+    for group_rx, option_rx in FALLBACK_CHOICES:
+        if group_rx.search(nfkc(group)):
+            for i, t in enumerate(texts):
+                if option_rx.search(nfkc(t)):
+                    return i
     return None
 
 
@@ -429,7 +452,7 @@ def build_plan(fields: list[dict], s: Sender) -> Plan:
                 and not re.search(r"選択|せんたく|---|select", o["text"], re.I)]
         if not (is_required(f) or INQUIRY_GROUP_RE.search(_signals(f))):
             continue  # 任意の無関係な選択欄は触らない
-        i = choose_option([o["text"] for o in opts])
+        i = choose_option([o["text"] for o in opts], f["label"] or f["group"])
         if i is not None:
             plan.selects.append((f["idx"], opts[i]["value"]))
         elif is_required(f):
@@ -439,11 +462,15 @@ def build_plan(fields: list[dict], s: Sender) -> Plan:
     for f in by_kind.get("choice", []):
         groups.setdefault(f["name"] or str(f["idx"]), []).append(f)
     for gname, opts in groups.items():
+        texts = [nfkc(o["label"]) for o in opts]
+        if "法人" in "".join(texts) and "個人" in "".join(texts):
+            plan.checks.append(next(o["idx"] for o, t in zip(opts, texts) if "法人" in t))  # 個人/法人 → 法人
+            continue
         req = any(is_required(o) for o in opts)
         is_inquiry = INQUIRY_GROUP_RE.search(nfkc(opts[0]["group"] + " " + gname))
         if not (req or is_inquiry):
             continue
-        i = choose_option([o["label"] for o in opts])
+        i = choose_option([o["label"] for o in opts], opts[0]["group"])
         if i is not None:
             plan.checks.append(opts[i]["idx"])
         elif req:
@@ -505,9 +532,13 @@ def find_refusal(text: str) -> str | None:
 
 
 def has_captcha(page: Page) -> str | None:
+    """画面に表示される認証があれば理由を返す。見えない reCAPTCHA（v3 / invisible）は対象外。"""
     for fr in _frames(page):
-        if re.search(r"recaptcha|hcaptcha|challenges\.cloudflare", fr.url or "", re.I):
-            return "reCAPTCHA等の認証あり"
+        url = fr.url or ""
+        if re.search(r"recaptcha/(api2|enterprise)/anchor", url) and "size=invisible" not in url:
+            return "reCAPTCHA（チェックボックス/画像認証）あり"
+        if re.search(r"hcaptcha|challenges\.cloudflare", url, re.I):
+            return "hCaptcha/Turnstile 等の認証あり"
         for sel in CAPTCHA_SELECTORS:
             try:
                 if fr.locator(sel).count() > 0:
@@ -519,12 +550,16 @@ def has_captcha(page: Page) -> str | None:
     return None
 
 
+# 本文欄になりうる textarea（reCAPTCHA が埋め込む非表示の g-recaptcha-response 等は除く）
+MESSAGE_TEXTAREA = "textarea:not([name*='captcha' i]):not([id*='captcha' i]):visible"
+
+
 def _form_frames(page: Page) -> list[Frame]:
     """textarea を含むフレーム（iframe 埋め込みフォーム対応）を優先順に返す。"""
     frames = []
     for fr in _frames(page):
         try:
-            if fr.locator("textarea").count() > 0:
+            if fr.locator(MESSAGE_TEXTAREA).count() > 0:
                 frames.append(fr)
         except Exception:
             continue
@@ -535,7 +570,8 @@ def _form_root(fr: Frame):
     """textarea を含む <form> があればそれを、無ければ body を返す。"""
     handle = fr.evaluate_handle(
         """() => {
-          const forms = Array.from(document.querySelectorAll('form')).filter(f => f.querySelector('textarea'));
+          const ok = (t) => !/captcha/i.test(t.name + ' ' + t.id) && t.getClientRects().length > 0;
+          const forms = Array.from(document.querySelectorAll('form')).filter(f => Array.from(f.querySelectorAll('textarea')).some(ok));
           if (forms.length) return forms.sort((a,b) => b.querySelectorAll('input,textarea,select').length - a.querySelectorAll('input,textarea,select').length)[0];
           return document.body;
         }"""
@@ -675,6 +711,14 @@ def judge_completion(page: Page, before_url: str, before_text: str) -> tuple[boo
     return None, "完了画面を確認できない"
 
 
+def _challenge_shown(page: Page) -> bool:
+    """送信ボタンを押した後に画像認証のポップアップが出たか（invisible reCAPTCHA の追加チャレンジ等）。"""
+    try:
+        return page.locator("iframe[src*='recaptcha'][src*='bframe']:visible, iframe[src*='hcaptcha']:visible").count() > 0
+    except Exception:
+        return False
+
+
 def _input_form_visible(page: Page) -> bool:
     """入力した本文欄がまだ編集可能な状態で見えているか（確認画面かどうかの判定用）。"""
     for fr in _frames(page):
@@ -744,6 +788,8 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
     if not clicked:
         return Outcome("失敗", "送信ボタンが見つからない")
     _wait_settle(page)
+    if _challenge_shown(page):
+        return Outcome("スキップ", "送信時に画像認証が表示された（回避せず未送信）")
     ok, why = judge_completion(page, before_url, before_text)
     if ok is not True and not _input_form_visible(page):
         # 入力欄が消えた＝確認画面とみなし、「送信」ボタンを押す（確認画面の「入力内容に誤りが…」等は無視）
@@ -758,6 +804,8 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
                 break
         if clicked2:
             _wait_settle(page)
+            if _challenge_shown(page):
+                return Outcome("スキップ", "送信時に画像認証が表示された（回避せず未送信）")
             ok, why = judge_completion(page, confirm_url, confirm_text)
             if ok is None and page.url != confirm_url:
                 ok, why = judge_completion(page, before_url, before_text)
