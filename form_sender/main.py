@@ -8,7 +8,6 @@
   python main.py status                         # 件数の確認
 """
 import argparse
-import os
 import random
 import re
 import sys
@@ -18,7 +17,7 @@ from datetime import datetime
 import config
 from common import (
     MODE_LIVE, MODE_TEST, RESULT_FAIL, RESULT_SKIP, SUBMITTED_PREFIX, Registry, build_message,
-    is_sent_row, load_companies, load_ng, load_results, record_result, sent_registry, sent_today_count,
+    is_sent_row, launch_chromium, load_companies, load_ng, load_results, record_result, sent_registry, sent_today_count,
 )
 
 
@@ -102,9 +101,7 @@ def cmd_send(args) -> None:
 
     sent = processed = 0
     with sync_playwright() as pw:
-        # CHROMIUM_PATH を指定すると、そのブラウザ実行ファイルを使う
-        browser = pw.chromium.launch(headless=not args.headed,
-                                     executable_path=os.environ.get("CHROMIUM_PATH") or None)
+        browser = launch_chromium(pw, headless=not args.headed)
         ctx = browser.new_context(locale="ja-JP", user_agent=config.USER_AGENT,
                                   viewport={"width": 1280, "height": 900})
         ctx.set_default_timeout(config.PAGE_TIMEOUT_MS)

@@ -111,9 +111,9 @@ SITES = {
 def _search_page(q: str) -> str:
     hosts = ["127.0.0.21", "127.0.0.22", "127.0.0.23", "127.0.0.24", "127.0.0.25", "127.0.0.11"]
     items = "".join(
-        f'<div class="result"><a class="result__a" href="//duckduckgo.com/l/?uddg=http%3A%2F%2F{h}%3A{PORT}%2Fsomepage&rut=x">r</a></div>'
+        f'<article><a data-testid="result-title-a" href="https://duckduckgo.com/l/?uddg=http%3A%2F%2F{h}%3A{PORT}%2Fsomepage&rut=x">r</a></article>'
         for h in hosts
-    ) + '<div class="result"><a class="result__a" href="https://suumo.jp/x">suumo</a></div>'
+    ) + '<article><a data-testid="result-title-a" href="https://suumo.jp/x">suumo</a></article>'
     return H("search", items)
 
 
@@ -132,6 +132,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         host = self.headers.get("Host", "").split(":")[0]
         path = urlparse(self.path).path
+        if host == "127.0.0.2":  # 疑似検索エンジン
+            return self._send(200, _search_page(parse_qs(urlparse(self.path).query).get("q", [""])[0]))
         if path == "/__posts":
             return self._send(200, json.dumps(POSTS, ensure_ascii=False), "application/json")
         site = SITES.get(host, {})
@@ -146,8 +148,6 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", 0))
         data = {k: v for k, v in parse_qs(self.rfile.read(n).decode("utf-8"), keep_blank_values=True).items()}
         path = urlparse(self.path).path
-        if path == "/html/":
-            return self._send(200, _search_page(data.get("q", [""])[0]))
         if path == "/confirm":
             hidden = "".join(f'<input type="hidden" name="{k}" value="{v[0]}">' for k, v in data.items())
             rows = "".join(f"<tr><th>{k}</th><td>{v[0]}</td></tr>" for k, v in data.items())

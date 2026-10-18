@@ -5,20 +5,23 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import parse_qs, urljoin, urlparse
+import base64
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
 import config
 from common import (
-    COMPANY_FIELDS, Registry, append_rows, domain_of, is_excluded_domain, load_companies,
+    COMPANY_FIELDS, Registry, append_rows, launch_chromium, domain_of, is_excluded_domain, load_companies,
     load_ng, nfkc, normalize_name, read_csv,
 )
 
 # 検索エンジン（テスト時は差し替え可能）
-DDG_URL = "https://html.duckduckgo.com/html/"
+DDG_URL = "https://duckduckgo.com/"
+DDG_RESULT_SEL = "a[data-testid=result-title-a]"
 BING_URL = "https://www.bing.com/search"
+BING_RESULT_SEL = "li.b_algo h2 a"
 SEARCH_SLEEP = (2.0, 5.0)
 SITE_SLEEP = (1.0, 2.5)
 FETCH_FAILED = "サイトを取得できない"
@@ -52,6 +55,7 @@ class Collector:
         self.http = requests.Session()
         self.http.headers.update({"User-Agent": config.USER_AGENT, "Accept-Language": "ja,en;q=0.8"})
         self.state = self._load_state()
+        self._pw = self._browser = self._page = None
 
     # ------------------------------------------------------------ state
     def _load_state(self) -> dict:
@@ -83,40 +87,31 @@ class Collector:
 
     # ------------------------------------------------------------ search
     def search(self, query: str) -> list[str]:
-        urls = self._search_ddg(query)
+        """実ブラウザで検索する（requests だと検索エンジンにブロックされるため）。"""
+        urls = self._search_in_browser(f"{DDG_URL}?{urlencode({'q': query, 'kl': 'jp-jp'})}", DDG_RESULT_SEL)
         if not urls:
-            urls = self._search_bing(query)
+            urls = self._search_in_browser(f"{BING_URL}?{urlencode({'q': query, 'setlang': 'ja'})}", BING_RESULT_SEL)
         time.sleep(random.uniform(*SEARCH_SLEEP))
-        return urls
+        return [u for u in (_unwrap_result_url(h) for h in urls) if u.startswith("http")]
 
-    def _search_ddg(self, query: str) -> list[str]:
+    def _search_in_browser(self, url: str, selector: str) -> list[str]:
+        if self._page is None:
+            from playwright.sync_api import sync_playwright
+            self._pw = sync_playwright().start()
+            self._browser = launch_chromium(self._pw)
+            self._page = self._browser.new_page(locale="ja-JP", user_agent=config.USER_AGENT)
         try:
-            r = self.http.post(DDG_URL, data={"q": query, "kl": "jp-jp"}, timeout=config.HTTP_TIMEOUT_SEC)
-        except requests.RequestException:
+            self._page.goto(url, wait_until="domcontentloaded", timeout=config.PAGE_TIMEOUT_MS)
+            self._page.wait_for_selector(selector, timeout=10000)
+            return self._page.eval_on_selector_all(selector, "els => els.map(e => e.href)")
+        except Exception:
             return []
-        if r.status_code != 200:
-            return []
-        soup = BeautifulSoup(r.text, "lxml")
-        urls = []
-        for a in soup.select("a.result__a"):
-            href = a.get("href", "")
-            if "uddg=" in href:
-                href = parse_qs(urlparse(href).query).get("uddg", [""])[0]
-            if href.startswith("http"):
-                urls.append(href)
-        return urls
 
-    def _search_bing(self, query: str) -> list[str]:
-        try:
-            r = self.http.get(
-                BING_URL, params={"q": query, "setlang": "ja", "cc": "JP"}, timeout=config.HTTP_TIMEOUT_SEC
-            )
-        except requests.RequestException:
-            return []
-        if r.status_code != 200:
-            return []
-        soup = BeautifulSoup(r.text, "lxml")
-        return [a["href"] for a in soup.select("li.b_algo h2 a[href]") if a["href"].startswith("http")]
+    def close(self) -> None:
+        if self._browser:
+            self._browser.close()
+            self._pw.stop()
+            self._browser = self._page = None
 
     def queries(self):
         """(業種, 検索語) を区×業種でローテーションしながら返す。前回の続きから再開する。"""
@@ -269,6 +264,7 @@ class Collector:
                     found.append(result)
                     self.log(f"  追加: {result.name} {result.url} [{result.industry}]")
         finally:
+            self.close()
             self._save_state()
             self._write(found)
         return found
@@ -310,6 +306,7 @@ class Collector:
                 found.append(result)
                 self.log(f"  追加: {result.name} {result.url}")
         finally:
+            self.close()
             self._write(found)
         return found
 
@@ -322,6 +319,21 @@ class Collector:
 
 
 # ---------------------------------------------------------------- helpers
+def _unwrap_result_url(href: str) -> str:
+    """検索エンジンのリダイレクトURL（DDG の uddg= / Bing の ck/a?u=a1...）から実URLを取り出す。"""
+    q = parse_qs(urlparse(href).query)
+    if "uddg" in q:
+        return q["uddg"][0]
+    u = q.get("u", [""])[0]
+    if "bing.com" in href and u.startswith("a1"):
+        b = u[2:] + "=" * (-len(u[2:]) % 4)
+        try:
+            return base64.urlsafe_b64decode(b).decode()
+        except ValueError:
+            return ""
+    return href
+
+
 def _page_text(soup: BeautifulSoup) -> str:
     soup = BeautifulSoup(str(soup), "lxml")
     for t in soup(["script", "style", "noscript", "template"]):

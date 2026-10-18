@@ -1,5 +1,6 @@
 """CSV の読み書き・社名/URL の正規化など共通処理。"""
 import csv
+import os
 import re
 import unicodedata
 from datetime import datetime
@@ -145,3 +146,8 @@ def record_result(name: str, url: str, result: str, reason: str, mode: str) -> d
 def build_message(company_name: str) -> str:
     text = config.MESSAGE_TXT.read_text(encoding="utf-8")
     return text.replace("{社名}", company_name).strip() + "\n"
+
+
+def launch_chromium(pw, headless: bool = True):
+    """Chromium を起動する。CHROMIUM_PATH を指定するとそのブラウザ実行ファイルを使う。"""
+    return pw.chromium.launch(headless=headless, executable_path=os.environ.get("CHROMIUM_PATH") or None)
