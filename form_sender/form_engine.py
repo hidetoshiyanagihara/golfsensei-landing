@@ -6,7 +6,7 @@ from urllib.parse import urljoin, urlparse
 from playwright.sync_api import Frame, Page, TimeoutError as PWTimeout
 
 import config
-from common import SUBMITTED_PREFIX, nfkc
+from common import REJECTED_PREFIX, SUBMITTED_PREFIX, nfkc
 
 CONTACT_LINK_RE = re.compile(
     r"お問い?合わ?せ|問い?合わ?せ|お問合せ|ご相談|ご依頼|お見積|contact|inquiry|enquiry|toiawase|otoiawase|(?<![a-z])form(?![a-z])", re.I
@@ -815,6 +815,11 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
         shot_path = ""
     if ok:
         return Outcome("成功", why, shot_path)
+    after_text = page_text(page) + "\n" + why
+    for pat in config.REJECTED_PATTERNS:
+        m = re.search(pat, after_text, re.I)
+        if m and not re.search(pat, before_text, re.I):
+            return Outcome("失敗", f"{REJECTED_PREFIX}: サイト側でスパム判定（「{m.group(0)}」・reCAPTCHA等）", shot_path)
     if ok is False and _input_form_visible(page):
         return Outcome("失敗", f"入力エラーで送信されず: {why}", shot_path)
     return Outcome("失敗", f"{SUBMITTED_PREFIX}: {why}（送信された可能性あり・再送しない）", shot_path)

@@ -81,6 +81,10 @@ SITES = {
         "/": H("見えない認証住宅", '<a href="/contact/">お問い合わせ</a>'),
         "/contact/": H("contact", "<form method='post' action='/thanks'><table><tr><th>お名前</th><td><input name='name' required></td></tr><tr><th>メール</th><td><input type='email' name='mail' required></td></tr><tr><th>内容</th><td><textarea name='b' required></textarea></td></tr></table><input type='submit' value='送信'></form><script src='https://www.google.com/recaptcha/api.js?render=xxx' async></script><div class='grecaptcha-badge' data-style='bottomright'>reCAPTCHA</div>"),
     },
+    "127.0.0.18": {  # reCAPTCHA v3 でスパム判定されるサイト
+        "/": H("スパム判定工業", '<a href="/contact/">お問い合わせ</a>'),
+        "/contact/": H("contact", "<form method='post' action='/spam'><table><tr><th>お名前</th><td><input name='name' required></td></tr><tr><th>メール</th><td><input type='email' name='mail' required></td></tr><tr><th>内容</th><td><textarea name='b' required></textarea></td></tr></table><input type='submit' value='送信'></form><div class='grecaptcha-badge'></div>"),
+    },
     "127.0.0.14": {
         "/": H("フォーム無し電気", "<p>お問い合わせはお電話で 052-000-0000</p><a href='/about'>about</a>"),
     },
@@ -156,6 +160,8 @@ class Handler(BaseHTTPRequestHandler):
             hidden = "".join(f'<input type="hidden" name="{k}" value="{v[0]}">' for k, v in data.items())
             rows = "".join(f"<tr><th>{k}</th><td>{v[0]}</td></tr>" for k, v in data.items())
             return self._send(200, H("確認", f"<h1>入力内容の確認</h1><p>入力内容に誤りがなければ送信してください。</p><table>{rows}</table><form method='post' action='/thanks'>{hidden}<input type='submit' value='戻る'><input type='submit' value='送信する'></form>"))
+        if path == "/spam":
+            return self._send(200, H("エラー", "<p>スパム送信の可能性があります。</p>"))
         if path in ("/thanks", "/ajax"):
             POSTS.append({"host": host, "path": path, "data": data})
             if path == "/ajax":

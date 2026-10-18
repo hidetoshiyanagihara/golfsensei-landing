@@ -16,7 +16,7 @@ from datetime import datetime
 
 import config
 from common import (
-    MODE_LIVE, MODE_TEST, RESULT_FAIL, RESULT_SKIP, SUBMITTED_PREFIX, Registry, build_message,
+    MODE_LIVE, MODE_TEST, REJECTED_PREFIX, RESULT_FAIL, RESULT_SKIP, SUBMITTED_PREFIX, Registry, build_message,
     is_sent_row, launch_chromium, load_companies, load_ng, load_results, record_result, sent_registry, sent_today_count,
 )
 
@@ -45,7 +45,7 @@ def _targets(mode: str, retest: bool) -> list[dict]:
     if mode == MODE_LIVE:
         # 本番でスキップ済み/送信済みの会社は対象外（送信前の失敗のみ再試行）
         done = Registry([r for r in results if r.get("モード") == MODE_LIVE and (
-            is_sent_row(r) or r.get("結果") == RESULT_SKIP)])
+            is_sent_row(r) or r.get("結果") == RESULT_SKIP or r.get("理由", "").startswith(REJECTED_PREFIX))])
     else:
         done = Registry([] if retest else [r for r in results if r.get("モード") == MODE_TEST])
     ng_recorded = Registry([r for r in results if r.get("理由") == "NGリスト"])

@@ -118,6 +118,9 @@ SUCCESS_PATTERNS = [
     r"thank\s*you", r"thanks", r"successfully\s*(sent|submitted)", r"has been sent",
 ]
 SUCCESS_URL_PATTERNS = [r"thank", r"complete", r"finish", r"done", r"success", r"kanryo", r"sent"]
+# サイト側の迷惑送信判定（reCAPTCHA v3 等）で拒否された表示。送信されていないが、再試行しても通らない
+REJECTED_PATTERNS = [r"スパム", r"spam", r"迷惑(メール|送信)", r"不正な(送信|アクセス)", r"ロボット(による|と判定)"]
+
 ERROR_PATTERNS = [
     r"入力(して|され)て?(ください|いません)", r"必須(項目|です)", r"正しく入力", r"入力内容に(誤り|エラー|問題)",
     r"エラーが(あり|発生)", r"送信(に|が)?失敗", r"送信できません", r"invalid", r"required field",

@@ -64,6 +64,7 @@ common.append_rows(config.COMPANIES_CSV, common.COMPANY_FIELDS, [
     {"社名": "必須多すぎ不動産", "URL": f"http://127.0.0.15:{P}/"},
     {"社名": "株式会社ディブ空調", "URL": f"http://127.0.0.16:{P}/"},
     {"社名": "見えない認証住宅", "URL": f"http://127.0.0.17:{P}/"},
+    {"社名": "スパム判定工業", "URL": f"http://127.0.0.18:{P}/"},
     {"社名": "NG登録株式会社", "URL": "http://ng.example.invalid/"},
 ])
 common.append_rows(config.NG_LIST_CSV, common.NG_FIELDS, [{"社名": "NG登録", "URL": "", "理由": "test"}])
@@ -88,7 +89,7 @@ check(res.get("NG登録株式会社", {}).get("理由") == "NGリスト", "NGリ
 posts = json.loads(urllib.request.urlopen(f"http://127.0.0.11:{P}/__posts").read())
 check(posts == [], "テストモードでは送信しない")
 shots = list(config.SCREENSHOT_DIR.glob("*.png"))
-check(len(shots) == 3, f"スクリーンショット保存 ({len(shots)}枚)")
+check(len(shots) == 4, f"スクリーンショット保存 ({len(shots)}枚)")
 
 print("== 3. 本番モード（疑似サイトへ送信）")
 args.mode, args.no_wait = "live", False
@@ -102,6 +103,8 @@ f = next((p["data"] for p in posts if p["host"] == "127.0.0.16"), {})
 check(live["株式会社テスト工務店"]["結果"] == "成功", "確認画面→送信→完了画面を判定")
 check(live["株式会社ディブ空調"]["結果"] == "成功", "Ajax送信の完了表示を判定")
 check(live["見えない認証住宅"]["結果"] == "成功", "見えない reCAPTCHA v3 のサイトに送信")
+check(live["スパム判定工業"]["理由"].startswith("送信拒否"), "スパム判定で拒否 → 送信拒否として記録")
+check(common.sent_today_count(common.load_results()) == 3, "送信拒否は送信件数に数えない")
 v = lambda d, k: d.get(k, [""])[0]
 check(v(a, "sei") == "柳原" and v(a, "mei") == "秀俊", "姓/名の分割入力")
 check(v(a, "sei_kana") == "ヤナギハラ" and v(a, "mei_kana") == "ヒデトシ", "フリガナ（カタカナ）")
