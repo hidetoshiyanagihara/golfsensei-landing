@@ -205,7 +205,7 @@ class Collector:
             og = soup.find("meta", attrs={"property": "og:site_name"})
             segs = [og["content"]] if og and og.get("content") else []
             if soup.title and soup.title.string:
-                segs += re.split(r"\s*[|｜\-－–—/／:：【】「」]\s*", soup.title.string)
+                segs += re.split(r"\s+[\-－–—]\s+|\s*[|｜/／:：【】「」]\s*", soup.title.string)  # 「A-WORK」の - では切らない
             for s in segs:
                 cand = _clean_name(s)
                 if cand and CORP_IN_NAME_RE.search(cand):
@@ -355,8 +355,11 @@ def _clean_name(s: str) -> str:
     """タイトル等から取った文字列を社名だけに整える。社名と言えなければ空文字。"""
     s = nfkc(s).strip()
     s = re.sub(r"^(?:©|\(c\)|copyright)\s*(?:\d{4}[\s\-–~]*\d{0,4})?\s*", "", s, flags=re.I)
-    s = re.sub(r"\s*(all rights reserved|inc\.?|co\.,? ?ltd\.?).*$", "", s, flags=re.I).strip(" .,|-")
+    s = re.sub(r"\s*(all rights reserved|inc\.?|co\.,? ?ltd\.?).*$", "", s, flags=re.I).strip(" ,|-")
     s = re.sub(r"\s*[|｜].*$", "", s)                                   # 「社名 | ROKUGO」
+    s = re.sub(r"\s+[\-–—]\s+.*$", "", s)                               # 「株式会社X - 土木工事・…」
+    s = re.sub(r"[(（【][ァ-ヶー・\s]+[)）】]", "", s)                   # 途中の読み「三本(ミモト)建設」
+    s = re.sub(r"(まで|にお任せ.*|へようこそ.*)$", "", s)
     s = re.sub(r"[\s・\-]+(公式(ホームページ|サイト|HP)|ホームページ|オフィシャルサイト|official site|トップページ|TOP)$", "", s, flags=re.I)
     # 「名古屋市北区で…なら【株式会社X】」「…の株式会社X」→ 株式会社X
     m = re.match(rf"^.*(?:なら|の)\s*【?({_CORP}[^】]+)】?$", s) or re.match(rf"^.*【(.*{_CORP}.*)】.*$", s)
@@ -364,16 +367,24 @@ def _clean_name(s: str) -> str:
         s = m.group(1)
     elif "なら" in s:
         s = s.rsplit("なら", 1)[1]
+    # 「創業120年の久野工務店株式会社」→ 法人格を含む「の」の後ろだけ（「株式会社リフォームの松もと」は対象外）
+    m = re.match(rf"^([^の]*)の(\S*{_CORP}\S*)$", s)
+    if m and not re.search(_CORP, m.group(1)):
+        s = m.group(2)
+    # 「総合建設 株式会社Takeichi」→ 株式会社Takeichi
+    m = re.match(rf"^(\S+)\s+({_CORP}\S+)$", s)
+    if m and not re.search(_CORP, m.group(1)):
+        s = m.group(2)
     s = re.sub(r"\s*[(（][^)）]*[)）]?\s*$", "", s)                    # 末尾の（読み・英文名）
     s = re.sub(r"[!！。].*$", "", s)                                     # 宣伝文句
     m = re.match(rf"^(\S+?{_CORP})\s+\S.*$", s)                          # 「X株式会社 X一級建築士事務所」
     if m:
         s = m.group(1)
     m = re.match(r"^(.*[ぁ-んァ-ヶ一-龥])\s+[A-Za-z][A-Za-z .,&'-]*$", s)  # 「株式会社X ASAI CONSTRUCTION」
-    if m:
+    if m and not re.fullmatch(_CORP, m.group(1).strip()):           # 「株式会社 I.D.E.」は残す
         s = m.group(1)
     s = s.strip(" 【】「」")
-    if s.lower() in GENERIC_PAGE_TITLES:
+    if s.lower() in GENERIC_PAGE_TITLES or re.fullmatch(_CORP, s):
         return ""
     if not (2 <= len(s) <= 40) or "\n" in s:
         return ""
