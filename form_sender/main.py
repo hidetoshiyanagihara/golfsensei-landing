@@ -12,17 +12,16 @@ import random
 import re
 import sys
 import time
-from datetime import datetime
 
 import config
 from common import (
     MODE_LIVE, MODE_TEST, REJECTED_PREFIX, RESULT_FAIL, STALLED_PREFIX, RESULT_SKIP, SUBMITTED_PREFIX, Registry, build_message,
-    is_sent_row, launch_chromium, load_companies, load_ng, load_results, record_result, sent_registry, sent_today_count,
+    is_sent_row, launch_chromium, load_companies, now_jst, load_ng, load_results, record_result, sent_registry, sent_today_count,
 )
 
 
 def log(msg: str) -> None:
-    print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+    print(f"[{now_jst():%H:%M:%S}] {msg}", flush=True)
 
 
 def cmd_collect(args) -> None:
@@ -116,7 +115,7 @@ def cmd_send(args) -> None:
                     time.sleep(wait)
                 name, url = c["社名"], c["URL"]
                 log(f"処理中: {name} {url}")
-                shot = str(config.SCREENSHOT_DIR / f"{datetime.now():%Y%m%d_%H%M%S}_{mode}_{_safe(name)}.png")
+                shot = str(config.SCREENSHOT_DIR / f"{now_jst():%Y%m%d_%H%M%S}_{mode}_{_safe(name)}.png")
                 page = ctx.new_page()
                 page.on("dialog", lambda d: d.accept())  # 「送信しますか？」等の確認ダイアログ
                 try:

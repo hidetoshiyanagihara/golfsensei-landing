@@ -4,6 +4,7 @@ import os
 import re
 import unicodedata
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -64,8 +65,16 @@ def is_excluded_domain(url: str) -> bool:
     return False
 
 
+JST = ZoneInfo("Asia/Tokyo")
+
+
+def now_jst() -> datetime:
+    """日本時間の現在時刻（サーバーの時刻設定に関係なく「1日50件」の区切りを日本の日付にする）。"""
+    return datetime.now(JST)
+
+
 def now_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_jst().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def read_csv(path: Path) -> list[dict]:
@@ -137,7 +146,7 @@ def sent_registry(results: list[dict]) -> Registry:
 
 
 def sent_today_count(results: list[dict]) -> int:
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_jst().strftime("%Y-%m-%d")
     return sum(1 for r in results if is_sent_row(r) and r.get("日時", "").startswith(today))
 
 
