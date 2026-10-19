@@ -123,5 +123,5 @@ REJECTED_PATTERNS = [r"スパム", r"spam", r"迷惑(メール|送信)", r"不�
 
 ERROR_PATTERNS = [
     r"入力(して|され)て?(ください|いません)", r"必須(項目|です)", r"正しく入力", r"入力内容に(誤り|エラー|問題)",
-    r"エラーが(あり|発生)", r"送信(に|が)?失敗", r"送信できません", r"invalid", r"required field",
+    r"エラーが(あり|発生)", r"入力ミス", r"チェックを入れて", r"(?m)^\s*error\s*$", r"送信(に|が)?失敗", r"送信できません", r"invalid", r"required field",
 ]

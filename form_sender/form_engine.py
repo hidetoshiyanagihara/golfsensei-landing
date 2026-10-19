@@ -181,6 +181,7 @@ def to_katakana(s: str) -> str:
 # (種別, 正規表現) を上から順に評価する。ラベル/グループ名/name/id/placeholder を対象。
 RULES = [
     ("agree", r"同意|承諾|個人情報|プライバシー|privacy|policy|規約|agree|accept|acceptance|確認しました|送信確認|内容を?確認|確認済"),
+    ("unknown", r"時間帯|ご都合|曜日|希望日|日時"),  # 連絡可能な時間帯などは入れる値がない
     ("email_confirm", r"(メール|mail).*(確認|再入力|もう一度|再度|confirm|again|check|conf|2)|(確認|再入力|もう一度|再度|confirm|re_?)[^a-z]*(メール|mail)"),
     ("email", r"メール|e-?mail|mail"),
     ("kana", r"フリガナ|ふりがな|ﾌﾘｶﾞﾅ|カナ|かな|ｶﾅ|kana|furigana|ruby|yomi|読み"),
@@ -719,7 +720,11 @@ def judge_completion(page: Page, before_url: str, before_text: str) -> tuple[boo
 def _challenge_shown(page: Page) -> bool:
     """送信ボタンを押した後に画像認証のポップアップが出たか（invisible reCAPTCHA の追加チャレンジ等）。"""
     try:
-        return page.locator("iframe[src*='recaptcha'][src*='bframe']:visible, iframe[src*='hcaptcha']:visible").count() > 0
+        return page.locator(
+            "iframe[src*='recaptcha'][src*='bframe']:visible, iframe[src*='hcaptcha']:visible, "
+            # 送信後に「私はロボットではありません」が出た（送信前に出ていたサイトはスキップ済み）
+            "iframe[src*='recaptcha'][src*='anchor']:not([src*='size=invisible']):visible"
+        ).count() > 0
     except Exception:
         return False
 
