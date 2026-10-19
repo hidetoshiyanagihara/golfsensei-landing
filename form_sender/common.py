@@ -73,6 +73,27 @@ def now_jst() -> datetime:
     return datetime.now(JST)
 
 
+def send_window_status(now: datetime | None = None) -> tuple[str, float]:
+    """本番送信できる時間か。("open", 0) / ("wait", 開始までの秒数) / ("closed", 0) を返す。"""
+    now = now or now_jst()
+    start, end = config.SEND_HOURS
+    if config.SEND_WEEKDAYS_ONLY and (now.weekday() >= 5 or _is_jp_holiday(now.date())):
+        return "closed", 0
+    if now.hour < start:
+        return "wait", (now.replace(hour=start, minute=0, second=0, microsecond=0) - now).total_seconds()
+    if now.hour >= end:
+        return "closed", 0
+    return "open", 0
+
+
+def _is_jp_holiday(d) -> bool:
+    try:
+        import jpholiday
+    except ImportError:  # 未インストールなら土日のみ判定
+        return False
+    return jpholiday.is_holiday(d)
+
+
 def now_str() -> str:
     return now_jst().strftime("%Y-%m-%d %H:%M:%S")
 

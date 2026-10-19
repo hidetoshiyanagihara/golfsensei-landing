@@ -31,6 +31,8 @@ SENDER = {
 # ---------------------------------------------------------------- 上限・待機
 COLLECT_MAX_PER_RUN = 100      # リスト作成 1回の最大追加数
 DAILY_SEND_LIMIT = 50          # 本番送信 1日の最大件数
+SEND_HOURS = (9, 18)           # 本番送信は日本時間のこの時間帯だけ（9:00〜18:00）
+SEND_WEEKDAYS_ONLY = True      # 本番送信は平日のみ（土日・祝日は送らない）
 TEST_DEFAULT_COUNT = 10        # テストモードの既定件数
 WAIT_MIN_SEC = 30              # 1件ごとの待機（秒）
 WAIT_MAX_SEC = 120

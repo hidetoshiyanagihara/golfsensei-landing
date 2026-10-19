@@ -16,7 +16,7 @@ import time
 import config
 from common import (
     MODE_LIVE, MODE_TEST, REJECTED_PREFIX, RESULT_FAIL, STALLED_PREFIX, RESULT_SKIP, SUBMITTED_PREFIX, Registry, build_message,
-    is_sent_row, launch_chromium, load_companies, now_jst, load_ng, load_results, record_result, sent_registry, sent_today_count,
+    is_sent_row, launch_chromium, load_companies, now_jst, send_window_status, load_ng, load_results, record_result, sent_registry, sent_today_count,
 )
 
 
@@ -113,6 +113,14 @@ def cmd_send(args) -> None:
                     wait = random.uniform(config.WAIT_MIN_SEC, config.WAIT_MAX_SEC)
                     log(f"待機 {wait:.0f} 秒")
                     time.sleep(wait)
+                if live and not args.any_time:
+                    state, secs = send_window_status()
+                    if state == "wait":
+                        log(f"送信開始時刻（{config.SEND_HOURS[0]}時）まで {secs / 60:.0f} 分待機")
+                        time.sleep(secs)
+                    elif state == "closed":
+                        log(f"送信時間外（平日{config.SEND_HOURS[0]}〜{config.SEND_HOURS[1]}時）のため終了します")
+                        break
                 name, url = c["社名"], c["URL"]
                 log(f"処理中: {name} {url}")
                 shot = str(config.SCREENSHOT_DIR / f"{now_jst():%Y%m%d_%H%M%S}_{mode}_{_safe(name)}.png")
@@ -176,6 +184,7 @@ def main() -> None:
     p.add_argument("--no-wait", action="store_true", help="（テストのみ）1件ごとの待機を省略")
     p.add_argument("--headed", action="store_true", help="ブラウザ画面を表示して実行")
     p.add_argument("--yes", action="store_true", help="本番送信の確認を省略")
+    p.add_argument("--any-time", action="store_true", help="（本番）送信時間帯の制限を無視する")
     p.set_defaults(func=cmd_send)
 
     p = sub.add_parser("status", help="件数を表示")

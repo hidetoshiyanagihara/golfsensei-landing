@@ -855,6 +855,6 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
     rejected = _rejected(page, before_text, why)
     if rejected:
         return Outcome("失敗", f"{REJECTED_PREFIX}: サイト側でスパム判定（「{rejected}」・reCAPTCHA等）", shot_path)
-    if ok is False and _input_form_visible(page):
+    if ok is False:  # エラー表示が出た＝サイトが受け付けていない
         return Outcome("失敗", f"入力エラーで送信されず: {why}", shot_path)
     return Outcome("失敗", f"{SUBMITTED_PREFIX}: {why}（送信された可能性あり・再送しない）", shot_path)
