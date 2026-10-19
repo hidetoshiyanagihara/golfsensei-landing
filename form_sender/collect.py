@@ -206,9 +206,10 @@ class Collector:
             segs = [og["content"]] if og and og.get("content") else []
             if soup.title and soup.title.string:
                 segs += re.split(r"\s+[\-－–—]\s+|\s*[|｜/／:：【】「」]\s*", soup.title.string)  # 「A-WORK」の - では切らない
-            for s in segs:
-                cand = _clean_name(s)
-                if cand and CORP_IN_NAME_RE.search(cand):
+            cands = [c for c in (_clean_name(s) for s in segs) if c]
+            # 法人格（株式会社など）を含む区切りを優先。「不動産売買専門店 | (株)エバーグリーン」→ 後者
+            for cand in [c for c in cands if re.search(_CORP, c)] + cands:
+                if CORP_IN_NAME_RE.search(cand):
                     return cand
         # 3) コピーライト表記
         for t in texts:
@@ -354,12 +355,16 @@ _CORP = r"(?:株式会社|有限会社|合同会社|合資会社|合名会社)"
 def _clean_name(s: str) -> str:
     """タイトル等から取った文字列を社名だけに整える。社名と言えなければ空文字。"""
     s = nfkc(s).strip()
+    for short, full in (("(株)", "株式会社"), ("㈱", "株式会社"), ("(有)", "有限会社"), ("㈲", "有限会社"), ("(同)", "合同会社")):
+        s = s.replace(short, full)
     s = re.sub(r"^(?:©|\(c\)|copyright)\s*(?:\d{4}[\s\-–~]*\d{0,4})?\s*", "", s, flags=re.I)
     s = re.sub(r"\s*(all rights reserved|inc\.?|co\.,? ?ltd\.?).*$", "", s, flags=re.I).strip(" ,|-")
     s = re.sub(r"\s*[|｜].*$", "", s)                                   # 「社名 | ROKUGO」
     s = re.sub(r"\s+[\-–—]\s+.*$", "", s)                               # 「株式会社X - 土木工事・…」
     s = re.sub(r"[(（【][ァ-ヶー・\s]+[)）】]", "", s)                   # 途中の読み「三本(ミモト)建設」
-    s = re.sub(r"(まで|にお任せ.*|へようこそ.*)$", "", s)
+    s = re.sub(r"(まで|にお任せ.*|へようこそ.*|の\S*ページ)$", "", s)
+    s = re.sub(r"\s+(平成|令和|昭和|創業|設立)\S*.*$", "", s)                 # 「X 平成24年8月法人化」
+    s = re.sub(r"^(\S*[A-Za-z]\S*)\s+[ァ-ヶー]+$", r"\1", s)               # 「巧STYLE タクミスタイル」
     s = re.sub(r"[\s・\-]+(公式(ホームページ|サイト|HP)|ホームページ|オフィシャルサイト|official site|トップページ|TOP)$", "", s, flags=re.I)
     # 「名古屋市北区で…なら【株式会社X】」「…の株式会社X」→ 株式会社X
     m = re.match(rf"^.*(?:なら|の)\s*【?({_CORP}[^】]+)】?$", s) or re.match(rf"^.*【(.*{_CORP}.*)】.*$", s)
