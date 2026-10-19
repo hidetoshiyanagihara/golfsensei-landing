@@ -671,7 +671,7 @@ SUBMIT_JS = r"""
   });
   if (!best || bestScore < (phase === 'send' ? 3 : 1)) return null;
   best.setAttribute('data-axion-submit', '1');
-  return label(best);
+  return label(best) || '(文字なしボタン)';  // 画像だけの送信ボタンも「押せた」と返す
 }
 """
 

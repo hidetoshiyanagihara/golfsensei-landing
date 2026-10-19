@@ -80,7 +80,7 @@ SITES = {
     },
     "127.0.0.17": {  # 見えない reCAPTCHA v3 のみ → 送信対象
         "/": H("見えない認証住宅", '<a href="/contact/">お問い合わせ</a>'),
-        "/contact/": H("contact", "<form method='post' action='/thanks'><table><tr><th>お名前</th><td><input name='name' required></td></tr><tr><th>メール</th><td><input type='email' name='mail' required></td></tr><tr><th>内容</th><td><textarea name='b' required></textarea></td></tr></table><input type='submit' value='送信'></form><script src='https://www.google.com/recaptcha/api.js?render=xxx' async></script><div class='grecaptcha-badge' data-style='bottomright'>reCAPTCHA</div>"),
+        "/contact/": H("contact", "<form method='post' action='/thanks'><table><tr><th>お名前</th><td><input name='name' required></td></tr><tr><th>メール</th><td><input type='email' name='mail' required></td></tr><tr><th>内容</th><td><textarea name='b' required></textarea></td></tr></table><input type='submit' value='' style='width:200px;height:40px;background:#06c'></form><script src='https://www.google.com/recaptcha/api.js?render=xxx' async></script><div class='grecaptcha-badge' data-style='bottomright'>reCAPTCHA</div>"),
     },
     "127.0.0.18": {  # reCAPTCHA v3 でスパム判定されるサイト
         "/": H("スパム判定工業", '<a href="/contact/">お問い合わせ</a>'),
