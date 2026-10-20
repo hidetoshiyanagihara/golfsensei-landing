@@ -74,7 +74,8 @@ EXCLUDED_DOMAINS = [
     "homepro.jp", "rehome-navi.com", "reform-guide.jp", "nuri-kae.jp", "gaiheki-madoguchi.com",
     "lixil-reform.net", "tabelog.com", "hotpepper.jp", "goo.ne.jp", "biz.ne.jp", "gbiz.go.jp",
     "kensetumap.com", "kensetsu-navi", "houzz.jp", "suumocounter", "lifull.com", "e-tsuhan",
-    "kenchikukenken.co.jp", "nagoya-cci.or.jp", "city.nagoya.jp", "pref.aichi.jp", "go.jp", "lg.jp", "ac.jp", "ed.jp",
+    "kenchikukenken.co.jp", "gaihekiguide.co.jp", "nagoya-gaiheki-tosou.com", "xn--3kqvs447ab16b.com",
+    "nagoya-cci.or.jp", "city.nagoya.jp", "pref.aichi.jp", "go.jp", "lg.jp", "ac.jp", "ed.jp",
 ]
 
 # 大手・上場企業（社名に含まれていたら除外）

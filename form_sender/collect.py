@@ -33,6 +33,8 @@ OVERVIEW_LINK_RE = re.compile(
 INDUSTRY_WORDS_RE = re.compile(
     r"建設|建築|工務店|土木|工事|設備|空調|給排水|配管|電気|リフォーム|リノベーション|住宅|不動産|賃貸|売買|仲介|管理|塗装|解体|内装"
 )
+# 業者の比較・ランキング・紹介サイト（自社サイトではない）
+PORTAL_TITLE_RE = re.compile(r"おすすめ|ランキング|比較|口コミ|業者一覧|業者ガイド|優良業者|業者を探す|一括見積")
 CORP_IN_NAME_RE = re.compile(r"株式会社|有限会社|合同会社|合資会社|㈱|㈲|\(株\)|\(有\)|工務店|建設|工業|設備|不動産|ホーム|住建|建工|電設|電工")
 NAME_LABELS = ("会社名", "社名", "商号", "名称", "法人名", "企業名", "屋号")
 ADDRESS_RE = re.compile(r"(?:愛知県\s*)?名古屋市\s*\S{1,4}?区[^\s、。,<>「」()（）|｜/／]{1,40}")
@@ -138,6 +140,9 @@ class Collector:
         if is_excluded_domain(final_url):
             return "ポータル/対象外ドメインへ転送"
         soup = BeautifulSoup(html, "lxml")
+        title = nfkc(soup.title.string) if soup.title and soup.title.string else ""
+        if PORTAL_TITLE_RE.search(title):
+            return f"比較・ランキングサイト（{title[:30]}）"
         pages = [soup]
         overview = self._find_overview_link(soup, final_url)
         if overview:
@@ -374,6 +379,15 @@ def _clean_name(s: str) -> str:
         s = s.rsplit("なら", 1)[1]
     # 「創業120年の久野工務店株式会社」→ 法人格を含む「の」の後ろだけ（「株式会社リフォームの松もと」は対象外）
     m = re.match(rf"^([^の]*)の(\S*{_CORP}\S*)$", s)
+    if m and not re.search(_CORP, m.group(1)):
+        s = m.group(2)
+    # 「株式会社X建設は店舗改装や…にご対応」→ 株式会社X建設
+    m = re.match(rf"^(\S*?{_CORP}\S*?|{_CORP}\S+?)は.{{8,}}$", s)
+    if m:
+        s = m.group(1)
+    s = re.sub(rf"({_CORP})(ホームページ|公式サイト|オフィシャルサイト)$", r"\1", s)
+    # 「外壁塗装・有限会社塗政」→ 有限会社塗政
+    m = re.match(rf"^([^・]+)・({_CORP}\S+)$", s)
     if m and not re.search(_CORP, m.group(1)):
         s = m.group(2)
     # 「総合建設 株式会社Takeichi」→ 株式会社Takeichi
