@@ -177,9 +177,22 @@ def record_result(name: str, url: str, result: str, reason: str, mode: str) -> d
     return row
 
 
-def build_message(company_name: str) -> str:
-    text = config.MESSAGE_TXT.read_text(encoding="utf-8")
-    return text.replace("{社名}", company_name).strip() + "\n"
+def build_message(company: dict) -> tuple[str, str]:
+    """送信先ごとの (件名, 本文)。{社名} {業種名} {地域} を置き換える。"""
+    industry = company.get("業種", "")
+    m = re.search(r"名古屋市\s*(\S{1,4}?区)", nfkc(company.get("所在地", "")))
+    values = {
+        "{社名}": company.get("社名", ""),
+        "{業種名}": config.INDUSTRY_LABELS.get(industry, industry or "建設関連"),
+        "{地域}": f"名古屋市{m.group(1)}" if m else "名古屋",
+    }
+
+    def fill(text: str) -> str:
+        for k, v in values.items():
+            text = text.replace(k, v)
+        return text
+
+    return fill(config.SENDER["subject"]), fill(config.MESSAGE_TXT.read_text(encoding="utf-8")).strip() + "\n"
 
 
 def launch_chromium(pw, headless: bool = True):

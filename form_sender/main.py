@@ -129,7 +129,8 @@ def cmd_send(args) -> None:
                 page = ctx.new_page()
                 page.on("dialog", lambda d: d.accept())  # 「送信しますか？」等の確認ダイアログ
                 try:
-                    out = process_company(page, name, url, build_message(name), live, shot)
+                    subject, message = build_message(c)
+                    out = process_company(page, name, url, message, live, shot, subject)
                 except Exception as e:  # 想定外のエラーでも記録して次へ
                     first = (str(e).splitlines() or [type(e).__name__])[0]
                     out_result, out_reason = RESULT_FAIL, f"予期しないエラー: {first[:150]}"

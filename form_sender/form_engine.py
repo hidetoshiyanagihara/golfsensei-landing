@@ -773,7 +773,8 @@ def _wait_settle(page: Page):
     page.wait_for_timeout(1500)
 
 
-def process_company(page: Page, name: str, url: str, message: str, live: bool, shot_path: str) -> Outcome:
+def process_company(page: Page, name: str, url: str, message: str, live: bool, shot_path: str,
+                    subject: str = "") -> Outcome:
     """1社分の処理。live=False（テスト）では入力後にスクリーンショットを撮り送信しない。"""
     if not _goto(page, url):
         return Outcome("失敗", "サイトにアクセスできない")
@@ -795,7 +796,7 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
     fields = fr.evaluate(EXTRACT_JS, root)
     if not fields:
         return Outcome("スキップ", "問い合わせフォームが見つからない")
-    sender = Sender(message=message)
+    sender = Sender(message=message, subject=subject or config.SENDER["subject"])
     plan = build_plan(fields, sender)
     if plan.problems:
         return Outcome("スキップ", " / ".join(dict.fromkeys(plan.problems))[:200])
