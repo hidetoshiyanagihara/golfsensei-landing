@@ -72,7 +72,7 @@ common.append_rows(config.NG_LIST_CSV, common.NG_FIELDS, [{"社名": "NG登録",
 common.append_rows(config.NG_LIST_CSV, common.NG_FIELDS, [
     {"社名": "", "URL": f"http://127.0.0.21:{P}/"}, {"社名": "", "URL": f"http://127.0.0.25:{P}/"}])
 
-args = SimpleNamespace(mode="test", count=10, retest=False, no_wait=True, headed=False, yes=True, any_time=True)
+args = SimpleNamespace(mode="test", count=10, retest=False, no_wait=True, headed=False, yes=True, any_time=True, industry=None)
 print("== 2. テストモード")
 main.cmd_send(args)
 res = {r["社名"]: r for r in common.load_results() if r["モード"] == "テスト"}

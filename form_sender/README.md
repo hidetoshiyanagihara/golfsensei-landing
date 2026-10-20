@@ -28,6 +28,7 @@ python main.py send --mode test --retest        # テスト済みの会社も再
 # 3. 本番モード（実際に送信。実行前に yes の確認あり。1日最大50件）
 python main.py send --mode live
 python main.py send --mode live --count 20
+python main.py send --mode live --industry 塗装 解体 内装   # 業種を絞って送る
 
 # 件数確認
 python main.py status

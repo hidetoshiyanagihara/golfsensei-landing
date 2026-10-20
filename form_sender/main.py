@@ -36,7 +36,7 @@ def cmd_import(args) -> None:
     log(f"完了: {len(found)} 社を companies.csv に追加しました")
 
 
-def _targets(mode: str, retest: bool) -> list[dict]:
+def _targets(mode: str, retest: bool, industries: list[str] | None = None) -> list[dict]:
     """送信対象の会社を companies.csv の順に返す（送信済み・NG・処理済みは除く）。"""
     results = load_results()
     sent = sent_registry(results)
@@ -51,6 +51,8 @@ def _targets(mode: str, retest: bool) -> list[dict]:
     ng_recorded = Registry([r for r in results if r.get("理由") == "NGリスト"])
     out = []
     for c in load_companies():
+        if industries and c.get("業種", "") not in industries:
+            continue
         name, url = c.get("社名", ""), c.get("URL", "")
         if not url:
             continue
@@ -92,7 +94,7 @@ def cmd_send(args) -> None:
     else:
         count = args.count or config.TEST_DEFAULT_COUNT
 
-    targets = _targets(mode, args.retest)
+    targets = _targets(mode, args.retest, args.industry)
     if not targets:
         log("対象の会社がありません（companies.csv を確認してください）")
         return
@@ -184,6 +186,7 @@ def main() -> None:
     p.add_argument("--no-wait", action="store_true", help="（テストのみ）1件ごとの待機を省略")
     p.add_argument("--headed", action="store_true", help="ブラウザ画面を表示して実行")
     p.add_argument("--yes", action="store_true", help="本番送信の確認を省略")
+    p.add_argument("--industry", nargs="+", help="この業種（companies.csv の業種列）の会社だけに送る 例: --industry 塗装 解体 内装")
     p.add_argument("--any-time", action="store_true", help="（本番）送信時間帯の制限を無視する")
     p.set_defaults(func=cmd_send)
 
