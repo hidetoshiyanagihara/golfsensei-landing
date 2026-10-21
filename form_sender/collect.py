@@ -369,9 +369,16 @@ def _clean_name(s: str) -> str:
     s = re.sub(r"^(?:©|\(c\)|copyright)\s*(?:\d{4}[\s\-–~]*\d{0,4})?\s*", "", s, flags=re.I)
     s = re.sub(r"\s*(all rights reserved|inc\.?|co\.,? ?ltd\.?).*$", "", s, flags=re.I).strip(" ,|-")
     s = re.sub(r"\s*[|｜].*$", "", s)                                   # 「社名 | ROKUGO」
-    s = re.sub(r"\s+[\-–—]\s+.*$", "", s)                               # 「株式会社X - 土木工事・…」
+    s = re.sub(r"\s+[\-–—/／]\s+.*$", "", s)                           # 「株式会社X - 土木工事・…」「X / 知事許可…」
+    s = re.sub(rf"^[^「]*「(?=\S*{_CORP})", "", s)                         # 「解体屋「有限会社X」
+    m = re.match(rf"^(\S*)[(（]({_CORP}[^)）]+)[)）].*$", s)               # 「meiwa(株式会社明和)」
+    if m and not re.search(_CORP, m.group(1)):
+        s = m.group(2)
+    m = re.match(rf"^.*?は({_CORP}\S+)$", s)                                # 「解体工事業者は株式会社X」
+    if m:
+        s = m.group(1)
     s = re.sub(r"[(（【][ァ-ヶー・\s]+[)）】]", "", s)                   # 途中の読み「三本(ミモト)建設」
-    s = re.sub(r"(まで|にお任せ.*|へようこそ.*|の\S*ページ)$", "", s)
+    s = re.sub(r"(まで|へ|にお任せ.*|へようこそ.*|の\S*ページ)$", "", s)
     s = re.sub(r"\s+(平成|令和|昭和|創業|設立)\S*.*$", "", s)                 # 「X 平成24年8月法人化」
     s = re.sub(r"^(\S*[A-Za-z]\S*)\s+[ァ-ヶー]+$", r"\1", s)               # 「巧STYLE タクミスタイル」
     s = re.sub(r"[\s・\-]+(公式(ホームページ|サイト|HP)|ホームページ|オフィシャルサイト|official site|トップページ|TOP)$", "", s, flags=re.I)
