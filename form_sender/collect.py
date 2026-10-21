@@ -402,7 +402,7 @@ def _clean_name(s: str) -> str:
     if m and not re.search(_CORP, m.group(1)):
         s = m.group(2)
     # 「総合建設 株式会社Takeichi」→ 株式会社Takeichi
-    m = re.match(rf"^(\S+)\s+({_CORP}\S+)$", s)
+    m = re.match(rf"^(\S+)\s+({_CORP}\S+|\S+{_CORP})$", s)       # 「解体専門企業 AREN株式会社」も
     if m and not re.search(_CORP, m.group(1)):
         s = m.group(2)
     s = re.sub(r"\s*[(（][^)）]*[)）]?\s*$", "", s)                    # 末尾の（読み・英文名）
