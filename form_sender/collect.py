@@ -1,4 +1,4 @@
-"""【1. リスト作成】検索エンジン/企業名簿から名古屋市の中小企業の公式サイトを集めて companies.csv に追記する。"""
+"""【1. リスト作成】検索エンジン/企業名簿から名古屋市と周辺の市の中小企業の公式サイトを集めて companies.csv に追記する。"""
 import json
 import random
 import re
@@ -37,7 +37,11 @@ INDUSTRY_WORDS_RE = re.compile(
 PORTAL_TITLE_RE = re.compile(r"おすすめ|ランキング|比較|口コミ|業者一覧|業者ガイド|優良業者|業者を探す|一括見積")
 CORP_IN_NAME_RE = re.compile(r"株式会社|有限会社|合同会社|合資会社|㈱|㈲|\(株\)|\(有\)|工務店|建設|工業|設備|不動産|ホーム|住建|建工|電設|電工")
 NAME_LABELS = ("会社名", "社名", "商号", "名称", "法人名", "企業名", "屋号")
-ADDRESS_RE = re.compile(r"(?:愛知県\s*)?名古屋市\s*\S{1,4}?区[^\s、。,<>「」()（）|｜/／]{1,40}")
+def _address_re() -> re.Pattern:
+    """対象地域（名古屋市の各区と周辺の市）の住所。設定を変えたテストでも効くよう呼ぶたびに作る。"""
+    cities = "|".join(map(re.escape, config.SURROUNDING_CITIES))
+    area = r"名古屋市\s*\S{1,4}?区" + (f"|(?:{cities})" if cities else "")
+    return re.compile(rf"(?:愛知県\s*)?(?:{area})[^\s、。,<>「」()（）|｜/／]{{1,40}}")
 EMPLOYEE_RE = re.compile(r"(?:従業員|社員|スタッフ)数?[^0-9\n]{0,12}?([0-9][0-9,]*)\s*(?:名|人)")
 CAPITAL_RE = re.compile(r"資本金[^0-9\n]{0,12}?([0-9][0-9,\.]*)\s*(億|千万|百万|万)?")
 
@@ -118,8 +122,8 @@ class Collector:
     def queries(self):
         """(業種, 検索語) を区×業種でローテーションしながら返す。前回の続きから再開する。"""
         pairs = [
-            (industry, f"名古屋市{ward} {kw}")
-            for ward in config.NAGOYA_WARDS
+            (industry, f"{area} {kw}")
+            for area in config.SURROUNDING_CITIES + [f"名古屋市{w}" for w in config.NAGOYA_WARDS]
             for industry, kws in config.INDUSTRY_QUERIES.items()
             for kw in kws
         ]
@@ -172,7 +176,7 @@ class Collector:
 
         address = _extract_address(texts)
         if not address:
-            return "名古屋市の所在地が見つからない"
+            return "名古屋市・周辺の市の所在地が見つからない"
 
         employees = _extract_employees(alltext)
         if employees is not None and employees > config.MAX_EMPLOYEES:
@@ -289,12 +293,12 @@ class Collector:
                 industry = row.get("業種", "")
                 if not name or existing.contains(name, url) or ng.contains(name, url):
                     continue
-                if "名古屋市" not in nfkc(row.get("所在地", "名古屋市")):
-                    self.log(f"  除外: {name}（所在地が名古屋市外）")
+                if row.get("所在地") and not _address_re().search(nfkc(row["所在地"])):
+                    self.log(f"  除外: {name}（所在地が対象地域外）")
                     continue
                 if not url:
                     self.log(f"検索: {name}")
-                    url = next((u for u in self.search(f"{name} 名古屋市 {industry}")
+                    url = next((u for u in self.search(f"{name} {industry}")
                                 if not is_excluded_domain(u)), "")
                     if not url:
                         self.log(f"  除外: {name}（公式サイトが見つからない）")
@@ -415,7 +419,7 @@ def _clean_name(s: str) -> str:
 def _extract_address(texts: list[str]) -> str:
     best = ""
     for t in texts:
-        for m in ADDRESS_RE.finditer(t):
+        for m in _address_re().finditer(t):
             addr = m.group(0).replace(" ", "")
             if not addr.startswith("愛知県"):
                 addr = "愛知県" + addr

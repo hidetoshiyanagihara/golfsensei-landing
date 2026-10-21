@@ -180,11 +180,14 @@ def record_result(name: str, url: str, result: str, reason: str, mode: str) -> d
 def build_message(company: dict) -> tuple[str, str]:
     """送信先ごとの (件名, 本文)。{社名} {業種名} {地域} を置き換える。"""
     industry = company.get("業種", "")
-    m = re.search(r"名古屋市\s*(\S{1,4}?区)", nfkc(company.get("所在地", "")))
+    addr = nfkc(company.get("所在地", ""))
+    m = re.search(r"名古屋市\s*(\S{1,4}?区)", addr)
+    city = next((c for c in config.SURROUNDING_CITIES if c in addr), "")
     values = {
         "{社名}": company.get("社名", ""),
         "{業種名}": config.INDUSTRY_LABELS.get(industry, industry or "建設関連"),
-        "{地域}": f"名古屋市{m.group(1)}" if m else "名古屋",
+        "{地域}": f"名古屋市{m.group(1)}" if m else (city or "名古屋"),
+        "{近さ}": "同じ愛知県の会社です" if city and not m else "同じ名古屋の会社です",
     }
 
     def fill(text: str) -> str:

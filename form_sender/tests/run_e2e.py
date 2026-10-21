@@ -23,6 +23,7 @@ config.SCREENSHOT_DIR = tmp / "screenshots"
 shutil.copy(HERE.parent / "ng_list.csv", config.NG_LIST_CSV)
 config.WAIT_MIN_SEC = config.WAIT_MAX_SEC = 0
 config.NAGOYA_WARDS = ["中区"]
+config.SURROUNDING_CITIES = []
 config.INDUSTRY_QUERIES = {"工務店": ["工務店"]}
 
 import collect  # noqa: E402
