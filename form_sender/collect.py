@@ -383,7 +383,8 @@ def _clean_name(s: str) -> str:
     s = re.sub(r"^(\S*[A-Za-z]\S*)\s+[ァ-ヶー]+$", r"\1", s)               # 「巧STYLE タクミスタイル」
     s = re.sub(r"[\s・\-]+(公式(ホームページ|サイト|HP)|ホームページ|オフィシャルサイト|official site|トップページ|TOP)$", "", s, flags=re.I)
     # 「名古屋市北区で…なら【株式会社X】」「…の株式会社X」→ 株式会社X
-    m = re.match(rf"^.*(?:なら|の)\s*【?({_CORP}[^】]+)】?$", s) or re.match(rf"^.*【(.*{_CORP}.*)】.*$", s)
+    m = (re.match(rf"^.*(?:なら|の)\s*【?({_CORP}[^】]+)】?$", s) or re.match(rf"^.*【(.*{_CORP}.*)】.*$", s)
+         or re.match(rf"^.*『(.*{_CORP}.*)』.*$", s))                       # 「塗装専門店『株式会社X』」
     if m:
         s = m.group(1)
     elif "なら" in s:
