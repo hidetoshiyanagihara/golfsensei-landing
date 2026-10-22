@@ -54,7 +54,7 @@ def _record(results: list[dict], post: dict, result: str, detail: str, mode: str
 
 
 def cmd_post(args) -> int:
-    from platforms import PostError, missing_env, publish
+    from platforms import REQUIRED_ENV, PostError, missing_env, publish
 
     mode = MODE_LIVE if args.mode == "live" else MODE_TEST
     now = datetime.now()
@@ -91,6 +91,9 @@ def cmd_post(args) -> int:
             log(f"保留 {label} 本日の上限 {config.DAILY_POST_LIMIT[platform]} 件に達しています")
             continue
         missing = missing_env(platform)
+        if len(missing) == len(REQUIRED_ENV[platform]):
+            log(f"保留 {label} {config.PLATFORM_LABELS[platform]} の認証情報が未設定です")
+            continue
         if missing:
             _record(results, p, RESULT_FAIL, "認証情報なし: " + ", ".join(missing), mode)
             log(f"失敗 {label} 認証情報なし: {', '.join(missing)}")

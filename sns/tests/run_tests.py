@@ -105,12 +105,17 @@ check(os.environ.get("X_ACCESS_SECRET") == "u", ".env を読み込み（引用�
 check(calls == [("x", f"こんにちは {config.LP_URL}?src=x")], "本番: X に投稿（1日上限1件）")
 check(live["P1"]["結果"] == "成功" and live["P1"]["投稿ID・理由"].startswith("id-x"), "成功と投稿IDを記録")
 check(live["P2"]["結果"] == "スキップ", "検査NGはスキップ")
-check(live["P3"]["結果"] == "失敗" and "LINKEDIN_ACCESS_TOKEN" in live["P3"]["投稿ID・理由"], "認証情報なしは失敗")
+check("P3" not in live, "認証情報が丸ごと未設定の媒体は保留（失敗にしない）")
 check("P4" not in live, "上限超過分は記録せず保留（翌日に投稿）")
-check(code == 1, "失敗があれば終了コード1")
+check(code == 0, "保留・スキップだけなら終了コード0")
 main.main(["post", "--mode", "live", "--yes"])
 check(len(calls) == 1, "成功済み・上限到達分は再投稿しない")
-check(len([r for r in common.load_results() if r["モード"] == "本番"]) == 3, "同じスキップ・失敗は重複して記録しない")
+check(len([r for r in common.load_results() if r["モード"] == "本番"]) == 2, "同じスキップは重複して記録しない")
+os.environ["LINKEDIN_ACCESS_TOKEN"] = "t"
+check(main.main(["post", "--mode", "live", "--yes"]) == 1, "一部だけ未設定は失敗・終了コード1")
+live = {r["ID"]: r for r in common.load_results() if r["モード"] == "本番"}
+check(live["P3"]["結果"] == "失敗" and "LINKEDIN_AUTHOR_URN" in live["P3"]["投稿ID・理由"], "不足している認証情報を記録")
+os.environ.pop("LINKEDIN_ACCESS_TOKEN")
 
 # ---------------------------------------------------------------- .env の書き換え
 common.save_env("X_API_KEY", "new")
@@ -132,7 +137,8 @@ def fake_get(url, **kw):
     if url.endswith("/userinfo"):
         return FakeRes({"sub": "abc123", "name": "柳原 秀俊"})
     if url.endswith("/me/accounts"):
-        return FakeRes({"data": [{"name": "ページ"}, {"name": "AXION", "instagram_business_account": {"id": "1789"}}]})
+        return FakeRes({"data": [{"name": "ページ"}, {"name": "AXION", "instagram_business_account": {"id": "1789"},
+                                                     "access_token": "PAGE"}]})
     if url.endswith("/oauth/access_token"):
         return FakeRes({"access_token": "LONG"})
     if url.endswith("/1789"):
@@ -151,7 +157,7 @@ code = main.main(["verify"])
 env_text = config.ENV_FILE.read_text(encoding="utf-8")
 check(code == 0, "verify: 3 媒体とも OK")
 check("LINKEDIN_AUTHOR_URN=urn:li:person:abc123" in env_text, "verify: LinkedIn の URN を自動記入")
-check("IG_USER_ID=1789" in env_text and "IG_ACCESS_TOKEN=LONG" in env_text, "verify: IG ユーザーIDと長期トークンを自動記入")
+check("IG_USER_ID=1789" in env_text and "IG_ACCESS_TOKEN=PAGE" in env_text, "verify: IG ユーザーIDと期限なしのページトークンを自動記入")
 os.environ.pop("X_API_KEY")
 config.ENV_FILE.write_text("", encoding="utf-8")
 check(main.main(["verify"]) == 1, "verify: 未設定の媒体があれば終了コード1")

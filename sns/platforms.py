@@ -144,12 +144,16 @@ def verify_instagram() -> str:
         save_env("IG_TOKEN_LONG_LIVED", "1")
     if not os.environ.get("IG_USER_ID"):
         res = requests.get(f"{config.INSTAGRAM_GRAPH_URL}/me/accounts", params={
-            "fields": "name,instagram_business_account", "access_token": token},
+            "fields": "name,instagram_business_account,access_token", "access_token": token},
             timeout=config.HTTP_TIMEOUT_SEC)
         pages = [p for p in _check(res, "Facebook ページ一覧").get("data", []) if p.get("instagram_business_account")]
         if not pages:
             raise PostError("Instagram ビジネスアカウントと連携した Facebook ページが見つからない")
         save_env("IG_USER_ID", pages[0]["instagram_business_account"]["id"])
+        if os.environ.get("IG_TOKEN_LONG_LIVED") and pages[0].get("access_token"):
+            # 長期ユーザートークンから得たページトークンは期限がないので、以後はこちらを使う
+            token = pages[0]["access_token"]
+            save_env("IG_ACCESS_TOKEN", token)
     res = requests.get(f"{config.INSTAGRAM_GRAPH_URL}/{os.environ['IG_USER_ID']}",
                        params={"fields": "username", "access_token": token}, timeout=config.HTTP_TIMEOUT_SEC)
     return "@" + _check(res, "Instagram アカウント確認")["username"]

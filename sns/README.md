@@ -2,6 +2,7 @@
 
 | ファイル | 内容 |
 |---|---|
+| [`API_SETUP.md`](API_SETUP.md) | **全自動投稿の始め方**（APIキーの取得手順と GitHub への登録） |
 | [`STRATEGY.md`](STRATEGY.md) | 運用戦略（ターゲット・媒体の役割・投稿の柱・KPI・週次ルーティン・運用ルール） |
 | [`PROFILES.md`](PROFILES.md) | 各 SNS のプロフィール文（貼り付け用） |
 | [`../axion-sales.html`](../axion-sales.html) | SNS からの誘導先 LP（無料相談の申込） |
@@ -64,7 +65,12 @@ Excel で編集する場合は「CSV UTF-8」形式で保存してください�
 
 ### 定期実行
 
-30 分おきに `python main.py post --mode live --yes` を実行します。
+**おすすめ：GitHub Actions（PC 不要）**。`.github/workflows/sns-post.yml` が 30 分おきに日本時間で投稿します。
+認証情報はリポジトリの Secrets に登録し、投稿記録は `sns-log` ブランチの `result.csv` に保存されます。
+手順は [`API_SETUP.md`](API_SETUP.md)。認証情報の確認は Actions の「SNS 接続チェック」から。
+
+自分の PC で動かす場合は、30 分おきに `python main.py post --mode live --yes` を実行します
+（GitHub Actions と併用すると記録が別々になり二重投稿になるので、どちらか一方にしてください）。
 
 - **Windows（タスクスケジューラ）**：「基本タスクの作成」→ 毎日・繰り返し間隔 30 分 →
   プログラム `python`、引数 `main.py post --mode live --yes`、開始 `C:\…\golfsensei-landing\sns`
@@ -75,6 +81,7 @@ Excel で編集する場合は「CSV UTF-8」形式で保存してください�
 - 予定日時を過ぎた未投稿分を古い順に投稿。予定から 24 時間以上過ぎたものは自動では出さない
   （PC を止めていた後の一斉投稿を防ぐ。出す場合は予定日時を直す）
 - 1 日の上限：X 5 件・Instagram 2 件・LinkedIn 2 件（`config.py`）。超えた分は翌日に回す
+- 認証情報が 1 つも設定されていない媒体は「保留」（失敗にしない。1 媒体ずつ始められる）
 - 検査で問題がある投稿はスキップ、API エラーは失敗として記録し、次回の実行で再試行
   （同じスキップ・失敗は `result.csv` に重複して記録しない）
 - テストモードの記録は本番の投稿済み判定に使わない（`モード` 列で区別）
