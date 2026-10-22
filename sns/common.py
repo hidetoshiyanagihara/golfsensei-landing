@@ -155,3 +155,16 @@ def due_posts(posts: list[dict], results: list[dict], mode: str, now: datetime,
         due.append(p)
     due.sort(key=lambda p: parse_time(p["予定日時"]))
     return due, late
+
+
+def save_env(key: str, value: str) -> None:
+    """sns/.env の KEY を書き換える（無ければ追記）。"""
+    lines = config.ENV_FILE.read_text(encoding="utf-8").splitlines() if config.ENV_FILE.exists() else []
+    for i, line in enumerate(lines):
+        if line.split("=", 1)[0].strip() == key:
+            lines[i] = f"{key}={value}"
+            break
+    else:
+        lines.append(f"{key}={value}")
+    config.ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.environ[key] = value

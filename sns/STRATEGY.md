@@ -71,7 +71,7 @@ SNS投稿 ─┐
 | いつ | やること |
 |---|---|
 | 金曜 30 分 | 翌週分の投稿を `posts.csv` に追加 → `python main.py check` |
-| 金曜 30 分 | Instagram 用の図解画像を作成（Canva 等）し、公開 URL を `画像URL` に記入 |
+| 金曜 30 分 | Instagram 用の図解を `cards.csv` に書き `python main.py images` → main に push して公開 |
 | 毎日 10 分 | コメント・DM への返信、対象の経営者の投稿への反応（手動） |
 | 月末 30 分 | `python main.py status` と各インサイトで KPI を確認し、伸びた投稿の型を翌月に増やす |
 

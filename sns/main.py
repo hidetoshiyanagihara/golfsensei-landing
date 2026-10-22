@@ -5,6 +5,8 @@
   python main.py post --mode test [--platform x]   # テスト: API を呼ばず、投稿予定の内容を表示・記録
   python main.py post --mode live [--yes]          # 本番: 予定日時を過ぎた未投稿分を投稿
   python main.py status                            # 媒体ごとの件数の確認
+  python main.py verify                            # .env の認証情報を確認し、URN・IG ユーザーID等を自動で埋める
+  python main.py images                            # cards.csv から Instagram 用画像を生成し画像URLを埋める
 
 タスクスケジューラ / cron で 30 分おきに `python main.py post --mode live --yes` を実行する想定。
 """
@@ -121,6 +123,44 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_verify(args) -> int:
+    from platforms import REQUIRED_ENV, VERIFIERS, PostError, missing_env
+
+    load_env()
+    ng = 0
+    for platform in config.PLATFORMS:
+        label = config.PLATFORM_LABELS[platform]
+        # URN と IG ユーザー ID は verify で自動取得できるので、未設定でも確認に進む
+        missing = [k for k in missing_env(platform) if k not in ("LINKEDIN_AUTHOR_URN", "IG_USER_ID")]
+        if missing:
+            log(f"未設定 {label}: {', '.join(missing)} を .env に記入してください")
+            ng += 1
+            continue
+        try:
+            log(f"OK     {label}: {VERIFIERS[platform]()}")
+        except (PostError, KeyError) as e:
+            log(f"NG     {label}: {e}")
+            ng += 1
+    log(f"確認完了: {len(REQUIRED_ENV) - ng}/{len(REQUIRED_ENV)} 媒体で投稿の準備ができています")
+    return 1 if ng else 0
+
+
+def cmd_images(args) -> int:
+    from images import fill_image_urls, load_cards, render
+
+    cards = load_cards()
+    if args.id:
+        cards = [c for c in cards if c.get("ID") in args.id]
+    if not cards:
+        log(f"{config.CARDS_CSV.name} に対象の行がありません")
+        return 1
+    made = render(cards, log=log)
+    n = fill_image_urls(made)
+    log(f"完了: {len(made)} 枚を生成、posts.csv の画像URLを {n} 件記入しました")
+    log("images/ を main ブランチにマージすると公開され、Instagram に投稿できるようになります")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="SNS 予約投稿ツール")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -131,6 +171,10 @@ def main(argv=None) -> int:
     p.add_argument("--yes", action="store_true", help="確認なしで投稿（定期実行用）")
     p.set_defaults(func=cmd_post)
     sub.add_parser("status").set_defaults(func=cmd_status)
+    sub.add_parser("verify").set_defaults(func=cmd_verify)
+    p = sub.add_parser("images")
+    p.add_argument("id", nargs="*", help="生成する ID（省略時はすべて）")
+    p.set_defaults(func=cmd_images)
     args = ap.parse_args(argv)
     return args.func(args)
 

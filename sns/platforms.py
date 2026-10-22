@@ -3,6 +3,9 @@
 X:         X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET
 LinkedIn:  LINKEDIN_ACCESS_TOKEN, LINKEDIN_AUTHOR_URN（urn:li:person:… または urn:li:organization:…）
 Instagram: IG_USER_ID, IG_ACCESS_TOKEN（プロアカウント + Facebook ページ連携が必要）
+
+verify_*() は認証情報を読み取り系 API で確かめ、分かる ID（LinkedIn の URN・IG ユーザー ID）や
+長期トークンを sns/.env に書き込む。
 """
 import os
 import re
@@ -11,7 +14,7 @@ import time
 import requests
 
 import config
-from common import HASHTAG_RE
+from common import HASHTAG_RE, save_env
 
 REQUIRED_ENV = {
     "x": ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"],
@@ -108,6 +111,51 @@ def post_instagram(text: str, image_url: str = "") -> str:
                         timeout=config.HTTP_TIMEOUT_SEC)
     return _check(res, "Instagram 公開")["id"]
 
+
+# ---------------------------------------------------------------- 認証情報の確認
+def verify_x() -> str:
+    from requests_oauthlib import OAuth1
+    auth = OAuth1(os.environ["X_API_KEY"], os.environ["X_API_SECRET"],
+                  os.environ["X_ACCESS_TOKEN"], os.environ["X_ACCESS_SECRET"])
+    res = requests.get(config.X_ME_URL, auth=auth, timeout=config.HTTP_TIMEOUT_SEC)
+    return "@" + _check(res, "X アカウント確認")["data"]["username"]
+
+
+def verify_linkedin() -> str:
+    res = requests.get(config.LINKEDIN_USERINFO_URL,
+                       headers={"Authorization": f"Bearer {os.environ['LINKEDIN_ACCESS_TOKEN']}"},
+                       timeout=config.HTTP_TIMEOUT_SEC)
+    info = _check(res, "LinkedIn アカウント確認")
+    urn = os.environ.get("LINKEDIN_AUTHOR_URN", "")
+    if not urn.startswith("urn:li:") or urn.endswith("xxxxxxxx"):
+        save_env("LINKEDIN_AUTHOR_URN", f"urn:li:person:{info['sub']}")
+    return f"{info.get('name', '')}（{os.environ['LINKEDIN_AUTHOR_URN']}）"
+
+
+def verify_instagram() -> str:
+    token = os.environ["IG_ACCESS_TOKEN"]
+    app_id, app_secret = os.environ.get("FB_APP_ID"), os.environ.get("FB_APP_SECRET")
+    if app_id and app_secret and not os.environ.get("IG_TOKEN_LONG_LIVED"):
+        res = requests.get(f"{config.INSTAGRAM_GRAPH_URL}/oauth/access_token", params={
+            "grant_type": "fb_exchange_token", "client_id": app_id, "client_secret": app_secret,
+            "fb_exchange_token": token}, timeout=config.HTTP_TIMEOUT_SEC)
+        token = _check(res, "Instagram 長期トークン")["access_token"]
+        save_env("IG_ACCESS_TOKEN", token)
+        save_env("IG_TOKEN_LONG_LIVED", "1")
+    if not os.environ.get("IG_USER_ID"):
+        res = requests.get(f"{config.INSTAGRAM_GRAPH_URL}/me/accounts", params={
+            "fields": "name,instagram_business_account", "access_token": token},
+            timeout=config.HTTP_TIMEOUT_SEC)
+        pages = [p for p in _check(res, "Facebook ページ一覧").get("data", []) if p.get("instagram_business_account")]
+        if not pages:
+            raise PostError("Instagram ビジネスアカウントと連携した Facebook ページが見つからない")
+        save_env("IG_USER_ID", pages[0]["instagram_business_account"]["id"])
+    res = requests.get(f"{config.INSTAGRAM_GRAPH_URL}/{os.environ['IG_USER_ID']}",
+                       params={"fields": "username", "access_token": token}, timeout=config.HTTP_TIMEOUT_SEC)
+    return "@" + _check(res, "Instagram アカウント確認")["username"]
+
+
+VERIFIERS = {"x": verify_x, "linkedin": verify_linkedin, "instagram": verify_instagram}
 
 POSTERS = {"x": post_x, "linkedin": post_linkedin, "instagram": post_instagram}
 

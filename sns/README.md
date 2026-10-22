@@ -6,6 +6,7 @@
 | [`PROFILES.md`](PROFILES.md) | 各 SNS のプロフィール文（貼り付け用） |
 | [`../axion-sales.html`](../axion-sales.html) | SNS からの誘導先 LP（無料相談の申込） |
 | `posts.csv` | 投稿予定（サンプル 2 週間分入り） |
+| `cards.csv` → `images/` | Instagram 用画像の内容 → 生成した画像（1080×1350 JPEG） |
 | `main.py` ほか | 予約投稿ツール（下記） |
 
 ## 予約投稿ツール
@@ -17,7 +18,9 @@ Python。`posts.csv` に書いた投稿を、予定日時を過ぎたら各 SNS 
 ```bash
 cd sns
 pip install -r requirements.txt
-cp .env.example .env    # 各 SNS の認証情報を記入（下記「API の準備」）
+playwright install chromium   # 画像生成用（form_sender でインストール済みなら不要）
+cp .env.example .env          # 各 SNS の認証情報を記入（下記「API の準備」）
+python main.py verify         # 認証情報を確認し、LinkedIn の URN・IG ユーザーID・長期トークンを自動で記入
 ```
 
 ### 使い方
@@ -29,7 +32,23 @@ python main.py post --mode test --platform x
 python main.py post --mode live             # 本番: 予定日時を過ぎた未投稿分を投稿（yes の確認あり）
 python main.py post --mode live --yes       # 定期実行用（確認なし）
 python main.py status                       # 媒体ごとの予定・投稿済み・失敗の件数
+python main.py verify                       # 認証情報の確認（ID の自動記入も）
+python main.py images [P020 ...]            # cards.csv から画像を生成し、posts.csv の画像URLを記入
 ```
+
+### Instagram 用画像（cards.csv）
+
+| 列 | 内容 |
+|---|---|
+| `ID` | posts.csv の Instagram 投稿と同じ ID |
+| `ラベル` | 左上のタグ（例 `保存版`） |
+| `見出し` | 大見出し。改行は `\n`、`**ここ**` はオレンジで強調 |
+| `項目` | 番号付きの項目。`\|` で区切る（項目内の改行は `\n`） |
+| `結び` | 下部のひとこと（`**強調**` 可） |
+
+`python main.py images` で `images/ID.jpg` を作り、posts.csv の空の画像URLに
+`https://golfsensei-landing.vercel.app/sns/images/ID.jpg` を入れます。
+**画像は main ブランチにマージ（push）して Vercel に公開されてから投稿されるようにしてください**（Instagram はその URL から画像を取りに行きます）。
 
 ### posts.csv
 
@@ -66,8 +85,8 @@ Excel で編集する場合は「CSV UTF-8」形式で保存してください�
 | 媒体 | 必要なもの | `.env` |
 |---|---|---|
 | X | [X Developer Portal](https://developer.x.com/) でアプリを作成し、User authentication で **Read and write** を有効化 → API Key/Secret と Access Token/Secret を発行（書き込み権限に変更した後に Access Token を再発行）。投稿 API の利用料金・上限は契約プランを確認 | `X_API_KEY` `X_API_SECRET` `X_ACCESS_TOKEN` `X_ACCESS_SECRET` |
-| LinkedIn | [LinkedIn Developers](https://developer.linkedin.com/) でアプリを作成し、「Share on LinkedIn」と「Sign In with LinkedIn using OpenID Connect」を追加 → `w_member_social` 付きのアクセストークンを発行。個人の URN は `/v2/userinfo` の `sub` から `urn:li:person:{sub}`。トークンは約 60 日で期限切れになるので再発行する | `LINKEDIN_ACCESS_TOKEN` `LINKEDIN_AUTHOR_URN` |
-| Instagram | Instagram をビジネスアカウントにして Facebook ページと連携 → [Meta for Developers](https://developers.facebook.com/) でアプリを作成し、`instagram_basic` `instagram_content_publish` `pages_show_list` の権限で長期アクセストークンを発行。IG ユーザー ID はページの `instagram_business_account` | `IG_USER_ID` `IG_ACCESS_TOKEN` |
+| LinkedIn | [LinkedIn Developers](https://developer.linkedin.com/) でアプリを作成し、「Share on LinkedIn」と「Sign In with LinkedIn using OpenID Connect」を追加 → `w_member_social` 付きのアクセストークンを発行。`LINKEDIN_AUTHOR_URN` は `verify` が自動で記入する。トークンは約 60 日で期限切れになるので再発行する | `LINKEDIN_ACCESS_TOKEN` `LINKEDIN_AUTHOR_URN` |
+| Instagram | Instagram をビジネスアカウントにして Facebook ページと連携 → [Meta for Developers](https://developers.facebook.com/) でアプリを作成し、グラフ API エクスプローラで `instagram_basic` `instagram_content_publish` `pages_show_list` 付きのユーザートークンを発行。`FB_APP_ID` `FB_APP_SECRET`（アプリの設定 → ベーシック）も入れておくと、`verify` が長期トークン（約60日）への交換と IG ユーザーID の取得を自動で行う | `IG_ACCESS_TOKEN` `FB_APP_ID` `FB_APP_SECRET`（`IG_USER_ID` は自動） |
 
 `config.py` の `LINKEDIN_VERSION`（YYYYMM）と `INSTAGRAM_GRAPH_URL` のバージョンは、古くなると API が使えなくなるので年 1 回程度更新してください。
 

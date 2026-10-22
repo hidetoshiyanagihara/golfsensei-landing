@@ -12,7 +12,7 @@ sys.path.insert(0, str(HERE.parent))
 import config  # noqa: E402
 
 tmp = Path(tempfile.mkdtemp())
-for name in ("POSTS_CSV", "RESULT_CSV", "ENV_FILE"):
+for name in ("POSTS_CSV", "RESULT_CSV", "ENV_FILE", "CARDS_CSV", "IMAGE_DIR"):
     setattr(config, name, tmp / getattr(config, name).name)
 
 import common  # noqa: E402
@@ -111,6 +111,64 @@ check(code == 1, "失敗があれば終了コード1")
 main.main(["post", "--mode", "live", "--yes"])
 check(len(calls) == 1, "成功済み・上限到達分は再投稿しない")
 check(len([r for r in common.load_results() if r["モード"] == "本番"]) == 3, "同じスキップ・失敗は重複して記録しない")
+
+# ---------------------------------------------------------------- .env の書き換え
+common.save_env("X_API_KEY", "new")
+common.save_env("FOO", "bar")
+env_text = config.ENV_FILE.read_text(encoding="utf-8")
+check("X_API_KEY=new" in env_text and "X_API_KEY=k" not in env_text and env_text.endswith("FOO=bar\n"),
+      "save_env: 既存キーは置換・新規キーは追記")
+
+# ---------------------------------------------------------------- verify（API は差し替え）
+class FakeRes:
+    def __init__(self, data, status=200):
+        self.status_code, self._data, self.text, self.headers = status, data, str(data), {}
+
+    def json(self):
+        return self._data
+
+
+def fake_get(url, **kw):
+    if url.endswith("/userinfo"):
+        return FakeRes({"sub": "abc123", "name": "柳原 秀俊"})
+    if url.endswith("/me/accounts"):
+        return FakeRes({"data": [{"name": "ページ"}, {"name": "AXION", "instagram_business_account": {"id": "1789"}}]})
+    if url.endswith("/oauth/access_token"):
+        return FakeRes({"access_token": "LONG"})
+    if url.endswith("/1789"):
+        return FakeRes({"username": "axionsales"})
+    if url.endswith("/users/me"):
+        return FakeRes({"data": {"username": "axion_sales"}})
+    return FakeRes({"error": "?"}, 400)
+
+
+platforms.requests.get = fake_get
+os.environ.update({"LINKEDIN_ACCESS_TOKEN": "t", "LINKEDIN_AUTHOR_URN": "urn:li:person:xxxxxxxx",
+                   "IG_ACCESS_TOKEN": "short", "FB_APP_ID": "a", "FB_APP_SECRET": "b"})
+os.environ.pop("IG_USER_ID", None)
+os.environ.pop("IG_TOKEN_LONG_LIVED", None)
+code = main.main(["verify"])
+env_text = config.ENV_FILE.read_text(encoding="utf-8")
+check(code == 0, "verify: 3 媒体とも OK")
+check("LINKEDIN_AUTHOR_URN=urn:li:person:abc123" in env_text, "verify: LinkedIn の URN を自動記入")
+check("IG_USER_ID=1789" in env_text and "IG_ACCESS_TOKEN=LONG" in env_text, "verify: IG ユーザーIDと長期トークンを自動記入")
+os.environ.pop("X_API_KEY")
+config.ENV_FILE.write_text("", encoding="utf-8")
+check(main.main(["verify"]) == 1, "verify: 未設定の媒体があれば終了コード1")
+
+# ---------------------------------------------------------------- 画像
+import images  # noqa: E402
+card = {"ID": "P9", "ラベル": "<保存版>", "見出し": "選ぶ\\n**4つの**ポイント", "項目": "一つ目|二つ\\n目", "結び": "以上"}
+h = images.card_html(card)
+check("&lt;保存版&gt;" in h and "選ぶ<br><em>4つの</em>ポイント" in h, "画像: エスケープ・改行・強調")
+check(h.count("<li ") == 2 and "二つ<br>目" in h, "画像: 項目は | 区切り、項目内は改行")
+with open(config.POSTS_CSV, "w", encoding="utf-8-sig") as f:
+    f.write("ID,予定日時,媒体,本文,画像URL\n")
+    f.write("P9,2026-11-01 09:00,instagram,a,\nP8,2026-11-01 09:00,instagram,b,https://e.com/b.jpg\n")
+    f.write("P7,2026-11-01 09:00,x,c,\n")
+check(images.fill_image_urls(["P9", "P8", "P7"]) == 1, "画像URL: 空の Instagram 投稿だけ記入")
+urls = {p["ID"]: p["画像URL"] for p in common.load_posts()}
+check(urls == {"P9": f"{config.IMAGE_URL_BASE}/P9.jpg", "P8": "https://e.com/b.jpg", "P7": ""}, "画像URL: 既存の URL は上書きしない")
 
 shutil.rmtree(tmp)
 print(f"\n{'全テスト成功' if not failures else f'{len(failures)} 件失敗'}")

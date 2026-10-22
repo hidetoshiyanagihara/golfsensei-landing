@@ -14,7 +14,7 @@ LP の URL は各媒体ごとに `?src=` を付ける（相談メールの件名
 名古屋で営業代行「AXION SALES（アクシオンセールス）」代表。建設・工務店・設備・リフォーム・不動産の中小企業さま向けに、リスト作成から商談設定まで新規アポ獲得を丸ごと代行。初月5アポ成果保証。新規開拓のコツを毎日発信／15分の無料相談は↓
 ```
 
-**ウェブサイト**：`https://hidetoshiyanagihara.github.io/golfsensei-landing/axion-sales.html?src=x`
+**ウェブサイト**：`https://golfsensei-landing.vercel.app/axion-sales.html?src=x`
 
 **固定投稿**：posts.csv の P001（自己紹介）を投稿後に固定する。
 
@@ -36,7 +36,7 @@ LP の URL は各媒体ごとに `?src=` を付ける（相談メールの件名
 ▼15分の無料相談はこちら
 ```
 
-**リンク**：`https://hidetoshiyanagihara.github.io/golfsensei-landing/axion-sales.html?src=instagram`
+**リンク**：`https://golfsensei-landing.vercel.app/axion-sales.html?src=instagram`
 
 **ハイライト**：「はじめての方へ」「サービス」「相談の流れ」「よくある質問」
 
@@ -66,7 +66,7 @@ AXION SALESは、その新規開拓を丸ごとお引き受けします。
 「営業お断り」の企業には連絡しない、断られたら二度と連絡しない――受け取る側の負担を考えた誠実な営業を大切にしています。
 
 15分の無料オンライン相談はこちら
-https://hidetoshiyanagihara.github.io/golfsensei-landing/axion-sales.html?src=linkedin
+https://golfsensei-landing.vercel.app/axion-sales.html?src=linkedin
 
 AXION SALES
 〒450-0002 名古屋市中村区名駅3-4-10 アルティメイト名駅1st 2階
