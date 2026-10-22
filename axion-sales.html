@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AXION SALES｜名古屋の建設・不動産専門 営業代行</title>
+<meta name="description" content="名古屋の建設・工務店・設備・リフォーム・不動産の中小企業さま向け営業代行。リスト作成から商談設定まで新規アポ獲得を丸ごと代行。初月3アポ成果保証。15分の無料相談受付中。">
+<meta property="og:title" content="AXION SALES｜名古屋の建設・不動産専門 営業代行">
+<meta property="og:description" content="リスト作成から商談設定まで、新規アポ獲得を丸ごと代行。初月3アポ成果保証。">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0f2340;
+    --navy-2: #1b3a63;
+    --accent: #e8962e;
+    --ink: #1f2430;
+    --sub: #5d6575;
+    --line: #e4e7ec;
+    --bg-soft: #f5f7fa;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--ink);
+    background: #fff;
+    line-height: 1.8;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 20px; }
+
+  /* ナビ */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(255,255,255,0.95);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(6px);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .brand { font-weight: 900; letter-spacing: 0.08em; color: var(--navy); text-decoration: none; }
+  .brand small { display: block; font-size: 9px; font-weight: 500; letter-spacing: 0.1em; color: var(--sub); line-height: 1; }
+  .nav-cta {
+    font-size: 13px; font-weight: 700; text-decoration: none;
+    background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 6px;
+  }
+
+  /* ヒーロー */
+  .hero {
+    background: linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 100%);
+    color: #fff; padding: 64px 0 56px;
+  }
+  .hero .tag {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
+    border: 1px solid rgba(255,255,255,0.4); padding: 4px 12px; border-radius: 999px; margin-bottom: 20px;
+  }
+  .hero h1 { font-size: clamp(26px, 6.4vw, 40px); font-weight: 900; line-height: 1.45; margin-bottom: 20px; }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p { font-size: 15px; color: rgba(255,255,255,0.85); margin-bottom: 28px; }
+  .guarantee {
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 28px;
+  }
+  .guarantee .num { font-size: 36px; font-weight: 900; color: var(--accent); line-height: 1; white-space: nowrap; }
+  .guarantee .num span { font-size: 16px; }
+  .guarantee div:last-child { font-size: 13px; line-height: 1.6; }
+  .guarantee strong { font-size: 16px; display: block; }
+  .btn {
+    display: block; text-align: center; text-decoration: none; font-weight: 700; font-size: 16px;
+    background: var(--accent); color: #fff; padding: 16px; border-radius: 8px; border: 0; width: 100%;
+    cursor: pointer; font-family: inherit; box-shadow: 0 4px 14px rgba(232,150,46,0.35);
+  }
+  .btn:hover { filter: brightness(1.05); }
+  .btn-sub { display: block; text-align: center; margin-top: 12px; font-size: 13px; color: rgba(255,255,255,0.8); }
+
+  /* セクション */
+  section { padding: 64px 0; }
+  section.soft { background: var(--bg-soft); }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--accent); text-align: center; margin-bottom: 8px; }
+  h2 { font-size: clamp(21px, 5vw, 28px); font-weight: 900; color: var(--navy); text-align: center; line-height: 1.5; margin-bottom: 36px; }
+
+  .worries { list-style: none; display: grid; gap: 12px; }
+  .worries li {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 16px 16px 48px; position: relative; font-weight: 500;
+  }
+  .worries li::before {
+    content: "✓"; position: absolute; left: 16px; top: 16px; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--navy); color: #fff; font-size: 12px; display: grid; place-items: center; line-height: 1;
+  }
+  .lead-out { text-align: center; margin-top: 28px; font-weight: 700; color: var(--navy); }
+
+  .steps { display: grid; gap: 14px; counter-reset: step; }
+  .step {
+    display: grid; grid-template-columns: 52px 1fr; gap: 14px; align-items: start;
+    border: 1px solid var(--line); border-radius: 10px; padding: 18px 16px; background: #fff;
+  }
+  .step::before {
+    counter-increment: step; content: "0" counter(step);
+    font-size: 22px; font-weight: 900; color: var(--accent); line-height: 1.2;
+  }
+  .step h3 { font-size: 16px; color: var(--navy); margin-bottom: 4px; }
+  .step p { font-size: 14px; color: var(--sub); }
+  .step.you { background: var(--navy); border-color: var(--navy); }
+  .step.you h3, .step.you p { color: #fff; }
+
+  .reasons { display: grid; gap: 16px; }
+  .reason { background: #fff; border-radius: 12px; padding: 22px 20px; border-top: 4px solid var(--accent); }
+  .reason h3 { font-size: 17px; color: var(--navy); margin-bottom: 8px; }
+  .reason p { font-size: 14px; color: var(--sub); }
+
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+  .flow div { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .flow div span {
+    display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 8px;
+    border-radius: 50%; background: var(--bg-soft); font-size: 20px;
+  }
+
+  .case { background: #fff; border-radius: 12px; padding: 24px 20px; }
+  .case-who { font-weight: 700; color: var(--navy); margin-bottom: 16px; }
+  .case-steps { list-style: none; display: grid; gap: 12px; }
+  .case-steps li { font-size: 14px; color: var(--sub); padding-left: 76px; position: relative; }
+  .case-steps b { position: absolute; left: 0; top: 0; color: var(--accent); font-size: 13px; }
+  .case-note { margin-top: 16px; font-size: 12px; color: var(--sub); }
+
+  details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  details summary { font-weight: 700; cursor: pointer; list-style: none; padding-right: 24px; position: relative; color: var(--navy); }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; position: absolute; right: 0; top: 0; font-size: 20px; line-height: 1.4; color: var(--accent); }
+  details[open] summary::after { content: "−"; }
+  details p { margin-top: 10px; font-size: 14px; color: var(--sub); }
+
+  /* フォーム */
+  .contact { background: var(--navy); color: #fff; }
+  .contact h2 { color: #fff; }
+  .contact .intro { text-align: center; font-size: 14px; color: rgba(255,255,255,0.85); margin: -20px 0 28px; }
+  form { background: #fff; color: var(--ink); border-radius: 12px; padding: 24px 20px; display: grid; gap: 16px; }
+  label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+  label .req { color: #d14343; font-size: 11px; margin-left: 4px; }
+  input, select, textarea {
+    font: inherit; font-size: 16px; font-weight: 400; padding: 12px; border: 1px solid #cfd5de; border-radius: 8px;
+    width: 100%; background: #fff; color: var(--ink);
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  .form-note { font-size: 12px; color: var(--sub); }
+  .alt { text-align: center; margin-top: 24px; font-size: 14px; }
+  .alt a { color: #fff; font-weight: 700; }
+  .tel { font-size: 24px; font-weight: 900; letter-spacing: 0.04em; text-decoration: none; display: inline-block; margin-top: 4px; }
+
+  footer { padding: 32px 0 40px; font-size: 12px; color: var(--sub); text-align: center; line-height: 1.9; }
+  footer strong { color: var(--navy); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#">AXION SALES<small>アクシオンセールス</small></a>
+    <a class="nav-cta" href="#contact">無料相談</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="tag">名古屋の建設・不動産 専門の営業代行</span>
+    <h1>腕のいい会社に、<br><em>新しいお客さん</em>との<br>商談を。</h1>
+    <p>建設・工務店・設備・リフォーム・不動産の中小企業さま向けに、リスト作成から商談設定まで、新規アポイントの獲得を丸ごと代行します。</p>
+    <div class="guarantee">
+      <div class="num">3<span>アポ</span></div>
+      <div><strong>初月の成果保証</strong>3件に届かなければ、初月の費用はいただきません</div>
+    </div>
+    <a class="btn" href="#contact">15分の無料相談を申し込む</a>
+    <span class="btn-sub">オンライン・売り込みはしません</span>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">PROBLEM</p>
+    <h2>こんなお悩みはありませんか？</h2>
+    <ul class="worries">
+      <li>職人・技術者はいるが、営業に回せる人がいない</li>
+      <li>紹介とリピートが中心で、受注に波がある</li>
+      <li>新規開拓をしたいが、何から始めればいいかわからない</li>
+      <li>営業を採用しても、育つまで時間とお金がかかる</li>
+    </ul>
+    <p class="lead-out">新規開拓の「手間のかかる部分」を、<br>AXION SALESがまるごと引き受けます。</p>
+  </div>
+</section>
+
+<section class="soft">
+  <div class="wrap">
+    <p class="eyebrow">SERVICE</p>
+    <h2>商談の前まで、すべて代行します</h2>
+    <div class="steps">
+      <div class="step"><div><h3>ターゲットリストの作成</h3><p>御社の得意な工事・物件・エリアから「本当に会うべき会社」を洗い出します。</p></div></div>
+      <div class="step"><div><h3>電話・問い合わせフォームでアプローチ</h3><p>業界の事情を踏まえたトークで接点をつくります。「営業お断り」の会社には連絡しません。</p></div></div>
+      <div class="step"><div><h3>商談の日程調整</h3><p>相手の状況や関心ごとを事前にお伝えしたうえで、商談日程を設定します。</p></div></div>
+      <div class="step"><div><h3>月次レポート</h3><p>どこに・何件・どんな反応だったかを毎月共有。自社の営業の財産として残ります。</p></div></div>
+      <div class="step you"><div><h3>御社は商談に集中するだけ</h3><p>いちばん大事な「会って話す」ところに、時間を使ってください。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">REASON</p>
+    <h2>AXION SALESが選ばれる理由</h2>
+    <div class="reasons">
+      <div class="reason" style="background: var(--bg-soft);"><h3>建設・不動産に特化</h3><p>業界の言葉や商習慣を理解したうえでアプローチするので、話が早く、相手にも失礼がありません。</p></div>
+      <div class="reason" style="background: var(--bg-soft);"><h3>初月3アポの成果保証</h3><p>初月にアポイントが3件に届かなければ、初月の費用はいただきません。「頼んだのに成果ゼロ」の心配がありません。</p></div>
+      <div class="reason" style="background: var(--bg-soft);"><h3>名古屋の地元企業</h3><p>名駅にオフィスを構え、名古屋・愛知の企業さまを中心にお手伝いしています。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="soft">
+  <div class="wrap">
+    <p class="eyebrow">MODEL CASE</p>
+    <h2>ご支援の進め方（例）</h2>
+    <div class="case">
+      <p class="case-who">名古屋市内の空調設備工事会社（従業員15名）の場合</p>
+      <ol class="case-steps">
+        <li><b>1週目</b>得意な「テナントビルの空調更新」に絞り、市内のビル管理会社・オーナー企業のリストを作成</li>
+        <li><b>2〜3週目</b>問い合わせフォームで案内を送り、反応のあった会社や優先度の高い会社へ電話でフォロー</li>
+        <li><b>4週目</b>「更新時期が近い」「見積りを比較したい」など、関心のある会社との商談を設定</li>
+        <li><b>月末</b>アプローチ先・反応・商談内容をレポートにまとめ、翌月のターゲットを一緒に見直し</li>
+      </ol>
+      <p class="case-note">※ 進め方をイメージしていただくためのモデルケースで、特定のお客さまの実績ではありません。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">FLOW</p>
+    <h2>ご相談から開始まで</h2>
+    <div class="flow">
+      <div><span>✉</span>お申込み</div>
+      <div><span>💬</span>無料相談<br>15分</div>
+      <div><span>📋</span>ご提案</div>
+      <div><span>🚀</span>開始</div>
+    </div>
+  </div>
+</section>
+
+<section class="soft">
+  <div class="wrap">
+    <p class="eyebrow">FAQ</p>
+    <h2>よくあるご質問</h2>
+    <details><summary>無料相談で売り込まれませんか？</summary><p>売り込みはしません。今の受注の入口や、増やしたいお客さまを一緒に整理する時間です。ご依頼いただくかどうかは、その後ゆっくりご検討ください。</p></details>
+    <details><summary>名古屋以外の会社でも依頼できますか？</summary><p>名古屋・愛知の企業さまが中心ですが、オンラインでの対応も可能です。まずはご相談ください。</p></details>
+    <details><summary>料金はいくらですか？</summary><p>月額の固定費と、獲得したアポイント1件ごとの成果報酬を組み合わせた料金体系です。業種・エリア・目標件数に合わせてお見積りしますので、無料相談でお気軽にお尋ねください。</p></details>
+    <details><summary>成果保証の内容を教えてください。</summary><p>ご契約の初月にアポイントが3件に届かなかった場合、初月の費用はいただきません。</p></details>
+    <details><summary>営業のノウハウは自社に残りますか？</summary><p>アプローチ先・トーク・反応を毎月レポートでお渡しします。将来、自社で営業を始めるときの材料としてお使いいただけます。</p></details>
+  </div>
+</section>
+
+<section class="contact" id="contact">
+  <div class="wrap">
+    <p class="eyebrow">CONTACT</p>
+    <h2>15分の無料相談</h2>
+    <p class="intro">送信するとメールアプリが開きます。内容を確認して、そのまま送信してください。</p>
+    <form id="contactForm">
+      <label><span>会社名<span class="req">必須</span></span><input name="company" required autocomplete="organization"></label>
+      <label><span>お名前<span class="req">必須</span></span><input name="name" required autocomplete="name"></label>
+      <label>業種
+        <select name="industry">
+          <option>建設</option><option>工務店</option><option>設備工事</option>
+          <option>リフォーム</option><option>不動産</option><option>その他</option>
+        </select>
+      </label>
+      <label>電話番号<input name="tel" type="tel" autocomplete="tel"></label>
+      <label>ご希望の日時・ご相談内容<textarea name="message" placeholder="例：平日の午後が都合がいいです。紹介以外の新規を増やしたい。"></textarea></label>
+      <button class="btn" type="submit">メールで申し込む</button>
+      <p class="form-note">メールアプリが開かない場合は、yanagihara.axionsales@outlook.jp まで直接ご連絡ください。</p>
+    </form>
+    <div class="alt">
+      お電話でも受け付けています<br>
+      <a class="tel" href="tel:09066164210">090-6616-4210</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <strong>AXION SALES（アクシオンセールス）</strong><br>
+    代表 柳原秀俊<br>
+    〒450-0002 名古屋市中村区名駅3-4-10 アルティメイト名駅1st 2階<br>
+    yanagihara.axionsales@outlook.jp
+  </div>
+</footer>
+
+<script>
+  // ?src=x などの流入元をメール件名に入れ、SNS ごとの相談数を数えられるようにする
+  const SOURCES = { x: 'X', instagram: 'Instagram', linkedin: 'LinkedIn', form: 'フォーム営業' };
+  const src = new URLSearchParams(location.search).get('src') || '';
+  const srcLabel = SOURCES[src] || (src ? src.slice(0, 20) : '直接');
+
+  document.getElementById('contactForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const v = (name) => f.elements[name].value.trim();
+    const subject = `[${srcLabel}経由] 無料相談の申込（${v('company')}）`;
+    const body = [
+      `会社名：${v('company')}`,
+      `お名前：${v('name')}`,
+      `業種：${v('industry')}`,
+      `電話番号：${v('tel')}`,
+      '',
+      'ご希望の日時・ご相談内容：',
+      v('message'),
+    ].join('\n');
+    location.href = 'mailto:yanagihara.axionsales@outlook.jp'
+      + '?subject=' + encodeURIComponent(subject)
+      + '&body=' + encodeURIComponent(body);
+  });
+</script>
+</body>
+</html>
