@@ -1,0 +1,68 @@
+# AXION SALES のSNS自動投稿（axion-autopost/）。毎朝AIが投稿を作り、X・Instagram・LinkedInに投稿する。
+name: Daily SNS post
+
+on:
+  schedule:
+    - cron: "47 22 * * *"   # 毎朝 7:47（日本時間）。GitHubの混雑で数分〜数十分遅れることがあります
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = 投稿せずに文章と画像の生成だけ試す"
+        default: "1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: axion-autopost
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 日本語フォントを入れる
+        working-directory: .
+        run: sudo apt-get update -q && sudo apt-get install -y -q fonts-noto-cjk
+
+      - run: pip install -r requirements.txt
+
+      - name: 今日の投稿を作る
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -m autopost.main generate
+
+      - name: 画像を公開URLに置く
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add images posts
+          git commit -m "SNS投稿を生成 $(TZ=Asia/Tokyo date +%F)" || echo "変更なし"
+          git push
+
+      - name: 3つのSNSに投稿
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.dry_run != '1' }}
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          LI_ACCESS_TOKEN: ${{ secrets.LI_ACCESS_TOKEN }}
+        run: python -m autopost.main publish
+
+      - name: 結果を保存
+        if: always()
+        run: |
+          git add -A posts history.json
+          git commit -m "SNS投稿の結果 $(TZ=Asia/Tokyo date +%F)" || echo "変更なし"
+          git push

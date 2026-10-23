@@ -1,5 +1,8 @@
 # AXION SALES SNS運用（X / Instagram / LinkedIn）
 
+> **自動投稿は [`../axion-autopost/`](../axion-autopost/)（毎朝AIが投稿を作る方式）に一本化しました。**
+> このフォルダの予約投稿ツール（posts.csv 方式）は定期実行を止めています。戦略・プロフィール文は引き続き使えます。
+
 | ファイル | 内容 |
 |---|---|
 | [`API_SETUP.md`](API_SETUP.md) | **全自動投稿の始め方**（APIキーの取得手順と GitHub への登録） |
