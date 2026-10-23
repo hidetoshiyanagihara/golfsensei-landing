@@ -369,6 +369,8 @@ def _clean_name(s: str) -> str:
     s = re.sub(r"^(?:©|\(c\)|copyright)\s*(?:\d{4}[\s\-–~]*\d{0,4})?\s*", "", s, flags=re.I)
     s = re.sub(r"\s*(all rights reserved|inc\.?|co\.,? ?ltd\.?).*$", "", s, flags=re.I).strip(" ,|-")
     s = re.sub(r"\s*[|｜].*$", "", s)                                   # 「社名 | ROKUGO」
+    s = re.sub(r"\s*\[[^\]]*\]\s*$", "", s)                                # 「株式会社 風[エクステリア 風]」
+    s = re.sub(rf"({_CORP})(\S*事業部|・\S+)$", r"\1", s)                  # 「中部東洋株式会社防水事業部」
     s = re.sub(r"\s+[\-–—/／]\s+.*$", "", s)                           # 「株式会社X - 土木工事・…」「X / 知事許可…」
     s = re.sub(rf"^[^「]*「(?=\S*{_CORP})", "", s)                         # 「解体屋「有限会社X」
     m = re.match(rf"^(\S*)[(（]({_CORP}[^)）]+)[)）].*$", s)               # 「meiwa(株式会社明和)」
@@ -404,7 +406,8 @@ def _clean_name(s: str) -> str:
         s = m.group(2)
     # 「総合建設 株式会社Takeichi」→ 株式会社Takeichi
     m = re.match(rf"^(\S+)\s+({_CORP}\S+|\S+{_CORP})$", s)       # 「解体専門企業 AREN株式会社」も
-    if m and not re.search(_CORP, m.group(1)):
+    # 前半が日本語の分類語のときだけ（「Hosho Group株式会社」の Hosho は社名の一部）
+    if m and not re.search(_CORP, m.group(1)) and re.search(r"[ぁ-んァ-ヶ一-龥]", m.group(1)):
         s = m.group(2)
     s = re.sub(r"\s*[(（][^)）]*[)）]?\s*$", "", s)                    # 末尾の（読み・英文名）
     s = re.sub(r"[!！。].*$", "", s)                                     # 宣伝文句
