@@ -4,3 +4,4 @@ screenshots/
 __pycache__/
 *.pyc
 call_list.csv
+prospects*.csv

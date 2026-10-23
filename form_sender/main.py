@@ -152,6 +152,17 @@ def cmd_send(args) -> None:
     log(f"終了: 処理 {processed} 社" + (f" / 送信 {sent} 件（本日計 {sent_today_count(load_results())} 件）" if live else ""))
 
 
+def cmd_prospects(args) -> None:
+    import csv as _csv
+    from collect import Collector
+    found = Collector(log=log).prospects(args.area, args.kinds, args.count)
+    with open(args.out, "w", encoding="utf-8-sig", newline="") as f:
+        w = _csv.writer(f)
+        w.writerow(["社名", "URL", "所在地", "業種"])
+        w.writerows([c.name, c.url, c.address, c.industry] for c in found)
+    log(f"完了: {len(found)} 社を {args.out} に書き出しました")
+
+
 def cmd_calllist(args) -> None:
     from calllist import CALL_LIST_CSV, build
     n = build(log=log)
@@ -196,6 +207,13 @@ def main() -> None:
     p.add_argument("--industry", nargs="+", help="この業種（companies.csv の業種列）の会社だけに送る 例: --industry 塗装 解体 内装")
     p.add_argument("--any-time", action="store_true", help="（本番）送信時間帯の制限を無視する")
     p.set_defaults(func=cmd_send)
+
+    p = sub.add_parser("prospects", help="「リスト希望」への返信用に、指定地域の取引先候補リストを作る")
+    p.add_argument("--area", required=True, help="例: 岡崎市 / 名古屋市中区")
+    p.add_argument("--kinds", nargs="+", default=["工務店", "不動産会社", "リフォーム会社"])
+    p.add_argument("--count", type=int, default=10)
+    p.add_argument("--out", default="prospects.csv")
+    p.set_defaults(func=cmd_prospects)
 
     p = sub.add_parser("calllist", help="送信できた会社のフォロー電話用リスト（call_list.csv）を作る")
     p.set_defaults(func=cmd_calllist)

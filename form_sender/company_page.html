@@ -1,0 +1,163 @@
+<title>AXION SALES</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* Layout: 現場の工程表のように、左に見出しの列・右に中身。狭い画面では1列に積む */
+:root {
+  --paper: #EDEFEE;      /* コンクリートの明るいグレー */
+  --panel: #F8F9F8;
+  --ink: #1C2124;
+  --muted: #59616A;
+  --line: #C9CFCC;
+  --signal: #EBB520;     /* 現場の注意色。面積は小さく */
+  --steel: #2D5873;
+  --display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #151819; --panel: #1D2123; --ink: #E7EAE8; --muted: #9CA5AD; --line: #343B3F;
+    --signal: #EBB520; --steel: #7FB0CF; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #151819; --panel: #1D2123; --ink: #E7EAE8; --muted: #9CA5AD; --line: #343B3F;
+  --signal: #EBB520; --steel: #7FB0CF; color-scheme: dark;
+}
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.8; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { padding-block: 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.brand { font-family: var(--display); font-weight: 900; letter-spacing: .08em; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+.brand::before { content: ""; width: 14px; height: 14px; background: var(--signal); transform: rotate(45deg); }
+.brand small { font-weight: 500; letter-spacing: .02em; color: var(--muted); font-size: 13px; }
+.top a { color: var(--ink); font-weight: 700; text-decoration: none; border-bottom: 2px solid var(--signal); }
+
+.hero { padding-block: 48px 64px; display: grid; gap: 28px; }
+.eyebrow { font-size: 14px; color: var(--muted); letter-spacing: .06em; }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(30px, 5.6vw, 54px); line-height: 1.3; margin: 0; text-wrap: balance; }
+h1 .mark { background: linear-gradient(transparent 62%, var(--signal) 62%); padding: 0 .05em; }
+.lead { max-width: 38em; font-size: 17px; margin: 0; }
+.guarantee { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-block: 18px; }
+.guarantee b { font-family: var(--display); font-weight: 900; font-size: clamp(40px, 7vw, 64px); line-height: 1; font-variant-numeric: tabular-nums; }
+.guarantee span { color: var(--muted); }
+
+section.block { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; padding-block: 48px; border-top: 1px solid var(--line); }
+section.block h2 { font-family: var(--display); font-weight: 700; font-size: 22px; margin: 0; line-height: 1.5; text-wrap: balance; }
+section.block h2 small { display: block; font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--muted); letter-spacing: .04em; }
+
+.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: step; }
+.flow li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px; padding-block: 16px; border-bottom: 1px dashed var(--line); counter-increment: step; }
+.flow li::before { content: counter(step, decimal-leading-zero); font-family: var(--display); font-weight: 900; font-size: 22px; color: var(--steel); font-variant-numeric: tabular-nums; }
+.flow h3 { margin: 0 0 4px; font-size: 17px; font-family: var(--display); font-weight: 700; }
+.flow p { margin: 0; color: var(--muted); }
+.flow li.yours::before { color: var(--ink); }
+.flow li.yours h3::after { content: "御社のお仕事"; margin-left: 10px; font-size: 12px; font-family: var(--body); font-weight: 700; background: var(--signal); color: #1C2124; padding: 2px 8px; border-radius: 2px; vertical-align: 2px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.chips li { border: 1px solid var(--line); background: var(--panel); padding: 4px 12px; border-radius: 999px; font-size: 15px; }
+.note { color: var(--muted); font-size: 14px; margin: 0; }
+
+dl.profile { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 0; margin: 0; }
+dl.profile dt, dl.profile dd { padding-block: 12px; border-bottom: 1px solid var(--line); margin: 0; }
+dl.profile dt { color: var(--muted); font-size: 14px; }
+
+.contact { background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--signal); padding: 24px; display: grid; gap: 16px; }
+.contact p { margin: 0; }
+.ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 16px; }
+.way { display: grid; gap: 6px; }
+.way .label { font-size: 13px; color: var(--muted); }
+.way .value { font-family: var(--display); font-weight: 700; font-size: 22px; user-select: all; overflow-wrap: anywhere; }
+.way button { justify-self: start; font: inherit; font-size: 14px; padding: 6px 14px; border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 2px; cursor: pointer; }
+.way button:focus-visible, .top a:focus-visible { outline: 3px solid var(--steel); outline-offset: 2px; }
+
+footer { padding-block: 32px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
+
+@media (max-width: 720px) {
+  section.block { grid-template-columns: minmax(0, 1fr); gap: 16px; padding-block: 36px; }
+  .hero { padding-block: 28px 44px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">AXION SALES <small>アクシオンセールス</small></div>
+    <a href="#contact">お問い合わせ</a>
+  </header>
+
+  <div class="hero">
+    <div class="eyebrow">名古屋の営業代行／建設・不動産業界向け</div>
+    <h1>新しいお客様との商談を、<br><span class="mark">アポイントが取れた状態</span>でお渡しします。</h1>
+    <p class="lead">営業先リストの作成から、電話・問い合わせフォームでのアプローチまでを当社が代行します。御社は、約束が取れた商談に行くだけです。営業の人手が足りない、新規開拓に手が回らない会社様のためのサービスです。</p>
+    <div class="guarantee"><b>初月 3件</b><span>のアポイントを保証します</span></div>
+  </div>
+
+  <section class="block" aria-labelledby="flow-h">
+    <h2 id="flow-h">ご依頼から商談まで<small>4つの工程</small></h2>
+    <ol class="flow">
+      <li><div><h3>営業先リストの作成</h3><p>御社の業種・対応エリア・得意な工事に合わせて、アプローチする会社や見込み客のリストを当社が作ります。</p></div></li>
+      <li><div><h3>電話・問い合わせフォームでのアプローチ</h3><p>リストの相手に、当社が御社に代わってご連絡します。</p></div></li>
+      <li><div><h3>アポイントの確定とお渡し</h3><p>商談の日時が決まったら、相手の情報と合わせて御社にお伝えします。</p></div></li>
+      <li class="yours"><div><h3>商談</h3><p>御社は約束の日時に商談に伺うだけです。</p></div></li>
+    </ol>
+  </section>
+
+  <section class="block" aria-labelledby="target-h">
+    <h2 id="target-h">対象の業種・エリア</h2>
+    <div>
+      <ul class="chips">
+        <li>建設</li><li>工務店</li><li>外壁・屋根塗装</li><li>解体工事</li><li>内装工事</li>
+        <li>設備工事</li><li>リフォーム</li><li>不動産</li>
+      </ul>
+      <p class="note">名古屋市と愛知県内の会社様が対象です。上記以外の業種もご相談ください。</p>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="free-h">
+    <h2 id="free-h">無料でお作りします<small>営業のご依頼は不要です</small></h2>
+    <p>御社の地域で取引先になりうる会社（工務店・不動産会社など）を、10社リストにしてお送りします。メールで「リスト希望」とお送りください。</p>
+  </section>
+
+  <section class="block" aria-labelledby="price-h">
+    <h2 id="price-h">料金・条件</h2>
+    <p>御社の業種・エリア・ご希望の件数をうかがったうえで、お見積もりをお出しします。まずは15分ほど、オンラインかお電話でお話を聞かせてください。</p>
+  </section>
+
+  <section class="block" aria-labelledby="profile-h">
+    <h2 id="profile-h">会社概要</h2>
+    <dl class="profile">
+      <dt>会社名</dt><dd>AXION SALES（アクシオンセールス）</dd>
+      <dt>代表</dt><dd>柳原 秀俊</dd>
+      <dt>所在地</dt><dd>〒450-0002 愛知県名古屋市中村区名駅3-4-10 アルティメイト名駅1st 2階</dd>
+      <dt>事業内容</dt><dd>営業代行（営業先リストの作成、電話・問い合わせフォームによる新規開拓、アポイント獲得）</dd>
+    </dl>
+  </section>
+
+  <section class="block" id="contact" aria-labelledby="contact-h">
+    <h2 id="contact-h">お問い合わせ</h2>
+    <div class="contact">
+      <p>無料のリストをご希望の方は「リスト希望」、お話を聞いてみたい方は「詳しく」と、ひとことメールをお送りください。お電話でも受け付けています。</p>
+      <div class="ways">
+        <div class="way"><span class="label">お電話</span><span class="value" id="tel">090-6616-4210</span><button type="button" id="copy-tel" data-copy="tel">番号をコピー</button></div>
+        <div class="way"><span class="label">メール</span><span class="value" id="mail">yanagihara.axionsales@outlook.jp</span><button type="button" id="copy-mail" data-copy="mail">アドレスをコピー</button></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>© AXION SALES（アクシオンセールス）</footer>
+</div>
+
+<script>
+document.querySelectorAll('[data-copy]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var el = document.getElementById(btn.dataset.copy);
+    var label = btn.textContent;
+    var done = function () { btn.textContent = 'コピーしました'; setTimeout(function () { btn.textContent = label; }, 1600); };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(el.textContent).then(done, fallback);
+    } else { fallback(); }
+  });
+});
+</script>

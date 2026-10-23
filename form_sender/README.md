@@ -35,6 +35,9 @@ python main.py status
 
 # 送信できた会社のフォロー電話用リスト（電話番号は各社サイトから取得）→ call_list.csv
 python main.py calllist
+
+# 「リスト希望」の返信が来たら：相手の地域の取引先候補（工務店・不動産会社など）を10社
+python main.py prospects --area 岡崎市 --out prospects_ケイエス防水.csv
 ```
 
 テストモードでは、入力後の画面が `screenshots/` に保存されます。

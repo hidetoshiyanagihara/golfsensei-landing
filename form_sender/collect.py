@@ -320,6 +320,27 @@ class Collector:
             self._write(found)
         return found
 
+    def prospects(self, area: str, kinds: list[str], count: int) -> list[Candidate]:
+        """「リスト希望」への返信用：area の kinds（例：工務店・不動産会社）を count 社。companies.csv には書かない。"""
+        found: list[Candidate] = []
+        seen: set[str] = set()
+        try:
+            for kind in kinds:
+                for url in self.search(f"{area} {kind}"):
+                    if len(found) >= count:
+                        return found
+                    d = domain_of(url)
+                    if d in seen or is_excluded_domain(url):
+                        continue
+                    seen.add(d)
+                    result = self.evaluate_site(url, kind)
+                    if isinstance(result, Candidate) and area in result.address:
+                        found.append(result)
+                        self.log(f"  {result.name} {result.url}")
+        finally:
+            self.close()
+        return found
+
     def _write(self, found: list[Candidate]) -> None:
         # 従業員数が確認できた中小企業を先頭に（＝送信で優先される）
         found.sort(key=lambda c: (c.employees is None, c.employees or 0))
