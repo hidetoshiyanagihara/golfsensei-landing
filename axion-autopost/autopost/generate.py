@@ -15,6 +15,24 @@ BANNED = ["絶対", "必ず", "誰でも", "最短で", "いかがでしたか",
 
 WEEKDAYS = "月火水木金土日"
 
+# prompt.md「11. 出力形式」と同じ形。structured outputs でこの形のJSONだけが返る
+_STR = {"type": "string"}
+OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "theme": _STR, "target": _STR, "x_post": _STR, "x_char_count": {"type": "integer"},
+        "instagram_image_title": _STR, "instagram_image_sub": _STR, "instagram_caption": _STR,
+        "self_check": {
+            "type": "object",
+            "properties": {k: {"type": "integer"} for k in CHECK_KEYS},
+            "required": CHECK_KEYS,
+            "additionalProperties": False,
+        },
+    },
+    "required": REQUIRED_KEYS + ["x_char_count", "self_check"],
+    "additionalProperties": False,
+}
+
 
 def build_system_prompt(template: str, today, recent_posts: str, memo: str) -> str:
     """prompt.md の {{today}} {{weekday}} {{recent_posts}} {{memo}} だけを差し込む（他の {{ }} は指示文なので残す）"""
@@ -71,14 +89,20 @@ def generate_post(template: str, recent_posts: str, memo: str, today) -> dict:
     request = "今日の投稿を作ってください。"
     last_error = None
     for _ in range(3):
+        # Sonnet 5.5 は答える前に考える（thinking）。その分も含めた上限なので余裕を持たせる
         msg = client.messages.create(
             model=MODEL,
-            max_tokens=3000,
+            max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": request}],
+            output_config={"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
         )
         text = "".join(b.text for b in msg.content if b.type == "text")
         try:
+            if msg.stop_reason == "refusal":
+                raise ValueError(f"AIが回答を断りました: {getattr(msg.stop_details, 'explanation', '')}")
+            if msg.stop_reason == "max_tokens":
+                raise ValueError("出力が上限に達して途中で切れました")
             return check_post(_extract_json(text))
         except ValueError as e:  # json.JSONDecodeError も ValueError
             last_error = e

@@ -48,7 +48,9 @@ calls_ai = []
 class FakeMessages:
     def create(self, **kw):
         calls_ai.append(kw)
-        return SimpleNamespace(content=[SimpleNamespace(type="text", text=replies.pop(0))])
+        return SimpleNamespace(content=[SimpleNamespace(type="thinking", thinking=""),
+                                        SimpleNamespace(type="text", text=replies.pop(0))],
+                               stop_reason="end_turn", stop_details=None)
 
 
 generate.anthropic.Anthropic = lambda: SimpleNamespace(messages=FakeMessages())
@@ -78,6 +80,11 @@ check("{{today}}" not in system and "{{weekday}}" not in system and f"{d0:%Y年%
 check("元請け依存" in system and "古い投稿" not in system, "直近14日分の投稿だけを渡す")
 check("清掃現場で管理会社" in system, "memo.md を追加メモとして渡す")
 check("{{未確定。" in system, "指示文の {{ }} はそのまま残す")
+req = calls_ai[0]
+check(req["max_tokens"] >= 16000 and req["output_config"]["format"]["type"] == "json_schema",
+      "考える分も含めた十分な上限と、JSON形式の指定（structured outputs）")
+schema_keys = set(req["output_config"]["format"]["schema"]["properties"])
+check(schema_keys == set(generate.REQUIRED_KEYS) | {"x_char_count", "self_check"}, "出力形式は prompt.md の11章と同じ")
 
 calls_ai.clear()
 replies[:] = [json.dumps({**GOOD, "instagram_caption": "絶対に反響が出ます"}), json.dumps(GOOD)]
