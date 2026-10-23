@@ -1,6 +1,6 @@
 # AXION SALES SNS自動投稿
 
-毎朝7:47に、AIが `brand.md` を読んでその日の投稿を作り、X・Instagram・LinkedInに自動投稿します。
+毎朝7:47に、AIが `prompt.md` に沿ってその日の投稿を作り、X・Instagramに自動投稿します（LinkedInは準備中）。
 動かす場所はGitHub（無料）。パソコンを点けておく必要はありません。
 
 - Instagramには文字入りの画像（自動生成）＋キャプション
@@ -52,7 +52,9 @@
 
 ## 運用
 
-- **投稿の中身・口調を変えたい** → `brand.md` を書き換えるだけ（GitHub上で鉛筆アイコンから直接編集できます）
+- **投稿の中身・口調を変えたい** → `prompt.md` を書き換えるだけ（GitHub上で鉛筆アイコンから直接編集できます）
+- **最近の出来事・気づきを投稿に入れたい** → `memo.md` に一言書く（翌朝の投稿に反映。使い終わったら消す）
+- **書き換えた結果を試したい** → Actions →「Daily SNS post」→「Run workflow」で dry_run に `preview` と入れて実行（保存も投稿もせず、文章だけ表示）
 - **投稿時刻を変えたい** → `.github/workflows/axion_daily_post.yml` の `cron`（日本時間−9時間で書く）
 - **投稿した内容の確認** → `axion-autopost/posts/日付.json`（成功なら `ok:`、失敗なら理由が書いてあります）
 - **失敗したら** → GitHubから通知メールが届きます。Actions で「Re-run jobs」すれば、成功済みのSNSは飛ばして失敗分だけやり直します

@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,38 +24,71 @@ def check(cond, msg):
 
 tmp = Path(tempfile.mkdtemp())
 main.ROOT, main.POSTS, main.IMAGES, main.HISTORY = tmp, tmp / "posts", tmp / "images", tmp / "history.json"
-(tmp / "brand.md").write_text((ROOT / "brand.md").read_text(encoding="utf-8"), encoding="utf-8")
 
 # ---------------------------------------------------------------- 生成（AIは差し替え）
-POST = {
-    "theme": "フォーム営業の送り先選び", "image_title": "送る前に「送らない判断」を",
-    "image_sub": "営業お断りの会社に送らないことが、結果的に反応率を上げます",
-    "x": "問い合わせフォーム営業で大事なのは、本文より送らない判断。" * 6,
-    "instagram": "フォーム営業のコツ\n\n#営業 #名古屋", "linkedin": "フォーム営業について #営業代行 (要点)",
+(tmp / "prompt.md").write_text((ROOT / "prompt.md").read_text(encoding="utf-8"), encoding="utf-8")
+main.PROMPT, main.MEMO = tmp / "prompt.md", tmp / "memo.md"
+main.MEMO.write_text("今週、清掃現場で管理会社の担当者と話した", encoding="utf-8")
+GOOD = {
+    "theme": "繁忙期の仕込み", "target": "名古屋のリフォーム会社の社長",
+    "x_post": "「今月は断るほど忙しい」\nその3ヶ月後に暇な月が来るリフォーム会社は多いです。\n原因は営業力じゃなく、忙しい時に仕込みが止まること。",
+    "x_char_count": 70, "instagram_image_title": "忙しい月の次が怖い",
+    "instagram_image_sub": "繁忙期こそ3ヶ月後のアポを仕込む",
+    "instagram_caption": "本文\n\nDMで『リスト』と送ってください\n#名古屋リフォーム #愛知工務店 #営業代行",
+    "self_check": {"hook": 5, "target": 5, "concrete": 4, "insight": 4, "reason_to_contact": 4},
 }
-replies = ['前置き {"theme": "x"}', "URL入り " + json.dumps({**POST, "x": "見て https://e.com"}), json.dumps(POST)]
-prompts = []
+replies = [
+    '前置き {"theme": "x"}',
+    json.dumps({**GOOD, "x_post": "あ" * 141}),
+    json.dumps({**GOOD, "self_check": {**GOOD["self_check"], "insight": 3}}),
+]
+calls_ai = []
 
 
 class FakeMessages:
     def create(self, **kw):
-        prompts.append(kw["messages"][0]["content"])
+        calls_ai.append(kw)
         return SimpleNamespace(content=[SimpleNamespace(type="text", text=replies.pop(0))])
 
 
 generate.anthropic.Anthropic = lambda: SimpleNamespace(messages=FakeMessages())
 os.environ.pop("ANTHROPIC_API_KEY", None)
 main.cmd_generate()
-check(len(prompts) == 0 and not (tmp / "posts").exists(), "AIのキー未設定なら何もしない（失敗にしない）")
+check(len(calls_ai) == 0 and not (tmp / "posts").exists(), "AIのキー未設定なら何もしない（失敗にしない）")
 main.cmd_publish()
 check(True, "AIのキー未設定で投稿がなくても失敗にしない")
 os.environ["ANTHROPIC_API_KEY"] = "dummy"
+
+# 直近の投稿（被り防止用）を用意
+d0 = main.today()
+(tmp / "posts").mkdir()
+main.save_json(main.paths(d0 - timedelta(days=2))[0], {"theme": "元請け依存", "x": "元請け1社に頼る怖さ"})
+main.save_json(main.paths(d0 - timedelta(days=20))[0], {"theme": "古い投稿", "x": "20日前"})
+
+try:
+    main.cmd_generate()
+    gen_error = None
+except RuntimeError as e:
+    gen_error = str(e)
+check(gen_error and "3回失敗" in gen_error and "自己チェック" in gen_error, "JSONなし・141字・自己チェック3点は作り直し、3回でエラー")
+check("140字以内" in calls_ai[2]["messages"][0]["content"] or "141字" in calls_ai[2]["messages"][0]["content"],
+      "作り直し時は前回の問題をAIに伝える")
+system = calls_ai[0]["system"]
+check("{{today}}" not in system and "{{weekday}}" not in system and f"{d0:%Y年%m月%d日}" in system, "日付・曜日を差し込む")
+check("元請け依存" in system and "古い投稿" not in system, "直近14日分の投稿だけを渡す")
+check("清掃現場で管理会社" in system, "memo.md を追加メモとして渡す")
+check("{{未確定。" in system, "指示文の {{ }} はそのまま残す")
+
+calls_ai.clear()
+replies[:] = [json.dumps({**GOOD, "instagram_caption": "絶対に反響が出ます"}), json.dumps(GOOD)]
 main.cmd_generate()
-day = main.today().strftime("%Y-%m-%d")
+day = d0.strftime("%Y-%m-%d")
 saved = json.loads((tmp / "posts" / f"{day}.json").read_text(encoding="utf-8"))
-check(len(prompts) == 3, "項目不足・URL入りの出力は作り直す（3回目で成功）")
-check("絶対に守ること" in prompts[0] and "（まだなし）" in prompts[0], "brand.md と過去テーマをプロンプトに入れる")
-check(platforms.x_weight(saved["x"]) <= 280 and saved["x"].endswith("…"), "Xの本文は280以内に切り詰め")
+check(len(calls_ai) == 2, "禁止表現（絶対）を含む出力は作り直す")
+check(saved["x"] == GOOD["x_post"] and saved["instagram"] == GOOD["instagram_caption"]
+      and saved["image_title"] == GOOD["instagram_image_title"] and saved["target"] == GOOD["target"],
+      "新しい出力形式を投稿用に保存")
+check(saved["x_char_count"] == len(GOOD["x_post"]), "X文字数は実際に数え直す")
 img = tmp / "images" / f"{day}.jpg"
 check(img.exists() and img.read_bytes()[:3] == b"\xff\xd8\xff", "画像はJPEGで保存（InstagramはPNG不可）")
 from PIL import Image  # noqa: E402
@@ -82,12 +116,12 @@ try:
 except SystemExit as e:
     exited = str(e)
 res = json.loads((tmp / "posts" / f"{day}.json").read_text(encoding="utf-8"))["results"]
-check(res["x"] == "ok:111" and res["instagram"].startswith("error:") and res["linkedin"] == "skipped",
-      "成功・失敗・キー未設定を記録")
+check(res["x"] == "ok:111" and res["instagram"].startswith("error:") and "linkedin" not in res,
+      "成功・失敗を記録（LinkedIn用の本文はないので対象外）")
 check(("instagram", f"https://raw.githubusercontent.com/owner/golfsensei-landing/main/{tmp.name}/images/{day}.jpg")
       in calls, "Instagramにはサブフォルダ込みの公開URLのJPEGを渡す")
 check(exited and "instagram" in exited, "失敗があれば終了コードで知らせる")
-check(json.loads(main.HISTORY.read_text(encoding="utf-8"))[-1]["theme"] == POST["theme"], "テーマを履歴に残す")
+check(json.loads(main.HISTORY.read_text(encoding="utf-8"))[-1]["theme"] == GOOD["theme"], "テーマを履歴に残す")
 
 calls.clear()
 platforms.post_instagram = lambda url, caption: calls.append(("instagram", url)) or "222"
