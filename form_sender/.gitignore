@@ -3,3 +3,4 @@ screenshots/
 .collect_state.json
 __pycache__/
 *.pyc
+call_list.csv

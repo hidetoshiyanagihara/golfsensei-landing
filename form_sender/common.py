@@ -195,7 +195,12 @@ def build_message(company: dict) -> tuple[str, str]:
             text = text.replace(k, v)
         return text
 
-    return fill(config.SENDER["subject"]), fill(config.MESSAGE_TXT.read_text(encoding="utf-8")).strip() + "\n"
+    body = config.MESSAGE_TXT.read_text(encoding="utf-8")
+    if config.COMPANY_PAGE_URL:
+        body = body.replace("{紹介ページ}", config.COMPANY_PAGE_URL)
+    else:
+        body = "".join(line for line in body.splitlines(keepends=True) if "{紹介ページ}" not in line)
+    return fill(config.SENDER["subject"]), fill(body).strip() + "\n"
 
 
 def launch_chromium(pw, headless: bool = True):

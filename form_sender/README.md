@@ -32,6 +32,9 @@ python main.py send --mode live --industry 塗装 解体 内装   # 業種を絞
 
 # 件数確認
 python main.py status
+
+# 送信できた会社のフォロー電話用リスト（電話番号は各社サイトから取得）→ call_list.csv
+python main.py calllist
 ```
 
 テストモードでは、入力後の画面が `screenshots/` に保存されます。

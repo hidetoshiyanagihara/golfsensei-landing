@@ -152,6 +152,12 @@ def cmd_send(args) -> None:
     log(f"終了: 処理 {processed} 社" + (f" / 送信 {sent} 件（本日計 {sent_today_count(load_results())} 件）" if live else ""))
 
 
+def cmd_calllist(args) -> None:
+    from calllist import CALL_LIST_CSV, build
+    n = build(log=log)
+    log(f"完了: {n} 社を {CALL_LIST_CSV.name} に書き出しました")
+
+
 def cmd_status(args) -> None:
     results = load_results()
     companies = load_companies()
@@ -190,6 +196,9 @@ def main() -> None:
     p.add_argument("--industry", nargs="+", help="この業種（companies.csv の業種列）の会社だけに送る 例: --industry 塗装 解体 内装")
     p.add_argument("--any-time", action="store_true", help="（本番）送信時間帯の制限を無視する")
     p.set_defaults(func=cmd_send)
+
+    p = sub.add_parser("calllist", help="送信できた会社のフォロー電話用リスト（call_list.csv）を作る")
+    p.set_defaults(func=cmd_calllist)
 
     p = sub.add_parser("status", help="件数を表示")
     p.set_defaults(func=cmd_status)
