@@ -1,7 +1,10 @@
 """Instagram用の画像（1080x1350 JPEG）を文字だけで作る。InstagramのAPIはPNGを受け付けない。"""
 import glob
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+
+FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"  # GitHub Actions がダウンロードして置く
 
 W, H = 1080, 1350
 BG = (14, 27, 48)          # 濃紺
@@ -13,6 +16,7 @@ MARGIN = 96
 
 def _font(weight: str, size: int) -> ImageFont.FreeTypeFont:
     patterns = [
+        f"{FONT_DIR}/NotoSansCJKjp-{weight}.otf",
         f"/usr/share/fonts/opentype/noto/NotoSansCJK-{weight}.ttc",
         f"/usr/share/fonts/**/NotoSansCJK*{weight}*.tt[cf]",
         "/usr/share/fonts/**/NotoSansCJK*.tt[cf]",
@@ -21,7 +25,7 @@ def _font(weight: str, size: int) -> ImageFont.FreeTypeFont:
         hits = sorted(glob.glob(p, recursive=True))
         if hits:
             return ImageFont.truetype(hits[0], size, index=0)  # index 0 = 日本語(JP)
-    raise RuntimeError("日本語フォントが見つかりません（fonts-noto-cjk をインストールしてください）")
+    raise RuntimeError("日本語フォントが見つかりません（fonts/ に NotoSansCJKjp-Bold.otf / -Regular.otf を置いてください）")
 
 
 def _wrap(text: str, font, max_width: int) -> list[str]:
