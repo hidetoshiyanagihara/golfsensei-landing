@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "1 = 投稿せずに文章と画像の生成だけ試す"
+        description: "1 = 投稿せずに文章と画像の生成だけ試す ／ 0 = 投稿する ／ preview = 保存も投稿もせず文章だけ表示"
         default: "1"
 
 permissions:
@@ -52,12 +52,20 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: プレビュー（保存・投稿しない）
+        if: ${{ github.event.inputs.dry_run == 'preview' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -m autopost.main preview
+
       - name: 今日の投稿を作る
+        if: ${{ github.event.inputs.dry_run != 'preview' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python -m autopost.main generate
 
       - name: 画像を公開URLに置く
+        if: ${{ github.event.inputs.dry_run != 'preview' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -66,7 +74,7 @@ jobs:
           git push
 
       - name: 3つのSNSに投稿
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.dry_run != '1' }}
+        if: ${{ github.event_name == 'schedule' || (github.event.inputs.dry_run != '1' && github.event.inputs.dry_run != 'preview') }}
         env:
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
@@ -77,7 +85,7 @@ jobs:
         run: python -m autopost.main publish
 
       - name: 結果を保存
-        if: always()
+        if: ${{ always() && github.event.inputs.dry_run != 'preview' }}
         run: |
           git add -A posts history.json
           git commit -m "SNS投稿の結果 $(TZ=Asia/Tokyo date +%F)" || echo "変更なし"

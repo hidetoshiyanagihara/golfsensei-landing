@@ -2,12 +2,13 @@
 使い方:
   python -m autopost.main generate   今日の投稿文と画像を作る（posts/ と images/ に保存）
   python -m autopost.main publish    作った投稿を各SNSに出す
+  python -m autopost.main preview    保存も投稿もせず、今日の投稿文を作って表示する（prompt.md の調整用）
 キーが設定されていないSNSは自動でスキップします。
 """
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,8 @@ from .platforms import PostError
 ROOT = Path(__file__).resolve().parent.parent
 POSTS, IMAGES = ROOT / "posts", ROOT / "images"
 HISTORY = ROOT / "history.json"
+PROMPT, MEMO = ROOT / "prompt.md", ROOT / "memo.md"
+RECENT_DAYS = 14
 
 
 def today():
@@ -45,8 +48,32 @@ def save_json(p, data):
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def cmd_generate():
+def recent_posts(d) -> str:
+    """直近14日分の投稿（今日を除く）を、被り防止のためにプロンプトへ渡す形にまとめる"""
+    lines = []
+    for i in range(RECENT_DAYS, 0, -1):
+        day = d - timedelta(days=i)
+        post = load_json(paths(day)[0], None)
+        if post:
+            lines.append(f"\n- {day:%m/%d}（{'月火水木金土日'[day.weekday()]}）テーマ：{post.get('theme', '')}"
+                         f"\n  X：{post.get('x', '')}")
+    return "".join(lines)
+
+
+def make_post(d) -> dict:
     from .generate import generate_post
+
+    memo = MEMO.read_text(encoding="utf-8") if MEMO.exists() else ""
+    return generate_post(PROMPT.read_text(encoding="utf-8"), recent_posts(d), memo, d)
+
+
+def cmd_preview():
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("ANTHROPIC_API_KEY が未設定です")
+    print(json.dumps(make_post(today()), ensure_ascii=False, indent=2))
+
+
+def cmd_generate():
     from .image_card import make_card
 
     d = today()
@@ -60,9 +87,7 @@ def cmd_generate():
     POSTS.mkdir(exist_ok=True)
     IMAGES.mkdir(exist_ok=True)
 
-    brand = (ROOT / "brand.md").read_text(encoding="utf-8")
-    recent = [h["theme"] for h in load_json(HISTORY, [])[-30:]]
-    post = generate_post(brand, recent, d)
+    post = make_post(d)
     post["x"] = platforms.fit_x(post["x"])
     make_card(post["image_title"], post["image_sub"], str(img_path))
     post["results"] = {}
@@ -92,6 +117,8 @@ def cmd_publish():
         ("instagram", platforms.IG_KEYS, lambda: platforms.post_instagram(image_url, post["instagram"])),
         ("linkedin", platforms.LI_KEYS, lambda: platforms.post_linkedin(post["linkedin"], str(img_path), post["image_title"])),
     ]
+    if not post.get("linkedin"):  # prompt.md はX・Instagram用。LinkedIn用の本文は作らない
+        jobs = jobs[:2]
     failed = []
     for name, keys, run in jobs:
         if str(results.get(name, "")).startswith("ok:"):
@@ -121,6 +148,6 @@ def cmd_publish():
 
 
 if __name__ == "__main__":
-    {"generate": cmd_generate, "publish": cmd_publish}.get(
+    {"generate": cmd_generate, "publish": cmd_publish, "preview": cmd_preview}.get(
         sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__)
     )()
