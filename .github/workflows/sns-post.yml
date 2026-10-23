@@ -1,11 +1,11 @@
-# AXION SALES の SNS 予約投稿。30 分おきに sns/posts.csv の予定を確認し、時刻を過ぎた分を投稿する。
+# 【停止中】自動投稿は axion-autopost/（Daily SNS post）に一本化したため、定期実行は止めている。
+# posts.csv の予定を手動で出したいときだけ Actions から Run workflow で使う。
+# AXION SALES の SNS 予約投稿。sns/posts.csv の予定を確認し、時刻を過ぎた分を投稿する。
 # 認証情報は Settings → Secrets and variables → Actions に登録（手順は sns/API_SETUP.md）。
 # 投稿記録（result.csv）は sns-log ブランチに保存し、二重投稿を防ぐ。
 name: SNS 予約投稿
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:

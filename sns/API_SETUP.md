@@ -1,5 +1,7 @@
 # 全自動投稿の始め方（APIキーの取得と登録）
 
+> **このページは旧方式（posts.csv）の手順です。現在の自動投稿の設定は [`../axion-autopost/README.md`](../axion-autopost/README.md) を見てください。**
+
 最初に一度だけ設定すれば、あとは **GitHub が 30 分おきに `posts.csv` を確認して自動で投稿**します。
 PC の電源を入れておく必要も、Python を入れる必要もありません。
 

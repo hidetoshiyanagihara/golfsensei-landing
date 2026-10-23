@@ -1,0 +1,24 @@
+name: Refresh Instagram token
+
+# Instagramのトークンは60日で切れるので、毎週月曜に自動で延長して保存し直す
+on:
+  schedule:
+    - cron: "13 0 * * 1"   # 毎週月曜 9:13（日本時間）
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: トークン延長
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$IG_ACCESS_TOKEN" ]; then echo "IG_ACCESS_TOKEN 未設定のためスキップ"; exit 0; fi
+          resp=$(curl -sS "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${IG_ACCESS_TOKEN}")
+          new=$(echo "$resp" | jq -r '.access_token // empty')
+          if [ -z "$new" ]; then echo "延長失敗: $(echo "$resp" | jq -c '.error // .')"; exit 1; fi
+          echo "::add-mask::$new"
+          gh secret set IG_ACCESS_TOKEN --body "$new" --repo "$GITHUB_REPOSITORY"
+          echo "延長しました（有効期限: 約60日後）"
