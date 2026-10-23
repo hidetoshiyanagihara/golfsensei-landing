@@ -20,6 +20,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: axion-autopost
@@ -30,9 +31,24 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 日本語フォントを入れる
-        working-directory: .
-        run: sudo apt-get update -q && sudo apt-get install -y -q fonts-noto-cjk
+      # apt でのインストールは止まることがあるため、フォントファイルを直接ダウンロードしてキャッシュする
+      - name: 日本語フォント（キャッシュ）
+        id: font-cache
+        uses: actions/cache@v4
+        with:
+          path: axion-autopost/fonts
+          key: noto-sans-cjk-jp-v1
+
+      - name: 日本語フォントをダウンロード
+        if: steps.font-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 5
+        run: |
+          mkdir -p fonts
+          for w in Bold Regular; do
+            curl -fsSL --retry 3 -o "fonts/NotoSansCJKjp-$w.otf" \
+              "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-$w.otf"
+          done
+          ls -l fonts
 
       - run: pip install -r requirements.txt
 
