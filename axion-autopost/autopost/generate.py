@@ -11,7 +11,8 @@ REQUIRED_KEYS = ["theme", "target", "x_post", "instagram_image_title", "instagra
 CHECK_KEYS = ["hook", "target", "concrete", "insight", "reason_to_contact"]
 X_MAX_CHARS = 140
 # prompt.md「7. 禁止事項」のうち、機械的に見分けられるもの
-BANNED = ["絶対", "必ず", "誰でも", "最短で", "いかがでしたか", "について解説します", "お気軽にご相談ください"]
+BANNED = ["絶対", "必ず", "誰でも", "最短で", "いかがでしたか", "について解説します", "お気軽にご相談ください",
+          "清掃"]  # 代表の他の事業には触れない（2026-10-24）
 
 WEEKDAYS = "月火水木金土日"
 
