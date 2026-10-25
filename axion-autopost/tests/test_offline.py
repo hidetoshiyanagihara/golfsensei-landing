@@ -80,6 +80,7 @@ check("{{today}}" not in system and "{{weekday}}" not in system and f"{d0:%Y年%
 check("元請け依存" in system and "古い投稿" not in system, "直近14日分の投稿だけを渡す")
 check("清掃現場で管理会社" in system, "memo.md を追加メモとして渡す")
 check("{{未確定。" in system, "指示文の {{ }} はそのまま残す")
+check("清掃・管理の会社を経営" not in system, "プロンプトに代表の他事業の経歴は書かない")
 req = calls_ai[0]
 check(req["max_tokens"] >= 16000 and req["output_config"]["format"]["type"] == "json_schema",
       "考える分も含めた十分な上限と、JSON形式の指定（structured outputs）")
@@ -87,11 +88,12 @@ schema_keys = set(req["output_config"]["format"]["schema"]["properties"])
 check(schema_keys == set(generate.REQUIRED_KEYS) | {"x_char_count", "self_check"}, "出力形式は prompt.md の11章と同じ")
 
 calls_ai.clear()
-replies[:] = [json.dumps({**GOOD, "instagram_caption": "絶対に反響が出ます"}), json.dumps(GOOD)]
+replies[:] = [json.dumps({**GOOD, "instagram_caption": "絶対に反響が出ます"}),
+              json.dumps({**GOOD, "x_post": "僕も清掃の現場側の人間なので"}), json.dumps(GOOD)]
 main.cmd_generate()
 day = d0.strftime("%Y-%m-%d")
 saved = json.loads((tmp / "posts" / f"{day}.json").read_text(encoding="utf-8"))
-check(len(calls_ai) == 2, "禁止表現（絶対）を含む出力は作り直す")
+check(len(calls_ai) == 3, "禁止表現（絶対・代表の他事業の「清掃」）を含む出力は作り直す")
 check(saved["x"] == GOOD["x_post"] and saved["instagram"] == GOOD["instagram_caption"]
       and saved["image_title"] == GOOD["instagram_image_title"] and saved["target"] == GOOD["target"],
       "新しい出力形式を投稿用に保存")
