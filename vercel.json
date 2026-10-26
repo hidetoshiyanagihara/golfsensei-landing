@@ -3,5 +3,20 @@
     "deploymentEnabled": {
       "sns-log": false
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/:src(x|instagram|youtube|linkedin|form)",
+      "has": [{ "type": "host", "value": "axionsales.vercel.app" }],
+      "destination": "/?src=:src",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "axionsales.vercel.app" }],
+      "destination": "/axion-sales.html"
+    }
+  ]
 }

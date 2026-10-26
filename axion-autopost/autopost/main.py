@@ -18,7 +18,7 @@ from . import platforms
 from .platforms import PostError
 
 ROOT = Path(__file__).resolve().parent.parent
-LP_URL = "https://golfsensei-landing.vercel.app/axion-sales.html"
+LP_URL = "https://axionsales.vercel.app"  # LP（axion-sales.html）の短いURL。/youtube などで流入元が付く（vercel.json）
 POSTS, IMAGES = ROOT / "posts", ROOT / "images"
 HISTORY = ROOT / "history.json"
 PROMPT, MEMO = ROOT / "prompt.md", ROOT / "memo.md"
@@ -106,7 +106,7 @@ def youtube_description(post, credits) -> str:
     """Instagramのキャプションから DM の案内を外し、YouTube から申し込める先（チャンネルのリンク・LP）を書く"""
     body = "\n".join(ln for ln in post["instagram"].splitlines() if "DM" not in ln).strip()
     cta = ("▼御社の業種・商圏に合わせた見込み客リスト20件を、無料で作ってお送りします\n"
-           f"チャンネルページのリンク、またはこちらから → {LP_URL}?src=youtube\n"
+           f"チャンネルページのリンク、またはこちらから → {LP_URL}/youtube\n"
            "（X・InstagramのDMで「リスト」と送っていただいてもOKです）")
     voice = "\n\n音声：" + "、".join(credits) if credits else ""
     return f"{body}\n\n{cta}{voice}"

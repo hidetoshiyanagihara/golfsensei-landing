@@ -191,7 +191,7 @@ check(all(abs(sc["talk"] - 3.0) < 0.01 and sc["sec"] >= 3.0 for sc in scenes), "
 check(said[-1][0] == "apo" and "チャンネルのリンク" in said[-1][1] and "DM" not in said[-1][1],
       "声：最後はアポくんが無料リストとチャンネルのリンクを案内（YouTubeにDMはない）")
 desc = main.youtube_description({"instagram": "本文1\n\nDMで「リスト」と送ってください。\n\n#名古屋"}, ["VOICEVOX:白上虎太郎"])
-check("DMで「リスト」と送ってください" not in desc and "?src=youtube" in desc and "#名古屋" in desc
+check("DMで「リスト」と送ってください" not in desc and "axionsales.vercel.app/youtube" in desc and "#名古屋" in desc
       and desc.endswith("音声：VOICEVOX:白上虎太郎"), "YouTube説明欄：DMの案内を外し、LPとクレジットを入れる")
 mp4v = tmp / "short_voice.mp4"
 sec_v, _ = video.make_short(short_post, str(mp4v), bgm=tmp / "no-bgm.mp3", speak=fake_speak)
