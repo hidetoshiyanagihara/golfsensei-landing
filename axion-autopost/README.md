@@ -45,6 +45,7 @@
 その日の投稿と同じテーマで、AXION SALES のキャラクター2人（アポくん・つながりちゃん）が会話する縦長動画（20〜40秒）を作り、ショートとして投稿します。会話はAIが `prompt.md` の11章に沿って作ります。動画はリポジトリに残しません。
 `bgm.mp3` を `axion-autopost/` に置くとBGMとして流れます（YouTubeオーディオライブラリの曲など、使ってよい曲だけ）。
 1. AXION SALES の YouTube チャンネルを作る
+   - YouTube Studio →「カスタマイズ」→「プロフィール」→「リンク」に LP を追加（タイトル「無料リスト20件のお申し込み」、URL `https://golfsensei-landing.vercel.app/axion-sales.html?src=youtube`）。YouTubeにはDMがなく、ショートの説明欄のURLは押せないため、動画の最後は「チャンネルのリンクから申し込んでね」と案内しています
 2. console.cloud.google.com でプロジェクトを作り、「YouTube Data API v3」を有効にする
 3. 「OAuth 同意画面」を作成（外部）→ 公開ステータスを **本番環境** にする（テストのままだとトークンが7日で切れます）
 4. 「認証情報」→「OAuth クライアント ID」→ 種類「ウェブ アプリケーション」、承認済みのリダイレクト URI に `https://developers.google.com/oauthplayground` を追加して作成

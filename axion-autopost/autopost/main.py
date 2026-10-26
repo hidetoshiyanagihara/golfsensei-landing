@@ -18,6 +18,7 @@ from . import platforms
 from .platforms import PostError
 
 ROOT = Path(__file__).resolve().parent.parent
+LP_URL = "https://golfsensei-landing.vercel.app/axion-sales.html"
 POSTS, IMAGES = ROOT / "posts", ROOT / "images"
 HISTORY = ROOT / "history.json"
 PROMPT, MEMO = ROOT / "prompt.md", ROOT / "memo.md"
@@ -101,6 +102,16 @@ def configured(keys):
     return all(os.environ.get(k) for k in keys)
 
 
+def youtube_description(post, credits) -> str:
+    """Instagramのキャプションから DM の案内を外し、YouTube から申し込める先（チャンネルのリンク・LP）を書く"""
+    body = "\n".join(ln for ln in post["instagram"].splitlines() if "DM" not in ln).strip()
+    cta = ("▼御社の業種・商圏に合わせた見込み客リスト20件を、無料で作ってお送りします\n"
+           f"チャンネルページのリンク、またはこちらから → {LP_URL}?src=youtube\n"
+           "（X・InstagramのDMで「リスト」と送っていただいてもOKです）")
+    voice = "\n\n音声：" + "、".join(credits) if credits else ""
+    return f"{body}\n\n{cta}{voice}"
+
+
 def post_short(post) -> str:
     """その日の投稿からショート動画を作ってYouTubeに出す（動画はリポジトリに残さない）"""
     import tempfile
@@ -110,7 +121,7 @@ def post_short(post) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "short.mp4")
         _, credits = make_short(post, path)
-        description = post["instagram"] + ("\n\n音声：" + "、".join(credits) if credits else "")
+        description = youtube_description(post, credits)
         return platforms.post_youtube(path, f"{post['image_title']} #Shorts", description)
 
 

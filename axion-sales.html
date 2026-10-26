@@ -319,7 +319,7 @@
 
 <script>
   // ?src=x などの流入元をメール件名に入れ、SNS ごとの相談数を数えられるようにする
-  const SOURCES = { x: 'X', instagram: 'Instagram', linkedin: 'LinkedIn', form: 'フォーム営業' };
+  const SOURCES = { x: 'X', instagram: 'Instagram', youtube: 'YouTube', linkedin: 'LinkedIn', form: 'フォーム営業' };
   const src = new URLSearchParams(location.search).get('src') || '';
   const srcLabel = SOURCES[src] || (src ? src.slice(0, 20) : '直接');
 

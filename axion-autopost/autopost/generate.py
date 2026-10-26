@@ -84,6 +84,8 @@ def check_post(data: dict) -> dict:
     if long_lines or any(d["speaker"] not in SPEAKERS for d in dialogue):
         raise ValueError(f"ショートのセリフが長すぎるか話し手が不正: {long_lines[:2]}")
     lines = "".join(d["line"] for d in dialogue)
+    if "DM" in lines:
+        raise ValueError("ショートのセリフにDMの案内がある（YouTubeにはDMがない）")
     banned = [w for w in BANNED if w in x + caption + lines]
     if banned:
         raise ValueError(f"禁止表現が含まれています: {banned}")

@@ -33,7 +33,8 @@ BUBBLE = (MARGIN - 20, 440, W - SAFE_RIGHT + 20, 830)
 CHAR_CENTER_X = {"apo": 290, "tsunagari": 650}
 BUBBLE_TEXT = (28, 32, 48)
 CHARS_PER_SEC = 13
-CTA = ("見込み客リスト20件、\n無料で作ります！", "DMで「リスト」と送ってね")
+# YouTube には DM がなく、ショートの説明欄のURLも押せないので、チャンネルページのリンクへ案内する
+CTA = ("見込み客リスト20件、\n無料で作ります！", "チャンネルのリンクから申し込んでね")
 
 
 def dialogue_from_post(post: dict) -> list[dict]:
