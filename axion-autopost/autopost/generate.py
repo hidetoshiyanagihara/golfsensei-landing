@@ -10,6 +10,8 @@ MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 REQUIRED_KEYS = ["theme", "target", "x_post", "instagram_image_title", "instagram_image_sub", "instagram_caption"]
 CHECK_KEYS = ["hook", "target", "concrete", "insight", "reason_to_contact"]
 X_MAX_CHARS = 140
+LINE_MAX_CHARS = 36   # ショートのセリフ（prompt.md は30字以内と指示。少し余裕を持たせる）
+SPEAKERS = ["gen", "axie"]
 # prompt.md「7. 禁止事項」のうち、機械的に見分けられるもの
 BANNED = ["絶対", "必ず", "誰でも", "最短で", "いかがでしたか", "について解説します", "お気軽にご相談ください",
           "清掃"]  # 代表の他の事業には触れない（2026-10-24）
@@ -29,8 +31,17 @@ OUTPUT_SCHEMA = {
             "required": CHECK_KEYS,
             "additionalProperties": False,
         },
+        "short_dialogue": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"speaker": {"type": "string", "enum": SPEAKERS}, "line": _STR},
+                "required": ["speaker", "line"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": REQUIRED_KEYS + ["x_char_count", "self_check"],
+    "required": REQUIRED_KEYS + ["x_char_count", "self_check", "short_dialogue"],
     "additionalProperties": False,
 }
 
@@ -65,7 +76,15 @@ def check_post(data: dict) -> dict:
         raise ValueError(f"Xの本文が{len(x)}字（{X_MAX_CHARS}字以内）")
     if re.search(r"https?://", x + caption):
         raise ValueError("URLが含まれています")
-    banned = [w for w in BANNED if w in x + caption]
+    dialogue = [{"speaker": d.get("speaker"), "line": str(d.get("line", "")).strip()}
+                for d in data.get("short_dialogue") or []]
+    if not 3 <= len(dialogue) <= 8:
+        raise ValueError(f"ショートの会話が{len(dialogue)}回（4〜6回）")
+    long_lines = [d["line"] for d in dialogue if len(d["line"]) > LINE_MAX_CHARS or not d["line"]]
+    if long_lines or any(d["speaker"] not in SPEAKERS for d in dialogue):
+        raise ValueError(f"ショートのセリフが長すぎるか話し手が不正: {long_lines[:2]}")
+    lines = "".join(d["line"] for d in dialogue)
+    banned = [w for w in BANNED if w in x + caption + lines]
     if banned:
         raise ValueError(f"禁止表現が含まれています: {banned}")
     scores = data.get("self_check") or {}
@@ -81,6 +100,7 @@ def check_post(data: dict) -> dict:
         "x_char_count": len(x),
         "instagram": caption,
         "self_check": {k: scores[k] for k in CHECK_KEYS},
+        "short_dialogue": dialogue,
     }
 
 

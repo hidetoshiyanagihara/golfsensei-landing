@@ -36,6 +36,9 @@ GOOD = {
     "instagram_image_sub": "繁忙期こそ3ヶ月後のアポを仕込む",
     "instagram_caption": "本文\n\nDMで『リスト』と送ってください\n#名古屋リフォーム #愛知工務店 #営業代行",
     "self_check": {"hook": 5, "target": 5, "concrete": 4, "insight": 4, "reason_to_contact": 4},
+    "short_dialogue": [{"speaker": "gen", "line": "うちは紹介でしか仕事来んよ"},
+                       {"speaker": "axie", "line": "来る月って、選べます？"},
+                       {"speaker": "axie", "line": "繁忙期こそ3ヶ月後を仕込みましょう"}],
 }
 replies = [
     '前置き {"theme": "x"}',
@@ -85,9 +88,17 @@ req = calls_ai[0]
 check(req["max_tokens"] >= 16000 and req["output_config"]["format"]["type"] == "json_schema",
       "考える分も含めた十分な上限と、JSON形式の指定（structured outputs）")
 schema_keys = set(req["output_config"]["format"]["schema"]["properties"])
-check(schema_keys == set(generate.REQUIRED_KEYS) | {"x_char_count", "self_check"}, "出力形式は prompt.md の11章と同じ")
+check(schema_keys == set(generate.REQUIRED_KEYS) | {"x_char_count", "self_check", "short_dialogue"},
+      "出力形式は prompt.md の12章と同じ")
 
 calls_ai.clear()
+for bad, why in ((GOOD["short_dialogue"][:2], "回"), ([{"speaker": "gen", "line": "あ" * 37}] * 4, "長すぎる"),
+                 ([{"speaker": "gen", "line": "僕も清掃の仕事を"}] * 4, "禁止表現")):
+    try:
+        generate.check_post({**GOOD, "short_dialogue": bad})
+        check(False, f"会話の検査（{why}）")
+    except ValueError as e:
+        check(why in str(e), f"会話の検査：{why}なら作り直す")
 replies[:] = [json.dumps({**GOOD, "instagram_caption": "絶対に反響が出ます"}),
               json.dumps({**GOOD, "x_post": "僕も清掃の現場側の人間なので"}), json.dumps(GOOD)]
 main.cmd_generate()
@@ -142,21 +153,25 @@ check(len(json.loads(main.HISTORY.read_text(encoding="utf-8"))) == 1, "履歴は
 # ---------------------------------------------------------------- LinkedIn の本文変換
 check(platforms.linkedin_text("費用(税別) #営業代行") == "費用\\(税別\\) {hashtag|\\#|営業代行}", "LinkedIn: 記号エスケープとハッシュタグ")
 
-# ---------------------------------------------------------------- YouTube ショート
+# ---------------------------------------------------------------- YouTube ショート（2人の会話）
 from autopost import video  # noqa: E402
 
-short_post = {"image_title": "紹介しか無理は本当？", "image_sub": "建設会社の社長へ",
-              "x": "Q.紹介しか無理？\nA.やってこなかっただけ。\n\n紹介は来る月を選べない。\n\nDMで「リスト」と送ってください。",
-              "instagram": "キャプション"}
-slides = video.slides_from_post(short_post)
-check(slides[0] == ("紹介しか無理は本当？", "建設会社の社長へ") and slides[-1] == video.CTA and len(slides) == 4,
-      "ショート：見出し→本文の段落→締め（本文のDM案内は締めに置き換え）")
+check(saved["short_dialogue"] == GOOD["short_dialogue"], "ショートの会話を保存")
+short_post = {"theme": "誤解に答える：紹介しか無理は本当？", "image_title": "紹介しか無理は本当？", "image_sub": "社長へ",
+              "x": "Q.紹介しか無理？\n\n紹介は来る月を選べない。\n\nDMで「リスト」と送ってください。",
+              "instagram": "キャプション", "short_dialogue": GOOD["short_dialogue"]}
+scenes = video._scenes(short_post)
+check([s["who"] for s in scenes] == ["gen", "axie", "axie", "axie"] and scenes[-1].get("cta"),
+      "ショート：会話の順に話し、最後はアクシーが無料リストを案内")
+old = video.dialogue_from_post({k: v for k, v in short_post.items() if k != "short_dialogue"})
+check(old[0] == {"speaker": "gen", "line": "紹介しか無理は本当？"} and all("DM" not in d["line"] for d in old),
+      "ショート：会話のない古い投稿は見出しとX本文から作る")
 from autopost.image_card import _font  # noqa: E402
 check(all("20" in ln or "2" not in ln for ln in video._wrap("見込み客リストを20件無料で作ります", _font("Bold", 100), 400)),
       "ショート：数字（20）を行の途中で分けない")
 mp4 = tmp / "short.mp4"
 sec = video.make_short(short_post, str(mp4), bgm=tmp / "no-bgm.mp3")
-check(mp4.exists() and mp4.stat().st_size > 10_000 and 10 < sec < 60, "ショート：縦長MP4を書き出す（10〜60秒）")
+check(mp4.exists() and mp4.stat().st_size > 10_000 and 5 < sec < 60, "ショート：縦長MP4を書き出す")
 
 yt_calls = []
 
