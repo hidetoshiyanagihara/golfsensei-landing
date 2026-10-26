@@ -391,6 +391,9 @@ def _clean_name(s: str) -> str:
     s = re.sub(r"\s*(all rights reserved|inc\.?|co\.,? ?ltd\.?).*$", "", s, flags=re.I).strip(" ,|-")
     s = re.sub(r"\s*[|｜].*$", "", s)                                   # 「社名 | ROKUGO」
     s = re.sub(r"\s*\[[^\]]*\]\s*$", "", s)                                # 「株式会社 風[エクステリア 風]」
+    s = re.sub(r"[\-－]\S*の\S*$", "", s)                                   # 「有限会社 建造-新城市の屋根…専門店」
+    s = re.sub(r"(\S)\s{2,}(\S)", r"\1\2", s)                                # 「有限会社 丸  京」
+    s = re.sub(rf"^({_CORP}\s?\S+)\s+\S*(工事|塗装|リフォーム|専門店)$", r"\1", s)  # 「株式会社 色彩 豊川外壁塗装工事」
     s = re.sub(rf"({_CORP})(\S*事業部|・\S+)$", r"\1", s)                  # 「中部東洋株式会社防水事業部」
     s = re.sub(r"\s+[\-–—/／]\s+.*$", "", s)                           # 「株式会社X - 土木工事・…」「X / 知事許可…」
     s = re.sub(rf"^[^「]*「(?=\S*{_CORP})", "", s)                         # 「解体屋「有限会社X」
