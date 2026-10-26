@@ -170,8 +170,70 @@ from autopost.image_card import _font  # noqa: E402
 check(all("20" in ln or "2" not in ln for ln in video._wrap("見込み客リストを20件無料で作ります", _font("Bold", 100), 400)),
       "ショート：数字（20）を行の途中で分けない")
 mp4 = tmp / "short.mp4"
-sec = video.make_short(short_post, str(mp4), bgm=tmp / "no-bgm.mp3")
-check(mp4.exists() and mp4.stat().st_size > 10_000 and 5 < sec < 60, "ショート：縦長MP4を書き出す")
+sec, credits = video.make_short(short_post, str(mp4), bgm=tmp / "no-bgm.mp3", speak=None)
+check(mp4.exists() and mp4.stat().st_size > 10_000 and 5 < sec < 60 and credits == [], "ショート：声なしの縦長MP4を書き出す")
+
+# 声（VOICEVOX は差し替え）：セリフの長さに場面を合わせ、音声トラックを入れる
+import numpy as np  # noqa: E402
+from autopost import voice  # noqa: E402
+
+said = []
+
+
+def fake_speak(text, who):
+    said.append((who, text))
+    return (np.sin(np.arange(int(voice.RATE * 3.0)) / 8) * 6000).astype(np.int16)   # どのセリフも3秒
+
+
+scenes = video._scenes(short_post, fake_speak)
+check(all(abs(sc["talk"] - 3.0) < 0.01 and sc["sec"] >= 3.0 for sc in scenes), "声：場面の長さを読み上げの長さに合わせる")
+check(said[-1][0] == "apo" and "DMで「リスト」" in said[-1][1], "声：最後はアポくんが無料リストとDMの案内を読み上げる")
+mp4v = tmp / "short_voice.mp4"
+sec_v, _ = video.make_short(short_post, str(mp4v), bgm=tmp / "no-bgm.mp3", speak=fake_speak)
+import imageio_ffmpeg  # noqa: E402
+import subprocess  # noqa: E402
+probe = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-i", str(mp4v), "-af", "volumedetect", "-f", "null", "-"],
+                       capture_output=True, text=True).stderr
+check("Audio" in probe and "mean_volume: -91" not in probe and sec_v >= 3.0 * len(scenes), "声：音声トラックに声が入る")
+
+
+class FakeVoiceRes:
+    def __init__(self, data=None, content=b""):
+        self._data, self.content, self.ok = data, content, True
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._data
+
+
+import io  # noqa: E402
+import wave  # noqa: E402
+
+buf = io.BytesIO()
+with wave.open(buf, "wb") as w:
+    w.setnchannels(1)
+    w.setsampwidth(2)
+    w.setframerate(voice.RATE)
+    w.writeframes(np.zeros(2400, dtype=np.int16).tobytes())
+vcalls = []
+
+
+def fake_voice_post(url, **kw):
+    vcalls.append((url, kw))
+    return FakeVoiceRes({"speedScale": 1.0}) if url.endswith("/audio_query") else FakeVoiceRes(content=buf.getvalue())
+
+
+real_vpost, real_vget = voice.requests.post, voice.requests.get
+voice.requests.post = fake_voice_post
+voice.requests.get = lambda url, **kw: FakeVoiceRes([{"name": "白上虎太郎", "styles": [{"id": 12}]},
+                                                     {"name": "冥鳴ひまり", "styles": [{"id": 14}]}])
+audio = voice.synth("DMで送ってね", "apo")
+check(len(audio) == 2400 and vcalls[0][1]["params"]["text"] == "ディーエムで送ってね"
+      and vcalls[1][1]["json"]["speedScale"] == voice.SPEED["apo"], "声：VOICEVOXで読み上げ（DMはディーエムと読む）")
+check(voice.credits() == ["VOICEVOX:白上虎太郎", "VOICEVOX:冥鳴ひまり"], "声：説明欄に入れるクレジット")
+voice.requests.post, voice.requests.get = real_vpost, real_vget
 
 yt_calls = []
 

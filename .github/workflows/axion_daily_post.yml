@@ -1,4 +1,4 @@
-# AXION SALES のSNS自動投稿（axion-autopost/）。毎朝AIが投稿を作り、X・Instagram・LinkedInに投稿する。
+# AXION SALES のSNS自動投稿（axion-autopost/）。毎朝AIが投稿を作り、X・Instagram・YouTubeショートに投稿する。
 name: Daily SNS post
 
 on:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "1 = 投稿せずに文章と画像の生成だけ試す ／ 0 = 投稿する ／ preview = 保存も投稿もせず文章だけ表示"
+        description: "1 = 投稿せずに文章と画像の生成だけ試す ／ 0 = 投稿する ／ preview = 保存も投稿もせず文章だけ表示 ／ video = 保存も投稿もせずショート動画を作ってダウンロードできるようにする"
         default: "1"
 
 permissions:
@@ -20,7 +20,10 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      MODE: ${{ github.event.inputs.dry_run || 'schedule' }}
+      YT_ON: ${{ secrets.YT_REFRESH_TOKEN != '' }}   # if: では secrets を直接使えないため
     defaults:
       run:
         working-directory: axion-autopost
@@ -30,6 +33,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # 声（VOICEVOX）はショート動画を作るときだけ起動する。準備に1〜2分かかるので先に始めておく
+      - name: 音声エンジンを起動
+        if: ${{ env.MODE == 'video' || ((env.MODE == 'schedule' || env.MODE == '0') && env.YT_ON == 'true') }}
+        working-directory: .
+        run: docker run -d --name voicevox -p 50021:50021 voicevox/voicevox_engine:cpu-0.26.0
 
       # apt でのインストールは止まることがあるため、フォントファイルを直接ダウンロードしてキャッシュする
       - name: 日本語フォント（キャッシュ）
@@ -52,20 +61,41 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: 音声エンジンの準備を待つ
+        if: ${{ env.MODE == 'video' || ((env.MODE == 'schedule' || env.MODE == '0') && env.YT_ON == 'true') }}
+        timeout-minutes: 5
+        run: |
+          until curl -fs http://localhost:50021/version; do sleep 5; done
+          echo " ← VOICEVOX の準備ができました"
+
       - name: プレビュー（保存・投稿しない）
-        if: ${{ github.event.inputs.dry_run == 'preview' }}
+        if: ${{ env.MODE == 'preview' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python -m autopost.main preview
 
+      - name: ショート動画のプレビュー（保存・投稿しない）
+        if: ${{ env.MODE == 'video' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -m autopost.main video_preview
+
+      - name: プレビュー動画をダウンロードできるようにする
+        if: ${{ env.MODE == 'video' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: short-preview
+          path: axion-autopost/preview.mp4
+          retention-days: 7
+
       - name: 今日の投稿を作る
-        if: ${{ github.event.inputs.dry_run != 'preview' }}
+        if: ${{ env.MODE == 'schedule' || env.MODE == '0' || env.MODE == '1' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python -m autopost.main generate
 
       - name: 画像を公開URLに置く
-        if: ${{ github.event.inputs.dry_run != 'preview' }}
+        if: ${{ env.MODE == 'schedule' || env.MODE == '0' || env.MODE == '1' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -73,8 +103,8 @@ jobs:
           git commit -m "SNS投稿を生成 $(TZ=Asia/Tokyo date +%F)" || echo "変更なし"
           git push
 
-      - name: 3つのSNSに投稿
-        if: ${{ github.event_name == 'schedule' || (github.event.inputs.dry_run != '1' && github.event.inputs.dry_run != 'preview') }}
+      - name: SNSに投稿
+        if: ${{ env.MODE == 'schedule' || env.MODE == '0' }}
         env:
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
@@ -89,7 +119,7 @@ jobs:
         run: python -m autopost.main publish
 
       - name: 結果を保存
-        if: ${{ always() && github.event.inputs.dry_run != 'preview' }}
+        if: ${{ always() && (env.MODE == 'schedule' || env.MODE == '0' || env.MODE == '1') }}
         run: |
           git add -A posts history.json
           git commit -m "SNS投稿の結果 $(TZ=Asia/Tokyo date +%F)" || echo "変更なし"

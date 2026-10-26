@@ -4,6 +4,7 @@
   python -m autopost.main publish    作った投稿を各SNSに出す
   python -m autopost.main preview    保存も投稿もせず、今日の投稿文を作って表示する（prompt.md の調整用）
   python -m autopost.main video      今日の投稿からショート動画を作って images/ に置く（確認用）
+  python -m autopost.main video_preview  保存も投稿もせず、投稿文と会話を作ってショート動画 preview.mp4 にする（確認用）
 キーが設定されていないSNSは自動でスキップします。
 """
 import json
@@ -108,8 +109,9 @@ def post_short(post) -> str:
 
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "short.mp4")
-        make_short(post, path)
-        return platforms.post_youtube(path, f"{post['image_title']} #Shorts", post["instagram"])
+        _, credits = make_short(post, path)
+        description = post["instagram"] + ("\n\n音声：" + "、".join(credits) if credits else "")
+        return platforms.post_youtube(path, f"{post['image_title']} #Shorts", description)
 
 
 def cmd_video():
@@ -121,7 +123,20 @@ def cmd_video():
     if not post:
         sys.exit("今日の投稿がありません")
     out = img_path.with_suffix(".mp4")
-    print(f"{out.name}: {make_short(post, str(out)):.1f}秒")
+    total, credits = make_short(post, str(out))
+    print(f"{out.name}: {total:.1f}秒 {'／'.join(credits) or '（声なし）'}")
+
+
+def cmd_video_preview():
+    """投稿文と会話を作り、ショート動画を preview.mp4 に書き出す（保存・投稿しない）"""
+    from .video import make_short
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("ANTHROPIC_API_KEY が未設定です")
+    post = make_post(today())
+    print(json.dumps(post, ensure_ascii=False, indent=2))
+    total, credits = make_short(post, str(ROOT / "preview.mp4"))
+    print(f"preview.mp4: {total:.1f}秒 {'／'.join(credits) or '（声なし）'}")
 
 
 def cmd_publish():
@@ -174,6 +189,7 @@ def cmd_publish():
 
 
 if __name__ == "__main__":
-    {"generate": cmd_generate, "publish": cmd_publish, "preview": cmd_preview, "video": cmd_video}.get(
+    {"generate": cmd_generate, "publish": cmd_publish, "preview": cmd_preview, "video": cmd_video,
+     "video_preview": cmd_video_preview}.get(
         sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__)
     )()

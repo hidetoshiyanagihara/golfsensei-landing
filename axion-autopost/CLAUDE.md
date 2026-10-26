@@ -23,8 +23,9 @@
 | `autopost/platforms.py` | X（OAuth1.0a, POST /2/tweets）、Instagram（graph.instagram.com, Instagramログイン版）、LinkedIn（/rest/posts, 個人アカウント投稿）|
 | `autopost/characters.py` / `assets/` | ショートのキャラクター2人。ユーザー提供の公式イラスト（2026-10-26）をアニメ向け切り抜きモデル（anime-seg isnetis）で切り抜いた `assets/apo.png`・`assets/tsunagari.png` を使う。アポくん＝行動派の営業マン・一人称「俺」・答える役（青）／つながりちゃん＝気配り上手・本音を引き出す役（ピンク）。話している方の後ろに色の光 |
 | `autopost/video.py` | YouTubeショート用の縦長動画（1080x1920）。prompt.md 11章の `short_dialogue` をもとに2人が会話（話す方が光って跳ね、聞く方は少し暗く、吹き出しに1文字ずつ表示）、最後にアポくんが無料リストを案内。任意の bgm.mp3。imageio-ffmpeg で書き出し。ショート再生画面で隠れる右180px・下520pxには大事なものを置かない |
+| `autopost/voice.py` | ショートの声。VOICEVOX ENGINE（Docker `voicevox/voicevox_engine:cpu-0.26.0`、Actions内で起動）で読み上げ。アポくん＝白上虎太郎(12)、つながりちゃん＝冥鳴ひまり(14)。各キャラの規約によりYouTube説明欄に「VOICEVOX:名前」を自動で入れる。エンジンが無ければ声なしで続行 |
 | `autopost/main.py` | `generate` / `publish` / `preview` コマンド。直近14日の投稿を被り防止に渡す。キー未設定のSNSはスキップ、成功済みSNSは再実行時スキップ。LinkedIn用本文は現プロンプトでは作らない |
-| `../.github/workflows/axion_daily_post.yml` | 毎日 22:47 UTC 実行（working-directory: axion-autopost）。手動実行は dry_run=1 生成のみ／0 投稿／preview 表示のみ |
+| `../.github/workflows/axion_daily_post.yml` | 毎日 22:47 UTC 実行（working-directory: axion-autopost）。手動実行は dry_run=1 生成のみ／0 投稿／preview 表示のみ／video ショート動画を作って artifact（short-preview）に置く |
 | `../.github/workflows/axion_refresh_ig_token.yml` | 毎週月曜にInstagramトークンを延長し、`gh secret set` で上書き（`GH_PAT` が必要）|
 | `posts/日付.json` | 生成内容と各SNSの結果（`ok:` / `error:` / `skipped`）|
 | `history.json` | 過去テーマの記録 |

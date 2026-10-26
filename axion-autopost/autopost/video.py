@@ -3,17 +3,22 @@
 AXION SALES の2人（アポくん・つながりちゃん）が会話する構成。
 話している方が明るく跳ね、聞いている方は少し暗くなる。吹き出しに文字が1文字ずつ出る。
 最後はアポくんが無料リストを案内する。
-axion-autopost/bgm.mp3 があればBGMとして小さめの音量で流す（なければ無音）。
+VOICEVOX が動いていればセリフを読み上げ、文字と動きを声の長さに合わせる（voice.py）。
+axion-autopost/bgm.mp3 があればBGMとして小さめの音量で流す。
 """
 import math
 import re
 import subprocess
+import tempfile
+import wave
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 from .characters import COLORS, NAMES, glow, sprite
 from .image_card import ACCENT, BG, SUBTEXT, _font
+from . import voice
 
 W, H = 1080, 1920
 FPS = 30
@@ -109,69 +114,110 @@ def _bubble(d: ImageDraw.ImageDraw, who: str, lines: list[str], font, size: int,
         d.text((x0 + 44, y1 - 74), sub, font=_font("Bold", 40), fill=COLORS["tsunagari"])
 
 
-def _scenes(post: dict) -> list[dict]:
+def _scenes(post: dict, speak=None) -> list[dict]:
+    """場面ごとの文字・長さ・声。speak(セリフ, 話し手) があれば読み上げて、その長さに合わせる"""
     inner_w = BUBBLE[2] - BUBBLE[0] - 88
+    items = [dict(d, max_h=BUBBLE[3] - BUBBLE[1] - 120) for d in dialogue_from_post(post)]
+    items.append({"speaker": "apo", "line": CTA[0], "say": CTA[0].replace("\n", "") + CTA[1],
+                  "sub": CTA[1], "cta": True, "max_h": BUBBLE[3] - BUBBLE[1] - 200})
     scenes = []
-    for item in dialogue_from_post(post):
-        font, size, lines = _fit(item["line"], inner_w, BUBBLE[3] - BUBBLE[1] - 120)
+    for item in items:
+        font, size, lines = _fit(item["line"], inner_w, item["max_h"])
         n = sum(len(ln) for ln in lines)
+        audio = speak(item.get("say", item["line"]), item["speaker"]) if speak else None
+        talk = len(audio) / voice.RATE if audio is not None else n / CHARS_PER_SEC
         scenes.append({"who": item["speaker"], "lines": lines, "font": font, "size": size, "chars": n,
-                       "sec": max(2.2, n / CHARS_PER_SEC + 1.3)})
-    font, size, lines = _fit(CTA[0], inner_w, BUBBLE[3] - BUBBLE[1] - 200, sizes=(62, 56, 50))
-    scenes.append({"who": "apo", "lines": lines, "font": font, "size": size, "chars": sum(map(len, lines)),
-                   "sec": 4.0, "sub": CTA[1], "cta": True})
+                       "talk": talk, "cps": n / max(talk, 0.6), "audio": audio,
+                       "sec": max(4.0 if item.get("cta") else 2.2, talk + (0.9 if audio is not None else 1.3)),
+                       "sub": item.get("sub", ""), "cta": item.get("cta", False)})
     return scenes
 
 
 def _frame(base: Image.Image, scene: dict, t: float) -> Image.Image:
     img = base.copy()
     d = ImageDraw.Draw(img)
-    shown = min(scene["chars"], int(t * CHARS_PER_SEC) + 1)
-    typing = shown < scene["chars"]
+    shown = min(scene["chars"], int(t * scene["cps"]) + 1)
+    talking = t < scene["talk"]
     speaker_top = H
     for who in CHAR_CENTER_X:
-        if who == scene["who"] or scene.get("cta"):
+        if who == scene["who"] or scene["cta"]:
             g = glow(who)
             img.paste(g, (CHAR_CENTER_X[who] - g.width // 2, SAFE_BOTTOM - g.height + 40), g)
     for who in CHAR_CENTER_X:
-        active = who == scene["who"] or bool(scene.get("cta"))
+        active = who == scene["who"] or scene["cta"]
         spr = sprite(who, active)
-        hop = int(abs(math.sin(t * math.pi * 2.2)) * 18) if active and (typing or scene.get("cta")) else 0
+        hop = int(abs(math.sin(t * math.pi * 2.2)) * 18) if active and (talking or scene["cta"]) else 0
         x, y = _char_pos(who, spr, hop)
         img.paste(spr, (x, y), spr)
         if who == scene["who"]:
             speaker_top = y
     _bubble(d, scene["who"], scene["lines"], scene["font"], scene["size"], shown, tail_y=speaker_top - 10,
-            sub="" if typing else scene.get("sub", ""), border=ACCENT if scene.get("cta") else None)
+            sub=scene["sub"] if shown >= scene["chars"] else "", border=ACCENT if scene["cta"] else None)
     return img
 
 
 # ---------------------------------------------------------------- 書き出し
-def make_short(post: dict, out_path: str, bgm: Path = BGM) -> float:
-    """動画を書き出して、長さ（秒）を返す"""
+def _voice_track(scenes: list[dict], path: str) -> None:
+    """各場面の声を、場面の始まり（少し間をあけて）に置いた1本の音声にする"""
+    starts, t = [], 0
+    for sc in scenes:
+        starts.append(t)
+        t += int(sc["sec"] * FPS)
+    track = np.zeros(int(t / FPS * voice.RATE) + voice.RATE, dtype=np.int16)
+    for start, sc in zip(starts, scenes):
+        if sc["audio"] is not None:
+            i = int(start / FPS * voice.RATE)
+            track[i:i + len(sc["audio"])] = sc["audio"][: len(track) - i]
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(voice.RATE)
+        w.writeframes(track.tobytes())
+
+
+def make_short(post: dict, out_path: str, bgm: Path = BGM, speak="auto") -> tuple[float, list[str]]:
+    """動画を書き出して、長さ（秒）と説明欄に入れるクレジットを返す。
+    speak="auto" なら VOICEVOX が動いていれば読み上げる。None なら声なし"""
     import imageio_ffmpeg
 
-    scenes = _scenes(post)
-    total = sum(s["sec"] for s in scenes)
+    credits = []
+    if speak == "auto":
+        speak = voice.synth if voice.available() else None
+        credits = voice.credits() if speak else []
+    scenes = _scenes(post, speak)
+    total = sum(int(s["sec"] * FPS) for s in scenes) / FPS
     theme = post.get("theme") or post["image_title"]
     base = _background(theme.split("：", 1)[-1])  # 「誤解に答える：〜」の曜日ラベルは外す
 
-    cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error",
-           "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-"]
-    if bgm.exists():
-        cmd += ["-stream_loop", "-1", "-i", str(bgm),
-                "-af", f"volume=0.35,afade=t=out:st={max(0, total - 1.5):.2f}:d=1.5"]
-    else:  # 音声トラックがないと扱いが不安定なサービスがあるので無音を入れる
-        cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
-    cmd += ["-map", "0:v", "-map", "1:a", "-t", f"{total:.2f}",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
-            "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out_path]
+    with tempfile.TemporaryDirectory() as tmp:
+        cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error",
+               "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-"]
+        inputs = []
+        if speak:
+            _voice_track(scenes, f"{tmp}/voice.wav")
+            cmd += ["-i", f"{tmp}/voice.wav"]
+            inputs.append("[1:a]aresample=44100,volume=1.6[v]")
+        if bgm.exists():
+            cmd += ["-stream_loop", "-1", "-i", str(bgm)]
+            fade = f"afade=t=out:st={max(0, total - 1.5):.2f}:d=1.5"
+            inputs.append(f"[{len(inputs) + 1}:a]aresample=44100,volume={0.12 if speak else 0.35},{fade}[b]")
+        if not inputs:  # 音声トラックがないと扱いが不安定なサービスがあるので無音を入れる
+            cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+            audio = ["-map", "1:a"]
+        else:
+            labels = "".join(f"[{x[-2]}]" for x in inputs)
+            mix = f"{labels}amix=inputs={len(inputs)}:duration=longest:normalize=0[a]" if len(inputs) > 1 \
+                else f"{labels}anull[a]"
+            audio = ["-filter_complex", ";".join(inputs + [mix]), "-map", "[a]"]
+        cmd += ["-map", "0:v", *audio, "-t", f"{total:.2f}",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
+                "-c:a", "aac", "-b:a", "160k", "-ac", "2", "-movflags", "+faststart", out_path]
 
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    for scene in scenes:
-        for f in range(int(scene["sec"] * FPS)):
-            proc.stdin.write(_frame(base, scene, f / FPS).convert("RGB").tobytes())
-    proc.stdin.close()
-    if proc.wait() != 0:
-        raise RuntimeError("動画の書き出しに失敗しました（ffmpeg）")
-    return total
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        for scene in scenes:
+            for f in range(int(scene["sec"] * FPS)):
+                proc.stdin.write(_frame(base, scene, f / FPS).convert("RGB").tobytes())
+        proc.stdin.close()
+        if proc.wait() != 0:
+            raise RuntimeError("動画の書き出しに失敗しました（ffmpeg）")
+    return total, credits
