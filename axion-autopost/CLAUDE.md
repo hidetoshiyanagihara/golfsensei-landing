@@ -21,8 +21,8 @@
 | `autopost/generate.py` | Claude API（`claude-sonnet-5-5`）でX・Instagramの文章をJSON生成。X140字超・URL・禁止表現・自己チェック3点以下は再生成（最大3回） |
 | `autopost/image_card.py` | Instagram/LinkedIn用の1080x1350 **JPEG** 画像（濃紺×ゴールド、文字のみ）をPillowで生成。Instagram APIはPNG不可 |
 | `autopost/platforms.py` | X（OAuth1.0a, POST /2/tweets）、Instagram（graph.instagram.com, Instagramログイン版）、LinkedIn（/rest/posts, 個人アカウント投稿）|
-| `autopost/characters.py` | ショートのキャラクター2人をPillowで描く（ゲンちゃん＝黄色ヘルメットの現場社長・質問役／アクシー＝紺ジャケット金ネクタイのAXION営業担当・答える役）。白ふちのステッカー風 |
-| `autopost/video.py` | YouTubeショート用の縦長動画（1080x1920）。prompt.md 11章の `short_dialogue` をもとに2人が会話（話す方が跳ねて口パク、吹き出しに1文字ずつ表示）、最後にアクシーが無料リストを案内。任意の bgm.mp3。imageio-ffmpeg で書き出し。ショート再生画面で隠れる右180px・下520pxには大事なものを置かない |
+| `autopost/characters.py` / `assets/` | ショートのキャラクター2人。ユーザー提供の公式イラスト（2026-10-26）をアニメ向け切り抜きモデル（anime-seg isnetis）で切り抜いた `assets/apo.png`・`assets/tsunagari.png` を使う。アポくん＝行動派の営業マン・一人称「俺」・答える役（青）／つながりちゃん＝気配り上手・本音を引き出す役（ピンク）。話している方の後ろに色の光 |
+| `autopost/video.py` | YouTubeショート用の縦長動画（1080x1920）。prompt.md 11章の `short_dialogue` をもとに2人が会話（話す方が光って跳ね、聞く方は少し暗く、吹き出しに1文字ずつ表示）、最後にアポくんが無料リストを案内。任意の bgm.mp3。imageio-ffmpeg で書き出し。ショート再生画面で隠れる右180px・下520pxには大事なものを置かない |
 | `autopost/main.py` | `generate` / `publish` / `preview` コマンド。直近14日の投稿を被り防止に渡す。キー未設定のSNSはスキップ、成功済みSNSは再実行時スキップ。LinkedIn用本文は現プロンプトでは作らない |
 | `../.github/workflows/axion_daily_post.yml` | 毎日 22:47 UTC 実行（working-directory: axion-autopost）。手動実行は dry_run=1 生成のみ／0 投稿／preview 表示のみ |
 | `../.github/workflows/axion_refresh_ig_token.yml` | 毎週月曜にInstagramトークンを延長し、`gh secret set` で上書き（`GH_PAT` が必要）|

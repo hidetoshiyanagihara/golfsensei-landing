@@ -42,7 +42,7 @@
    スコープは `openid` `profile` `w_member_social` の3つにチェック → 出たトークンを登録
 
 **YouTube（ショート動画）**
-その日の投稿と同じテーマで、AXION SALES のキャラクター2人（ゲンちゃん・アクシー）が会話する縦長動画（20〜40秒）を作り、ショートとして投稿します。会話はAIが `prompt.md` の11章に沿って作ります。動画はリポジトリに残しません。
+その日の投稿と同じテーマで、AXION SALES のキャラクター2人（アポくん・つながりちゃん）が会話する縦長動画（20〜40秒）を作り、ショートとして投稿します。会話はAIが `prompt.md` の11章に沿って作ります。動画はリポジトリに残しません。
 `bgm.mp3` を `axion-autopost/` に置くとBGMとして流れます（YouTubeオーディオライブラリの曲など、使ってよい曲だけ）。
 1. AXION SALES の YouTube チャンネルを作る
 2. console.cloud.google.com でプロジェクトを作り、「YouTube Data API v3」を有効にする

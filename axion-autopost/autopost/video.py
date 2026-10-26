@@ -1,7 +1,8 @@
 """その日の投稿からYouTubeショート用の縦長動画（1080x1920 MP4）を作る。
 
-AXION SALES の2人（ゲンちゃん・アクシー）が会話する構成。
-話している方が跳ねて口が動き、吹き出しに文字が1文字ずつ出る。最後はアクシーが無料リストを案内する。
+AXION SALES の2人（アポくん・つながりちゃん）が会話する構成。
+話している方が明るく跳ね、聞いている方は少し暗くなる。吹き出しに文字が1文字ずつ出る。
+最後はアポくんが無料リストを案内する。
 axion-autopost/bgm.mp3 があればBGMとして小さめの音量で流す（なければ無音）。
 """
 import math
@@ -11,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from .characters import NAMES, SPRITE_H, SPRITE_W, sprite
+from .characters import COLORS, NAMES, glow, sprite
 from .image_card import ACCENT, BG, SUBTEXT, _font
 
 W, H = 1080, 1920
@@ -22,10 +23,9 @@ SAFE_RIGHT = 180
 SAFE_BOTTOM = H - 520
 BGM = Path(__file__).resolve().parent.parent / "bgm.mp3"
 
-BUBBLE = (MARGIN - 20, 500, W - SAFE_RIGHT + 20, 900)
-CHAR_TOP = SAFE_BOTTOM - SPRITE_H
-CHAR_X = {"gen": 310 - SPRITE_W // 2, "axie": 670 - SPRITE_W // 2}
-NAME_COLOR = {"gen": (226, 120, 40), "axie": (36, 56, 100)}
+TAGLINE = "つながる。ひろがる。新しいビジネスを。"
+BUBBLE = (MARGIN - 20, 440, W - SAFE_RIGHT + 20, 830)
+CHAR_CENTER_X = {"apo": 290, "tsunagari": 650}
 BUBBLE_TEXT = (28, 32, 48)
 CHARS_PER_SEC = 13
 CTA = ("見込み客リスト20件、\n無料で作ります！", "DMで「リスト」と送ってね")
@@ -35,11 +35,11 @@ def dialogue_from_post(post: dict) -> list[dict]:
     """会話がない古い投稿は、見出しと X 本文から作る"""
     if post.get("short_dialogue"):
         return post["short_dialogue"]
-    lines = [{"speaker": "gen", "line": post["image_title"]}]
+    lines = [{"speaker": "tsunagari", "line": post["image_title"]}]
     for para in post["x"].split("\n\n"):
         para = para.strip().replace("\n", "")
         if para and "DM" not in para:
-            lines.append({"speaker": "axie", "line": para})
+            lines.append({"speaker": "apo", "line": para})
     return lines
 
 
@@ -70,31 +70,35 @@ def _fit(text: str, max_w: int, max_h: int, sizes=(68, 62, 56, 50, 44)):
 
 
 # ---------------------------------------------------------------- 1コマの描画
+def _char_pos(who: str, img: Image.Image, hop: int = 0) -> tuple[int, int]:
+    return CHAR_CENTER_X[who] - img.width // 2, SAFE_BOTTOM - img.height - hop
+
+
 def _background(theme: str) -> Image.Image:
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
-    d.rectangle([MARGIN, 200, MARGIN + 12, 252], fill=ACCENT)
-    d.text((MARGIN + 36, 202), "AXION SALES", font=_font("Bold", 42), fill=ACCENT)
-    font = _font("Bold", 44)
+    d.rectangle([MARGIN, 190, MARGIN + 12, 242], fill=ACCENT)
+    d.text((MARGIN + 36, 192), "AXION SALES", font=_font("Bold", 42), fill=ACCENT)
+    d.text((MARGIN + 36, 248), TAGLINE, font=_font("Regular", 28), fill=SUBTEXT)
+    font = _font("Bold", 42)
     for i, ln in enumerate(_wrap(theme, font, W - MARGIN - SAFE_RIGHT)[:2]):
-        d.text((MARGIN, 300 + i * 62), ln, font=font, fill=(255, 255, 255))
-    floor_y = SAFE_BOTTOM - 30
-    d.ellipse([60, floor_y - 40, W - SAFE_RIGHT + 40, floor_y + 70], fill=(24, 40, 68))   # 床
-    nf = _font("Regular", 30)
-    for who, x in CHAR_X.items():
+        d.text((MARGIN, 312 + i * 56), ln, font=font, fill=(255, 255, 255))
+    d.ellipse([70, SAFE_BOTTOM - 46, W - SAFE_RIGHT + 30, SAFE_BOTTOM + 40], fill=(24, 40, 68))   # 床
+    nf = _font("Bold", 30)
+    for who, cx in CHAR_CENTER_X.items():
         name = NAMES[who]
-        d.text((x + SPRITE_W // 2 - nf.getlength(name) / 2, SAFE_BOTTOM + 14), name, font=nf, fill=SUBTEXT)
+        d.text((cx - nf.getlength(name) / 2, SAFE_BOTTOM + 14), name, font=nf, fill=COLORS[who])
     return img
 
 
 def _bubble(d: ImageDraw.ImageDraw, who: str, lines: list[str], font, size: int, shown: int,
-            sub: str = "", border=None):
+            tail_y: int, sub: str = "", border=None):
     x0, y0, x1, y1 = BUBBLE
     d.rounded_rectangle(BUBBLE, radius=44, fill=(255, 255, 255), outline=border, width=8 if border else 0)
-    tail_x = CHAR_X[who] + SPRITE_W // 2
-    d.polygon([(tail_x - 34, y1 - 2), (tail_x + 34, y1 - 2), (tail_x, y1 + 56)], fill=(255, 255, 255))
-    d.text((x0 + 44, y0 + 30), NAMES[who], font=_font("Bold", 34), fill=NAME_COLOR[who])
-    y, left = y0 + 92, shown
+    tx = CHAR_CENTER_X[who]
+    d.polygon([(tx - 30, y1 - 2), (tx + 30, y1 - 2), (tx, min(tail_y, y1 + 50))], fill=(255, 255, 255))
+    d.text((x0 + 44, y0 + 28), NAMES[who], font=_font("Bold", 34), fill=COLORS[who])
+    y, left = y0 + 88, shown
     for ln in lines:
         if left <= 0:
             break
@@ -102,19 +106,19 @@ def _bubble(d: ImageDraw.ImageDraw, who: str, lines: list[str], font, size: int,
         left -= len(ln)
         y += int(size * 1.4)
     if sub:
-        d.text((x0 + 44, y1 - 76), sub, font=_font("Bold", 40), fill=NAME_COLOR["gen"])
+        d.text((x0 + 44, y1 - 74), sub, font=_font("Bold", 40), fill=COLORS["tsunagari"])
 
 
 def _scenes(post: dict) -> list[dict]:
     inner_w = BUBBLE[2] - BUBBLE[0] - 88
     scenes = []
     for item in dialogue_from_post(post):
-        font, size, lines = _fit(item["line"], inner_w, BUBBLE[3] - BUBBLE[1] - 130)
+        font, size, lines = _fit(item["line"], inner_w, BUBBLE[3] - BUBBLE[1] - 120)
         n = sum(len(ln) for ln in lines)
         scenes.append({"who": item["speaker"], "lines": lines, "font": font, "size": size, "chars": n,
                        "sec": max(2.2, n / CHARS_PER_SEC + 1.3)})
-    font, size, lines = _fit(CTA[0], inner_w, BUBBLE[3] - BUBBLE[1] - 210, sizes=(62, 56, 50))
-    scenes.append({"who": "axie", "lines": lines, "font": font, "size": size, "chars": sum(map(len, lines)),
+    font, size, lines = _fit(CTA[0], inner_w, BUBBLE[3] - BUBBLE[1] - 200, sizes=(62, 56, 50))
+    scenes.append({"who": "apo", "lines": lines, "font": font, "size": size, "chars": sum(map(len, lines)),
                    "sec": 4.0, "sub": CTA[1], "cta": True})
     return scenes
 
@@ -124,14 +128,21 @@ def _frame(base: Image.Image, scene: dict, t: float) -> Image.Image:
     d = ImageDraw.Draw(img)
     shown = min(scene["chars"], int(t * CHARS_PER_SEC) + 1)
     typing = shown < scene["chars"]
-    _bubble(d, scene["who"], scene["lines"], scene["font"], scene["size"], shown,
+    speaker_top = H
+    for who in CHAR_CENTER_X:
+        if who == scene["who"] or scene.get("cta"):
+            g = glow(who)
+            img.paste(g, (CHAR_CENTER_X[who] - g.width // 2, SAFE_BOTTOM - g.height + 40), g)
+    for who in CHAR_CENTER_X:
+        active = who == scene["who"] or bool(scene.get("cta"))
+        spr = sprite(who, active)
+        hop = int(abs(math.sin(t * math.pi * 2.2)) * 18) if active and (typing or scene.get("cta")) else 0
+        x, y = _char_pos(who, spr, hop)
+        img.paste(spr, (x, y), spr)
+        if who == scene["who"]:
+            speaker_top = y
+    _bubble(d, scene["who"], scene["lines"], scene["font"], scene["size"], shown, tail_y=speaker_top - 10,
             sub="" if typing else scene.get("sub", ""), border=ACCENT if scene.get("cta") else None)
-    for who, x in CHAR_X.items():
-        talking = who == scene["who"] or scene.get("cta")
-        hop = int(abs(math.sin(t * math.pi * 2.2)) * 16) if talking and (typing or scene.get("cta")) else 0
-        mouth = talking and typing and int(t * 8) % 2 == 0
-        spr = sprite(who, mouth)
-        img.paste(spr, (x, CHAR_TOP - hop), spr)
     return img
 
 
@@ -159,7 +170,7 @@ def make_short(post: dict, out_path: str, bgm: Path = BGM) -> float:
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for scene in scenes:
         for f in range(int(scene["sec"] * FPS)):
-            proc.stdin.write(_frame(base, scene, f / FPS).tobytes())
+            proc.stdin.write(_frame(base, scene, f / FPS).convert("RGB").tobytes())
     proc.stdin.close()
     if proc.wait() != 0:
         raise RuntimeError("動画の書き出しに失敗しました（ffmpeg）")
