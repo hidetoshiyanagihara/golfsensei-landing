@@ -21,6 +21,7 @@
 | `autopost/generate.py` | Claude API（`claude-sonnet-5-5`）でX・Instagramの文章をJSON生成。X140字超・URL・禁止表現・自己チェック3点以下は再生成（最大3回） |
 | `autopost/image_card.py` | Instagram/LinkedIn用の1080x1350 **JPEG** 画像（濃紺×ゴールド、文字のみ）をPillowで生成。Instagram APIはPNG不可 |
 | `autopost/platforms.py` | X（OAuth1.0a, POST /2/tweets）、Instagram（graph.instagram.com, Instagramログイン版）、LinkedIn（/rest/posts, 個人アカウント投稿）|
+| `autopost/video.py` | YouTubeショート用の縦長動画（1080x1920、文字スライド＋任意の bgm.mp3）を imageio-ffmpeg で作る。ショート再生画面で隠れる右180px・下520pxには文字を置かない |
 | `autopost/main.py` | `generate` / `publish` / `preview` コマンド。直近14日の投稿を被り防止に渡す。キー未設定のSNSはスキップ、成功済みSNSは再実行時スキップ。LinkedIn用本文は現プロンプトでは作らない |
 | `../.github/workflows/axion_daily_post.yml` | 毎日 22:47 UTC 実行（working-directory: axion-autopost）。手動実行は dry_run=1 生成のみ／0 投稿／preview 表示のみ |
 | `../.github/workflows/axion_refresh_ig_token.yml` | 毎週月曜にInstagramトークンを延長し、`gh secret set` で上書き（`GH_PAT` が必要）|
@@ -41,6 +42,7 @@ Instagramは画像を公開URLから取りに来るため、画像をリポジ�
 | Instagram | ✅ 自動投稿稼働。10/23 にテスト投稿成功。トークン自動延長（GH_PAT）も成功 |
 | Secrets | ✅ ANTHROPIC_API_KEY / X_API_KEY / X_API_SECRET / X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET / IG_ACCESS_TOKEN / GH_PAT 登録済み |
 | 投稿プロンプト | ✅ 10/23 に brand.md → prompt.md（ユーザー作成）へ切り替え |
+| YouTube | 🛠 2026-10-26 にショート動画の生成・投稿を実装。チャンネル作成済み。Google Cloud（YouTube Data API v3、OAuth同意画面を本番、OAuthクライアント）→ OAuth Playground で refresh token → `YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` 登録待ち。`YT_PRIVACY`（Actions の Variables）で unlisted にできる |
 | LinkedIn | ⏸ 保留。会社ページ作成時に「つながりの数が不足」で作れず。つながりが10人前後になったら再挑戦。現プロンプトはLinkedIn用本文を作らないので、再開時はプロンプトの出力に linkedin を足す |
 
 ## 今後やること

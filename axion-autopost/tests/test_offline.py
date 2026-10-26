@@ -142,5 +142,56 @@ check(len(json.loads(main.HISTORY.read_text(encoding="utf-8"))) == 1, "履歴は
 # ---------------------------------------------------------------- LinkedIn の本文変換
 check(platforms.linkedin_text("費用(税別) #営業代行") == "費用\\(税別\\) {hashtag|\\#|営業代行}", "LinkedIn: 記号エスケープとハッシュタグ")
 
+# ---------------------------------------------------------------- YouTube ショート
+from autopost import video  # noqa: E402
+
+short_post = {"image_title": "紹介しか無理は本当？", "image_sub": "建設会社の社長へ",
+              "x": "Q.紹介しか無理？\nA.やってこなかっただけ。\n\n紹介は来る月を選べない。\n\nDMで「リスト」と送ってください。",
+              "instagram": "キャプション"}
+slides = video.slides_from_post(short_post)
+check(slides[0] == ("紹介しか無理は本当？", "建設会社の社長へ") and slides[-1] == video.CTA and len(slides) == 4,
+      "ショート：見出し→本文の段落→締め（本文のDM案内は締めに置き換え）")
+from autopost.image_card import _font  # noqa: E402
+check(all("20" in ln or "2" not in ln for ln in video._wrap("見込み客リストを20件無料で作ります", _font("Bold", 100), 400)),
+      "ショート：数字（20）を行の途中で分けない")
+mp4 = tmp / "short.mp4"
+sec = video.make_short(short_post, str(mp4), bgm=tmp / "no-bgm.mp3")
+check(mp4.exists() and mp4.stat().st_size > 10_000 and 10 < sec < 60, "ショート：縦長MP4を書き出す（10〜60秒）")
+
+yt_calls = []
+
+
+def fake_post(url, **kw):
+    yt_calls.append(("POST", url, kw))
+    if "oauth2" in url:
+        return FakeRes({"access_token": "AT"})
+    res = FakeRes({})
+    res.headers = {"Location": "https://upload.example/session"}
+    return res
+
+
+def fake_put(url, **kw):
+    yt_calls.append(("PUT", url, kw))
+    return FakeRes({"id": "VIDEO123"})
+
+
+class FakeRes:
+    def __init__(self, data, status=200):
+        self.status_code, self._data, self.text, self.headers = status, data, str(data), {}
+
+    def json(self):
+        return self._data
+
+
+real_post, real_put = platforms.requests.post, platforms.requests.put
+platforms.requests.post, platforms.requests.put = fake_post, fake_put
+os.environ.update({"YT_CLIENT_ID": "c", "YT_CLIENT_SECRET": "s", "YT_REFRESH_TOKEN": "r", "YT_PRIVACY": ""})
+vid = platforms.post_youtube(str(mp4), "タイトル #Shorts", "説明")
+meta = yt_calls[1][2]["json"]
+check(vid == "VIDEO123" and yt_calls[0][2]["data"]["grant_type"] == "refresh_token", "YouTube：リフレッシュトークンで認証して投稿")
+check(meta["status"]["privacyStatus"] == "public" and meta["snippet"]["title"] == "タイトル #Shorts",
+      "YouTube：公開範囲は未設定（空文字）なら public")
+platforms.requests.post, platforms.requests.put = real_post, real_put
+
 print(f"\n{'全テスト成功' if not failures else f'{len(failures)} 件失敗'}")
 sys.exit(1 if failures else 0)

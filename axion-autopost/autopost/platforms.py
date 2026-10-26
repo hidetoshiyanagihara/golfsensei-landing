@@ -149,3 +149,48 @@ def post_linkedin(text: str, image_path: str, image_title: str) -> str:
     r = requests.post("https://api.linkedin.com/rest/posts", headers=rest, json=body, timeout=TIMEOUT)
     _check(r, "LinkedIn投稿")
     return r.headers.get("x-restli-id", "ok")
+
+
+# ---------------------------------------------------------------- YouTube（ショート）
+YT_KEYS = ["YT_CLIENT_ID", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN"]
+
+
+def _yt_access_token() -> str:
+    r = requests.post("https://oauth2.googleapis.com/token", data={
+        "client_id": os.environ["YT_CLIENT_ID"],
+        "client_secret": os.environ["YT_CLIENT_SECRET"],
+        "refresh_token": os.environ["YT_REFRESH_TOKEN"],
+        "grant_type": "refresh_token",
+    }, timeout=TIMEOUT)
+    _check(r, "YouTube認証（リフレッシュトークン切れの可能性）")
+    return r.json()["access_token"]
+
+
+def post_youtube(video_path: str, title: str, description: str) -> str:
+    """縦長・3分以内の動画はショートとして扱われる。公開範囲は YT_PRIVACY（既定 public）"""
+    token = _yt_access_token()
+    size = os.path.getsize(video_path)
+    meta = {
+        "snippet": {
+            "title": title[:100],
+            "description": description[:4900],
+            "categoryId": "22",  # ブログ
+            "defaultLanguage": "ja",
+        },
+        "status": {
+            "privacyStatus": os.environ.get("YT_PRIVACY") or "public",  # Actions では未設定でも空文字が来る
+            "selfDeclaredMadeForKids": False,
+        },
+    }
+    r = requests.post(
+        "https://www.googleapis.com/upload/youtube/v3/videos",
+        params={"uploadType": "resumable", "part": "snippet,status"},
+        headers={"Authorization": f"Bearer {token}", "X-Upload-Content-Type": "video/mp4",
+                 "X-Upload-Content-Length": str(size)},
+        json=meta, timeout=TIMEOUT,
+    )
+    _check(r, "YouTubeアップロード準備")
+    with open(video_path, "rb") as f:
+        r = requests.put(r.headers["Location"], headers={"Content-Type": "video/mp4"}, data=f, timeout=300)
+    _check(r, "YouTubeアップロード")
+    return r.json()["id"]

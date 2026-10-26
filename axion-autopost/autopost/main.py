@@ -3,6 +3,7 @@
   python -m autopost.main generate   今日の投稿文と画像を作る（posts/ と images/ に保存）
   python -m autopost.main publish    作った投稿を各SNSに出す
   python -m autopost.main preview    保存も投稿もせず、今日の投稿文を作って表示する（prompt.md の調整用）
+  python -m autopost.main video      今日の投稿からショート動画を作って images/ に置く（確認用）
 キーが設定されていないSNSは自動でスキップします。
 """
 import json
@@ -99,6 +100,30 @@ def configured(keys):
     return all(os.environ.get(k) for k in keys)
 
 
+def post_short(post) -> str:
+    """その日の投稿からショート動画を作ってYouTubeに出す（動画はリポジトリに残さない）"""
+    import tempfile
+
+    from .video import make_short
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "short.mp4")
+        make_short(post, path)
+        return platforms.post_youtube(path, f"{post['image_title']} #Shorts", post["instagram"])
+
+
+def cmd_video():
+    """今日の投稿からショート動画を作って images/ と同じ場所に保存する（確認用。コミットしない）"""
+    from .video import make_short
+
+    post_path, img_path = paths(today())
+    post = load_json(post_path, None)
+    if not post:
+        sys.exit("今日の投稿がありません")
+    out = img_path.with_suffix(".mp4")
+    print(f"{out.name}: {make_short(post, str(out)):.1f}秒")
+
+
 def cmd_publish():
     d = today()
     post_path, img_path = paths(d)
@@ -116,9 +141,10 @@ def cmd_publish():
         ("x", platforms.X_KEYS, lambda: platforms.post_x(post["x"])),
         ("instagram", platforms.IG_KEYS, lambda: platforms.post_instagram(image_url, post["instagram"])),
         ("linkedin", platforms.LI_KEYS, lambda: platforms.post_linkedin(post["linkedin"], str(img_path), post["image_title"])),
+        ("youtube", platforms.YT_KEYS, lambda: post_short(post)),
     ]
     if not post.get("linkedin"):  # prompt.md はX・Instagram用。LinkedIn用の本文は作らない
-        jobs = jobs[:2]
+        jobs = [j for j in jobs if j[0] != "linkedin"]
     failed = []
     for name, keys, run in jobs:
         if str(results.get(name, "")).startswith("ok:"):
@@ -148,6 +174,6 @@ def cmd_publish():
 
 
 if __name__ == "__main__":
-    {"generate": cmd_generate, "publish": cmd_publish, "preview": cmd_preview}.get(
+    {"generate": cmd_generate, "publish": cmd_publish, "preview": cmd_preview, "video": cmd_video}.get(
         sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__)
     )()
