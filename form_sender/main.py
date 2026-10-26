@@ -8,6 +8,7 @@
   python main.py status                         # 件数の確認
 """
 import argparse
+from collections import Counter
 import random
 import re
 import sys
@@ -42,9 +43,12 @@ def _targets(mode: str, retest: bool, industries: list[str] | None = None) -> li
     sent = sent_registry(results)
     ng = load_ng()
     if mode == MODE_LIVE:
-        # 本番でスキップ済み/送信済みの会社は対象外（送信前の失敗のみ再試行）
-        done = Registry([r for r in results if r.get("モード") == MODE_LIVE and (
-            is_sent_row(r) or r.get("結果") == RESULT_SKIP
+        # 本番でスキップ済み/送信済みの会社は対象外。送信前の失敗は1回だけ再試行する
+        # （入力エラーやボタンが押せない等は同じ結果になりやすく、毎回の再試行は時間の無駄になるため）
+        live = [r for r in results if r.get("モード") == MODE_LIVE]
+        fails = Counter(r.get("URL", "") for r in live if r.get("結果") == RESULT_FAIL)
+        done = Registry([r for r in live if (
+            is_sent_row(r) or r.get("結果") == RESULT_SKIP or fails[r.get("URL", "")] >= 2
             or r.get("理由", "").startswith((REJECTED_PREFIX, STALLED_PREFIX)))])
     else:
         done = Registry([] if retest else [r for r in results if r.get("モード") == MODE_TEST])
