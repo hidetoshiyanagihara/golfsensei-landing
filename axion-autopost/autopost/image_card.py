@@ -77,7 +77,7 @@ def make_card(title: str, sub: str, out_path: str) -> str:
     # 下部
     foot_font = _font("Regular", 34)
     d.line([MARGIN, H - 190, W - MARGIN, H - 190], fill=(60, 78, 105), width=2)
-    d.text((MARGIN, H - 150), "名古屋の営業代行｜AXION SALES", font=foot_font, fill=SUBTEXT)
+    d.text((MARGIN, H - 150), "営業代行｜AXION SALES", font=foot_font, fill=SUBTEXT)
 
     img.save(out_path, "JPEG", quality=92, optimize=True)
     return out_path
