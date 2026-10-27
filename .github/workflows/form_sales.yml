@@ -30,6 +30,7 @@ jobs:
       COUNT: ${{ github.event.inputs.count || '10' }}
       FORM_STATE_KEY: ${{ secrets.FORM_STATE_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      FORM_AI_MODEL: ${{ vars.FORM_AI_MODEL }}   # 空なら claude-opus-5-5
     defaults:
       run:
         working-directory: form_sender
