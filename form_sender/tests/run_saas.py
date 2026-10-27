@@ -116,7 +116,7 @@ saas.run(5, live=True, wait=False)
 check(len(posts()) == n, "送信済みの会社には再送しない")
 
 print("== 暗号化して保存")
-os.environ["FORM_STATE_KEY"] = vault.Fernet.generate_key().decode()
+os.environ["FORM_STATE_KEY"] = "テスト用の合言葉 correct horse battery staple"
 vault.STATE_ENC = tmp / "state.enc"
 vault.FILES = [config.COMPANIES_CSV, config.NG_LIST_CSV, config.RESULT_CSV, config.RESEARCH_JSONL, config.DISCOVER_STATE]
 config.BASE_DIR = tmp
