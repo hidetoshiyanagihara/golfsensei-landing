@@ -5,6 +5,7 @@
   python main.py import 名簿.csv [--max 100]     # 1. 企業名簿CSVから取り込み → companies.csv
   python main.py send --mode test [--count 10]  # テスト: 入力のみ・送信しない・スクショ保存
   python main.py send --mode live [--count 50]  # 本番: 実際に送信
+  python main.py saas --mode test|live [--count 10]  # SaaS向け：探す→調べる→文面→送信を自動で
   python main.py status                         # 件数の確認
 """
 import argparse
@@ -144,6 +145,11 @@ def cmd_send(args) -> None:
     log(f"終了: 処理 {processed} 社" + (f" / 送信 {sent} 件（本日計 {sent_today_count(load_results())} 件）" if live else ""))
 
 
+def cmd_saas(args) -> None:
+    from saas import run
+    run(args.count or config.SAAS_SEND_PER_RUN, live=args.mode == "live", headed=args.headed, wait=not args.no_wait)
+
+
 def cmd_status(args) -> None:
     results = load_results()
     companies = load_companies()
@@ -180,6 +186,13 @@ def main() -> None:
     p.add_argument("--headed", action="store_true", help="ブラウザ画面を表示して実行")
     p.add_argument("--yes", action="store_true", help="本番送信の確認を省略")
     p.set_defaults(func=cmd_send)
+
+    p = sub.add_parser("saas", help="SaaS向け：送り先探し・事前調査・営業文・送信を自動で行う（確認なし）")
+    p.add_argument("--mode", choices=["test", "live"], default="test")
+    p.add_argument("--count", type=int, default=0, help="送る（テストは入力する）件数。既定は config.SAAS_SEND_PER_RUN")
+    p.add_argument("--no-wait", action="store_true", help="1件ごとの待機を省略（テスト用）")
+    p.add_argument("--headed", action="store_true")
+    p.set_defaults(func=cmd_saas)
 
     p = sub.add_parser("status", help="件数を表示")
     p.set_defaults(func=cmd_status)

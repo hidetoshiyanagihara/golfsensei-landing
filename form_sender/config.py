@@ -9,6 +9,9 @@ RESULT_CSV = BASE_DIR / "result.csv"
 MESSAGE_TXT = BASE_DIR / "message.txt"
 SCREENSHOT_DIR = BASE_DIR / "screenshots"
 COLLECT_STATE = BASE_DIR / ".collect_state.json"
+RESEARCH_JSONL = BASE_DIR / "research.jsonl"      # SaaS向け：1社ごとの調査メモ・判断・送った文面
+DISCOVER_STATE = BASE_DIR / ".discover_state.json"
+MESSAGE_SAAS_TXT = BASE_DIR / "message_saas.txt"   # SaaS向け：宛名・自己紹介・無料リスト・連絡先（本文はAIが会社ごとに書く）
 
 # ---------------------------------------------------------------- 送信者情報
 SENDER = {
@@ -41,6 +44,12 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+
+# ---------------------------------------------------------------- SaaS向け（自動・事前調査つき）
+SAAS_SEND_PER_RUN = 10         # 1回（平日1日1回）に送る最大件数
+SAAS_RESEARCH_PER_RUN = 20     # 1回に調べる最大社数（AIの費用の上限。送れない会社が続いても止まる）
+SAAS_DISCOVER_ROUNDS = 2       # 送り先の候補が足りないとき、1回に探しに行く最大回数
+SAAS_POOL_MIN = 15             # 未処理の候補がこれより少なければ探しに行く
 
 # ---------------------------------------------------------------- リスト作成
 MAX_EMPLOYEES = 100            # これを超える従業員数の会社は除外
