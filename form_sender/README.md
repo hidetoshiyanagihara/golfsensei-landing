@@ -19,7 +19,7 @@ GitHub Actions（`.github/workflows/form_sales.yml`）が平日10:13に自動で
 - **リポジトリが公開のため**、送り先・調査メモ・文面・結果は `state.enc`（鍵は Secrets の `FORM_STATE_KEY`）に暗号化して保存し、ログには会社名を出さない。
   手元で見るとき：`FORM_STATE_KEY=… python vault.py open` → `companies.csv` / `research.jsonl` / `result.csv`
 - テスト：`python tests/run_saas.py`（AIは差し替え、送信先はローカルの疑似サイトのみ）
-- 費用の目安：Claude（`claude-opus-5-5`）＋Web検索で 1社の調査・文面 約30〜40円、送り先探し 1回 約30〜50円
+- 費用の目安：Claude（`claude-opus-5-5`）＋Web検索で 1社の調査・文面 約50円、送り先探し 1回 約50円（平日10件送ると月1〜1.5万円ほど。`FORM_AI_MODEL=claude-sonnet-5-5` でおよそ半分）
 
 ## セットアップ
 
