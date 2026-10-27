@@ -232,7 +232,7 @@ def fake_voice_post(url, **kw):
 
 real_vpost, real_vget = voice.requests.post, voice.requests.get
 voice.requests.post = fake_voice_post
-voice.requests.get = lambda url, **kw: FakeVoiceRes([{"name": "白上虎太郎", "styles": [{"id": 12}]},
+voice.requests.get = lambda url, **kw: FakeVoiceRes([{"name": "白上虎太郎", "styles": [{"id": 12}, {"id": 32}]},
                                                      {"name": "春日部つむぎ", "styles": [{"id": 8}]}])
 audio = voice.synth("DMで送ってね", "apo")
 check(len(audio) == 2400 and vcalls[0][1]["params"]["text"] == "ディーエムで送ってね"
