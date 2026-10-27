@@ -193,7 +193,7 @@ check(said[-2][0] == "apo" and "チャンネルのリンク" in said[-2][1] and 
 check(said[-1] == ("tsunagari", video.END_SAY) and "営業代行" in said[-1][1], "声：最後につながりちゃんが「営業代行の〜」と社名を言う")
 desc = main.youtube_description({"instagram": "本文1\n\nDMで「リスト」と送ってください。\n\n#名古屋"}, ["VOICEVOX:白上虎太郎"])
 check("DMで「リスト」と送ってください" not in desc and "axionsales.vercel.app/youtube" in desc and "#名古屋" in desc
-      and desc.endswith("音声：VOICEVOX:白上虎太郎") and desc.startswith("名古屋の営業代行"),
+      and desc.endswith("音声：VOICEVOX:白上虎太郎") and desc.startswith("営業代行の「AXION SALES"),
       "YouTube説明欄：営業代行と名乗り、DMの案内を外し、LPとクレジットを入れる")
 check(main.youtube_title({"image_title": "見出し"}) == "見出し｜営業代行 AXION SALES #Shorts", "YouTubeタイトルに営業代行を入れる")
 mp4v = tmp / "short_voice.mp4"

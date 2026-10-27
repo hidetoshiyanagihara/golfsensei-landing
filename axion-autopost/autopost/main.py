@@ -103,7 +103,7 @@ def configured(keys):
 
 
 # 何の会社か一目でわかるよう、YouTube のタイトルと説明欄の頭に「営業代行」を入れる
-YT_INTRO = "名古屋の営業代行「AXION SALES（アクシオンセールス）」です。新規開拓・アポ獲得を代行しています。"
+YT_INTRO = "営業代行の「AXION SALES（アクシオンセールス）」です。全国の企業さまの新規開拓・アポ獲得を代行しています。"
 
 
 def youtube_title(post) -> str:
