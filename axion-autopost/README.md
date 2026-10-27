@@ -41,6 +41,20 @@
 4. 開発者ポータル上部「Docs and tools」→「OAuth Token Tools」→ Create token
    スコープは `openid` `profile` `w_member_social` の3つにチェック → 出たトークンを登録
 
+**YouTube（ショート動画）**
+その日の投稿と同じテーマで、AXION SALES のキャラクター2人（アポくん・つながりちゃん）が会話する縦長動画（20〜40秒）を作り、ショートとして投稿します。会話はAIが `prompt.md` の11章に沿って作ります。動画はリポジトリに残しません。
+`bgm.mp3` を `axion-autopost/` に置くとBGMとして流れます（YouTubeオーディオライブラリの曲など、使ってよい曲だけ）。
+1. AXION SALES の YouTube チャンネルを作る
+   - YouTube Studio →「カスタマイズ」→「プロフィール」→「リンク」に LP を追加（タイトル「無料リスト20件のお申し込み」、URL `https://axionsales.vercel.app/youtube`）。YouTubeにはDMがなく、ショートの説明欄のURLは押せないため、動画の最後は「チャンネルのリンクから申し込んでね」と案内しています
+2. console.cloud.google.com でプロジェクトを作り、「YouTube Data API v3」を有効にする
+3. 「OAuth 同意画面」を作成（外部）→ 公開ステータスを **本番環境** にする（テストのままだとトークンが7日で切れます）
+4. 「認証情報」→「OAuth クライアント ID」→ 種類「ウェブ アプリケーション」、承認済みのリダイレクト URI に `https://developers.google.com/oauthplayground` を追加して作成
+5. developers.google.com/oauthplayground を開き、右上の歯車 →「Use your own OAuth credentials」に 4 のクライアントID・シークレットを入れる
+   → 左の一覧で `https://www.googleapis.com/auth/youtube.upload` を選び「Authorize APIs」→ チャンネルのアカウントで許可 →「Exchange authorization code for tokens」
+6. 次の3つを登録：`YT_CLIENT_ID`（4のクライアントID）／`YT_CLIENT_SECRET`（4のシークレット）／`YT_REFRESH_TOKEN`（5の Refresh token）
+
+最初は限定公開で試したいときは、Settings → Secrets and variables → Actions → **Variables** に `YT_PRIVACY` = `unlisted` を追加（消すと公開に戻ります）。
+
 ### 3. テストする
 1. リポジトリの **Actions** タブ → 「Daily SNS post」→「Run workflow」
 2. dry_run は `1` のまま実行 → 数分後、`axion-autopost/images/` に画像、`axion-autopost/posts/` に3SNS分の文章ができていれば成功（投稿はされません）
