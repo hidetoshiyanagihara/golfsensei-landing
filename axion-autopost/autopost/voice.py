@@ -12,12 +12,13 @@ import numpy as np
 import requests
 
 URL = os.environ.get("VOICEVOX_URL") or "http://localhost:50021"
-# 声（VOICEVOX のスタイルID）。アポくん＝白上虎太郎（ふつう）、つながりちゃん＝春日部つむぎ（ノーマル）
-VOICES = {"apo": int(os.environ.get("VOICE_APO") or 12), "tsunagari": int(os.environ.get("VOICE_TSUNAGARI") or 8)}
-SPEED = {"apo": 1.15, "tsunagari": 1.12}
-# つながりちゃんは少し高め・抑揚大きめで、明るくテンション高く
+# 声（VOICEVOX のスタイルID）。アポくん＝白上虎太郎（わーい）、つながりちゃん＝春日部つむぎ（ノーマル）
+VOICES = {"apo": int(os.environ.get("VOICE_APO") or 32), "tsunagari": int(os.environ.get("VOICE_TSUNAGARI") or 8)}
+SPEED = {"apo": 1.18, "tsunagari": 1.12}
+# アポくんは抑揚と声の張りを強めて熱く、つながりちゃんは少し高め・抑揚大きめで明るく
 PITCH = {"apo": 0.0, "tsunagari": 0.04}
-INTONATION = {"apo": 1.0, "tsunagari": 1.35}
+INTONATION = {"apo": 1.4, "tsunagari": 1.35}
+VOLUME = {"apo": 1.15, "tsunagari": 1.0}
 RATE = 24000
 # 読み間違えやすい語の読み
 READINGS = {"DM": "ディーエム"}
@@ -38,7 +39,7 @@ def synth(text: str, who: str) -> np.ndarray:
     r = requests.post(f"{URL}/audio_query", params={"text": text, "speaker": speaker}, timeout=60)
     r.raise_for_status()
     query = r.json()
-    query.update(speedScale=SPEED[who], pitchScale=PITCH[who], intonationScale=INTONATION[who],
+    query.update(speedScale=SPEED[who], pitchScale=PITCH[who], intonationScale=INTONATION[who], volumeScale=VOLUME[who],
                  outputSamplingRate=RATE, outputStereo=False)
     r = requests.post(f"{URL}/synthesis", params={"speaker": speaker}, json=query, timeout=120)
     r.raise_for_status()
