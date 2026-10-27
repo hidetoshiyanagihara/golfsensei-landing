@@ -102,6 +102,14 @@ def configured(keys):
     return all(os.environ.get(k) for k in keys)
 
 
+# 何の会社か一目でわかるよう、YouTube のタイトルと説明欄の頭に「営業代行」を入れる
+YT_INTRO = "名古屋の建設・不動産専門の営業代行「AXION SALES（アクシオンセールス）」です。新規開拓・アポ獲得を代行しています。"
+
+
+def youtube_title(post) -> str:
+    return f"{post['image_title'][:60]}｜営業代行 AXION SALES #Shorts"
+
+
 def youtube_description(post, credits) -> str:
     """Instagramのキャプションから DM の案内を外し、YouTube から申し込める先（チャンネルのリンク・LP）を書く"""
     body = "\n".join(ln for ln in post["instagram"].splitlines() if "DM" not in ln).strip()
@@ -109,7 +117,7 @@ def youtube_description(post, credits) -> str:
            f"チャンネルページのリンク、またはこちらから → {LP_URL}/youtube\n"
            "（X・InstagramのDMで「リスト」と送っていただいてもOKです）")
     voice = "\n\n音声：" + "、".join(credits) if credits else ""
-    return f"{body}\n\n{cta}{voice}"
+    return f"{YT_INTRO}\n\n{body}\n\n{cta}{voice}"
 
 
 def post_short(post) -> str:
@@ -122,7 +130,7 @@ def post_short(post) -> str:
         path = os.path.join(tmp, "short.mp4")
         _, credits = make_short(post, path)
         description = youtube_description(post, credits)
-        return platforms.post_youtube(path, f"{post['image_title']} #Shorts", description)
+        return platforms.post_youtube(path, youtube_title(post), description)
 
 
 def cmd_video():

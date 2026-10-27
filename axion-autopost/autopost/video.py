@@ -2,7 +2,8 @@
 
 AXION SALES の2人（アポくん・つながりちゃん）が会話する構成。
 話している方が明るく跳ね、聞いている方は少し暗くなる。吹き出しに文字が1文字ずつ出る。
-最後はアポくんが無料リストを案内する。
+最後はアポくんが無料リストを案内し、AXION SALES のロゴと「営業代行」を見せて、つながりちゃんが社名を言って締める。
+上部には常に「営業代行」と出し、何の会社か一目でわかるようにする。
 VOICEVOX が動いていればセリフを読み上げ、文字と動きを声の長さに合わせる（voice.py）。
 BGMは毎回オリジナル曲を作曲して流す（bgm.py）。axion-autopost/bgm.mp3 を置けば、そちらを優先する。
 """
@@ -11,13 +12,14 @@ import re
 import subprocess
 import tempfile
 import wave
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from .characters import COLORS, NAMES, glow, sprite
-from .image_card import ACCENT, BG, SUBTEXT, _font
+from .image_card import ACCENT, BG, _font
 from . import bgm as music
 from . import voice
 
@@ -29,13 +31,17 @@ SAFE_RIGHT = 180
 SAFE_BOTTOM = H - 520
 BGM = Path(__file__).resolve().parent.parent / "bgm.mp3"
 
-TAGLINE = "つながる。ひろがる。新しいビジネスを。"
+SERVICE = "名古屋の建設・不動産専門 営業代行"
+LOGO = Path(__file__).resolve().parent.parent / "assets" / "logo.png"  # 公式ロゴ（ユーザー提供のステッカー画像から切り出し）
 BUBBLE = (MARGIN - 20, 440, W - SAFE_RIGHT + 20, 830)
 CHAR_CENTER_X = {"apo": 290, "tsunagari": 650}
 BUBBLE_TEXT = (28, 32, 48)
 CHARS_PER_SEC = 13
 # YouTube には DM がなく、ショートの説明欄のURLも押せないので、チャンネルページのリンクへ案内する
 CTA = ("見込み客リスト20件、\n無料で作ります！", "チャンネルのリンクから申し込んでね")
+# 締め：ロゴを出して、つながりちゃんが社名を言う
+END_SAY = "営業代行の、アクシオンセールスでした！"
+END_LINES = (SERVICE, "新規開拓・アポ獲得を代行します", "▶ チャンネルのリンクから無料リスト")
 
 
 def dialogue_from_post(post: dict) -> list[dict]:
@@ -85,8 +91,14 @@ def _background(theme: str) -> Image.Image:
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
     d.rectangle([MARGIN, 190, MARGIN + 12, 242], fill=ACCENT)
-    d.text((MARGIN + 36, 192), "AXION SALES", font=_font("Bold", 42), fill=ACCENT)
-    d.text((MARGIN + 36, 248), TAGLINE, font=_font("Regular", 28), fill=SUBTEXT)
+    brand = _font("Bold", 42)
+    d.text((MARGIN + 36, 192), "AXION SALES", font=brand, fill=ACCENT)
+    # 社名の横に「営業代行」の札。何の会社か最初の1秒でわかるように
+    bx = MARGIN + 36 + brand.getlength("AXION SALES") + 22
+    badge = _font("Bold", 34)
+    d.rounded_rectangle((bx, 192, bx + badge.getlength("営業代行") + 36, 246), radius=27, fill=ACCENT)
+    d.text((bx + 18, 196), "営業代行", font=badge, fill=BG)
+    d.text((MARGIN + 36, 248), "名古屋の建設・不動産の新規開拓・アポ獲得", font=_font("Bold", 30), fill=(255, 255, 255))
     font = _font("Bold", 42)
     for i, ln in enumerate(_wrap(theme, font, W - MARGIN - SAFE_RIGHT)[:2]):
         d.text((MARGIN, 312 + i * 56), ln, font=font, fill=(255, 255, 255))
@@ -122,17 +134,39 @@ def _scenes(post: dict, speak=None) -> list[dict]:
     items = [dict(d, max_h=BUBBLE[3] - BUBBLE[1] - 120) for d in dialogue_from_post(post)]
     items.append({"speaker": "apo", "line": CTA[0], "say": CTA[0].replace("\n", "") + CTA[1],
                   "sub": CTA[1], "cta": True, "max_h": BUBBLE[3] - BUBBLE[1] - 200})
+    items.append({"speaker": "tsunagari", "line": "", "say": END_SAY, "end": True})
     scenes = []
     for item in items:
-        font, size, lines = _fit(item["line"], inner_w, item["max_h"])
+        font, size, lines = _fit(item["line"], inner_w, item.get("max_h", 200))
         n = sum(len(ln) for ln in lines)
         audio = speak(item.get("say", item["line"]), item["speaker"]) if speak else None
         talk = len(audio) / voice.RATE if audio is not None else n / CHARS_PER_SEC
         scenes.append({"who": item["speaker"], "lines": lines, "font": font, "size": size, "chars": n,
                        "talk": talk, "cps": n / max(talk, 0.6), "audio": audio,
-                       "sec": max(4.0 if item.get("cta") else 2.2, talk + (0.9 if audio is not None else 1.3)),
-                       "sub": item.get("sub", ""), "cta": item.get("cta", False)})
+                       "sec": max(4.0 if item.get("cta") else 3.0 if item.get("end") else 2.2,
+                                  talk + (0.9 if audio is not None else 1.3)),
+                       "sub": item.get("sub", ""), "cta": item.get("cta", False), "end": item.get("end", False)})
     return scenes
+
+
+@lru_cache(maxsize=None)
+def _logo(width: int) -> Image.Image:
+    logo = Image.open(LOGO).convert("RGB")
+    return logo.resize((width, round(logo.height * width / logo.width)), Image.LANCZOS)
+
+
+def _end_card(img: Image.Image, d: ImageDraw.ImageDraw, t: float) -> None:
+    """締めのカード：白地に公式ロゴと「営業代行」。少し下からふわっと出る"""
+    rise = int(max(0.0, 1 - t / 0.35) * 40)
+    x0, y0, x1, y1 = BUBBLE[0], BUBBLE[1] - 20 + rise, BUBBLE[2], BUBBLE[3] + 40 + rise
+    d.rounded_rectangle((x0, y0, x1, y1), radius=44, fill=(255, 255, 255), outline=ACCENT, width=8)
+    logo = _logo(x1 - x0 - 120)
+    img.paste(logo, (x0 + 60, y0 + 36))
+    y = y0 + 36 + logo.height + 28
+    for i, (text, size, color) in enumerate(zip(END_LINES, (44, 34, 34), (BG, BUBBLE_TEXT, COLORS["tsunagari"]))):
+        font = _font("Bold", size)
+        d.text(((x0 + x1 - font.getlength(text)) / 2, y), text, font=font, fill=color)
+        y += int(size * 1.55)
 
 
 def _frame(base: Image.Image, scene: dict, t: float) -> Image.Image:
@@ -141,18 +175,22 @@ def _frame(base: Image.Image, scene: dict, t: float) -> Image.Image:
     shown = min(scene["chars"], int(t * scene["cps"]) + 1)
     talking = t < scene["talk"]
     speaker_top = H
+    together = scene["cta"] or scene["end"]  # 案内と締めは2人いっしょに
     for who in CHAR_CENTER_X:
-        if who == scene["who"] or scene["cta"]:
+        if who == scene["who"] or together:
             g = glow(who)
             img.paste(g, (CHAR_CENTER_X[who] - g.width // 2, SAFE_BOTTOM - g.height + 40), g)
     for who in CHAR_CENTER_X:
-        active = who == scene["who"] or scene["cta"]
+        active = who == scene["who"] or together
         spr = sprite(who, active)
-        hop = int(abs(math.sin(t * math.pi * 2.2)) * 18) if active and (talking or scene["cta"]) else 0
+        hop = int(abs(math.sin(t * math.pi * 2.2)) * 18) if active and (talking or together) else 0
         x, y = _char_pos(who, spr, hop)
         img.paste(spr, (x, y), spr)
         if who == scene["who"]:
             speaker_top = y
+    if scene["end"]:
+        _end_card(img, d, t)
+        return img
     _bubble(d, scene["who"], scene["lines"], scene["font"], scene["size"], shown, tail_y=speaker_top - 10,
             sub=scene["sub"] if shown >= scene["chars"] else "", border=ACCENT if scene["cta"] else None)
     return img
