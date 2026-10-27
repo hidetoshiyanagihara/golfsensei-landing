@@ -162,8 +162,8 @@ short_post = {"theme": "誤解に答える：紹介しか無理は本当？", "i
               "x": "Q.紹介しか無理？\n\n紹介は来る月を選べない。\n\nDMで「リスト」と送ってください。",
               "instagram": "キャプション", "short_dialogue": GOOD["short_dialogue"]}
 scenes = video._scenes(short_post)
-check([s["who"] for s in scenes] == ["tsunagari", "apo", "apo", "apo"] and scenes[-1].get("cta"),
-      "ショート：会話の順に話し、最後はアポくんが無料リストを案内")
+check([s["who"] for s in scenes] == ["tsunagari", "apo", "apo", "apo", "tsunagari"] and scenes[-2].get("cta")
+      and scenes[-1].get("end"), "ショート：会話の順に話し、アポくんが無料リストを案内、ロゴで締める")
 old = video.dialogue_from_post({k: v for k, v in short_post.items() if k != "short_dialogue"})
 check(old[0] == {"speaker": "tsunagari", "line": "紹介しか無理は本当？"} and all("DM" not in d["line"] for d in old),
       "ショート：会話のない古い投稿は見出しとX本文から作る")
@@ -188,11 +188,14 @@ def fake_speak(text, who):
 
 scenes = video._scenes(short_post, fake_speak)
 check(all(abs(sc["talk"] - 3.0) < 0.01 and sc["sec"] >= 3.0 for sc in scenes), "声：場面の長さを読み上げの長さに合わせる")
-check(said[-1][0] == "apo" and "チャンネルのリンク" in said[-1][1] and "DM" not in said[-1][1],
-      "声：最後はアポくんが無料リストとチャンネルのリンクを案内（YouTubeにDMはない）")
+check(said[-2][0] == "apo" and "チャンネルのリンク" in said[-2][1] and "DM" not in said[-2][1],
+      "声：アポくんが無料リストとチャンネルのリンクを案内（YouTubeにDMはない）")
+check(said[-1] == ("tsunagari", video.END_SAY) and "営業代行" in said[-1][1], "声：最後につながりちゃんが「営業代行の〜」と社名を言う")
 desc = main.youtube_description({"instagram": "本文1\n\nDMで「リスト」と送ってください。\n\n#名古屋"}, ["VOICEVOX:白上虎太郎"])
 check("DMで「リスト」と送ってください" not in desc and "axionsales.vercel.app/youtube" in desc and "#名古屋" in desc
-      and desc.endswith("音声：VOICEVOX:白上虎太郎"), "YouTube説明欄：DMの案内を外し、LPとクレジットを入れる")
+      and desc.endswith("音声：VOICEVOX:白上虎太郎") and desc.startswith("名古屋の建設・不動産専門の営業代行"),
+      "YouTube説明欄：営業代行と名乗り、DMの案内を外し、LPとクレジットを入れる")
+check(main.youtube_title({"image_title": "見出し"}) == "見出し｜営業代行 AXION SALES #Shorts", "YouTubeタイトルに営業代行を入れる")
 mp4v = tmp / "short_voice.mp4"
 sec_v, _ = video.make_short(short_post, str(mp4v), bgm=tmp / "no-bgm.mp3", speak=fake_speak)
 import imageio_ffmpeg  # noqa: E402
