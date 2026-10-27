@@ -31,7 +31,7 @@ SAFE_RIGHT = 180
 SAFE_BOTTOM = H - 520
 BGM = Path(__file__).resolve().parent.parent / "bgm.mp3"
 
-SERVICE = "名古屋の建設・不動産専門 営業代行"
+SERVICE = "名古屋の営業代行"
 LOGO = Path(__file__).resolve().parent.parent / "assets" / "logo.png"  # 公式ロゴ（ユーザー提供のステッカー画像から切り出し）
 BUBBLE = (MARGIN - 20, 440, W - SAFE_RIGHT + 20, 830)
 CHAR_CENTER_X = {"apo": 290, "tsunagari": 650}
@@ -98,7 +98,7 @@ def _background(theme: str) -> Image.Image:
     badge = _font("Bold", 34)
     d.rounded_rectangle((bx, 192, bx + badge.getlength("営業代行") + 36, 246), radius=27, fill=ACCENT)
     d.text((bx + 18, 196), "営業代行", font=badge, fill=BG)
-    d.text((MARGIN + 36, 248), "名古屋の建設・不動産の新規開拓・アポ獲得", font=_font("Bold", 30), fill=(255, 255, 255))
+    d.text((MARGIN + 36, 248), "名古屋の新規開拓・アポ獲得", font=_font("Bold", 30), fill=(255, 255, 255))
     font = _font("Bold", 42)
     for i, ln in enumerate(_wrap(theme, font, W - MARGIN - SAFE_RIGHT)[:2]):
         d.text((MARGIN, 312 + i * 56), ln, font=font, fill=(255, 255, 255))
