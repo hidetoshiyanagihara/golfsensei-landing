@@ -1,0 +1,88 @@
+# SaaS向けのフォーム営業（form_sender/）。平日の朝、送り先を探し、1社ずつ事前調査して営業文を作り、問い合わせフォームから送る。
+# リポジトリは公開なので、送り先・調査メモ・結果は暗号化した form_sender/state.enc にだけ残し、ログには会社名を出さない。
+name: Form sales (SaaS)
+
+on:
+  schedule:
+    - cron: "13 1 * * 1-5"   # 平日 10:13（日本時間）
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "live = 実際に送る ／ test = 入力までで送らない（スクリーンショットを暗号化して保存）"
+        default: "test"
+      count:
+        description: "送る（テストは入力する）件数"
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: form-sales
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MODE: ${{ github.event.inputs.mode || 'live' }}
+      COUNT: ${{ github.event.inputs.count || '10' }}
+      FORM_STATE_KEY: ${{ secrets.FORM_STATE_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      FORM_AI_MODEL: ${{ vars.FORM_AI_MODEL }}   # 空なら claude-opus-5-5
+    defaults:
+      run:
+        working-directory: form_sender
+    steps:
+      - uses: actions/checkout@v4
+
+      # 本番の自動送信は、テストで文面と入力を確かめてから form_sender/LIVE_ON を置いて始める
+      - name: 本番を始めてよいか
+        id: gate
+        run: |
+          if [ "$MODE" = "live" ] && [ ! -f LIVE_ON ]; then
+            echo "LIVE_ON がないため、本番の送信はまだ行いません"; echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: 準備
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: 記録を復号
+        if: steps.gate.outputs.go == 'true'
+        run: python vault.py open
+
+      - name: 探す・調べる・書く・送る
+        if: steps.gate.outputs.go == 'true'
+        run: python main.py saas --mode "$MODE" --count "$COUNT"
+
+      - name: 記録を暗号化して保存
+        if: always() && steps.gate.outputs.go == 'true'
+        run: |
+          python vault.py close
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.enc
+          git commit -m "フォーム営業の記録 $(TZ=Asia/Tokyo date +%F)" || exit 0
+          for i in 1 2 3; do git pull --rebase --autostash -q && git push && break; sleep 5; done
+
+      - name: テストの画面を暗号化
+        if: always() && env.MODE == 'test' && steps.gate.outputs.go == 'true'
+        run: python vault.py pack screens.enc screenshots
+
+      - uses: actions/upload-artifact@v4
+        if: always() && env.MODE == 'test' && steps.gate.outputs.go == 'true'
+        with:
+          name: form-test-screens
+          path: form_sender/screens.enc
+          retention-days: 7

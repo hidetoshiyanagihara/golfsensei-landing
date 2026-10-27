@@ -688,7 +688,27 @@ def _wait_settle(page: Page):
     page.wait_for_timeout(1500)
 
 
-def process_company(page: Page, name: str, url: str, message: str, live: bool, shot_path: str) -> Outcome:
+def precheck(page: Page, url: str) -> Outcome | None:
+    """送れる会社か（フォームがある・営業お断りでない・画像認証がない）を先に確かめる。送れるなら None。
+    調査や文面づくり（AI）の前に呼び、送れない会社にお金と時間を使わないようにする。"""
+    if not _goto(page, url):
+        return Outcome("失敗", "サイトにアクセスできない")
+    refusal = find_refusal(page_text(page))
+    if refusal:
+        return Outcome("スキップ", f"営業お断りの記載あり「{refusal}」")
+    if not find_contact_page(page, url):
+        return Outcome("スキップ", "問い合わせフォームが見つからない")
+    refusal = find_refusal(page_text(page))
+    if refusal:
+        return Outcome("スキップ", f"営業お断りの記載あり「{refusal}」")
+    cap = has_captcha(page)
+    if cap:
+        return Outcome("スキップ", cap)
+    return None
+
+
+def process_company(page: Page, name: str, url: str, message: str, live: bool, shot_path: str,
+                    subject: str = "") -> Outcome:
     """1社分の処理。live=False（テスト）では入力後にスクリーンショットを撮り送信しない。"""
     if not _goto(page, url):
         return Outcome("失敗", "サイトにアクセスできない")
@@ -710,7 +730,7 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
     fields = fr.evaluate(EXTRACT_JS, root)
     if not fields:
         return Outcome("スキップ", "問い合わせフォームが見つからない")
-    sender = Sender(message=message)
+    sender = Sender(message=message, subject=subject or config.SENDER["subject"])
     plan = build_plan(fields, sender)
     if plan.problems:
         return Outcome("スキップ", " / ".join(dict.fromkeys(plan.problems))[:200])

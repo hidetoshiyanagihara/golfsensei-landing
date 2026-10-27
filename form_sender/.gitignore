@@ -3,3 +3,6 @@ screenshots/
 .collect_state.json
 __pycache__/
 *.pyc
+research.jsonl
+.discover_state.json
+screens.enc
