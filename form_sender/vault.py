@@ -4,8 +4,10 @@
   python vault.py close   作業用ファイルをまとめて暗号化し state.enc に書く
   python vault.py pack 出力先 フォルダ   フォルダ（スクリーンショットなど）を暗号化して1ファイルにする
 
-鍵は環境変数 FORM_STATE_KEY（GitHub の Secrets）。
+鍵は環境変数 FORM_STATE_KEY（GitHub の Secrets）。好きな長い合言葉でよい（そこから暗号の鍵を作る）。
 """
+import base64
+import hashlib
 import io
 import os
 import sys
@@ -24,7 +26,9 @@ def _fernet() -> Fernet:
     key = os.environ.get("FORM_STATE_KEY")
     if not key:
         sys.exit("FORM_STATE_KEY が未設定です")
-    return Fernet(key.encode())
+    # 合言葉から暗号の鍵を作る（同じ合言葉なら、いつでも同じ鍵になる）
+    raw = hashlib.pbkdf2_hmac("sha256", key.strip().encode(), b"axion-form-sales", 200_000)
+    return Fernet(base64.urlsafe_b64encode(raw))
 
 
 def _zip(paths: list[Path], base: Path) -> bytes:
