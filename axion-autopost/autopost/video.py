@@ -4,7 +4,7 @@ AXION SALES の2人（アポくん・つながりちゃん）が会話する構�
 話している方が明るく跳ね、聞いている方は少し暗くなる。吹き出しに文字が1文字ずつ出る。
 最後はアポくんが無料リストを案内する。
 VOICEVOX が動いていればセリフを読み上げ、文字と動きを声の長さに合わせる（voice.py）。
-axion-autopost/bgm.mp3 があればBGMとして小さめの音量で流す。
+BGMは毎回オリジナル曲を作曲して流す（bgm.py）。axion-autopost/bgm.mp3 を置けば、そちらを優先する。
 """
 import math
 import re
@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 
 from .characters import COLORS, NAMES, glow, sprite
 from .image_card import ACCENT, BG, SUBTEXT, _font
+from . import bgm as music
 from . import voice
 
 W, H = 1080, 1920
@@ -198,18 +199,16 @@ def make_short(post: dict, out_path: str, bgm: Path = BGM, speak="auto") -> tupl
             _voice_track(scenes, f"{tmp}/voice.wav")
             cmd += ["-i", f"{tmp}/voice.wav"]
             inputs.append("[1:a]aresample=44100,volume=1.6[v]")
-        if bgm.exists():
-            cmd += ["-stream_loop", "-1", "-i", str(bgm)]
-            fade = f"afade=t=out:st={max(0, total - 1.5):.2f}:d=1.5"
-            inputs.append(f"[{len(inputs) + 1}:a]aresample=44100,volume={0.12 if speak else 0.35},{fade}[b]")
-        if not inputs:  # 音声トラックがないと扱いが不安定なサービスがあるので無音を入れる
-            cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
-            audio = ["-map", "1:a"]
-        else:
-            labels = "".join(f"[{x[-2]}]" for x in inputs)
-            mix = f"{labels}amix=inputs={len(inputs)}:duration=longest:normalize=0[a]" if len(inputs) > 1 \
-                else f"{labels}anull[a]"
-            audio = ["-filter_complex", ";".join(inputs + [mix]), "-map", "[a]"]
+        if not bgm.exists():  # 曲を置いていなければ、その日の投稿から決まるオリジナル曲を作る
+            bgm = Path(f"{tmp}/bgm.wav")
+            music.make_bgm(total + 1, str(bgm), music.seed_for(post.get("theme", "") + post["x"]))
+        cmd += ["-stream_loop", "-1", "-i", str(bgm)]
+        fade = f"afade=t=out:st={max(0, total - 1.5):.2f}:d=1.5"
+        inputs.append(f"[{len(inputs) + 1}:a]aresample=44100,volume={0.2 if speak else 0.5},{fade}[b]")
+        labels = "".join(f"[{x[-2]}]" for x in inputs)
+        mix = f"{labels}amix=inputs={len(inputs)}:duration=longest:normalize=0[a]" if len(inputs) > 1 \
+            else f"{labels}anull[a]"
+        audio = ["-filter_complex", ";".join(inputs + [mix]), "-map", "[a]"]
         cmd += ["-map", "0:v", *audio, "-t", f"{total:.2f}",
                 "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
                 "-c:a", "aac", "-b:a", "160k", "-ac", "2", "-movflags", "+faststart", out_path]

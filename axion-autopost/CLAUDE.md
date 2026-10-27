@@ -7,7 +7,8 @@
 - 柳原秀俊（AXION SALES 代表、名古屋の営業代行。法人化前の個人事業）。やりとりは日本語
 - 非エンジニア。手順は「どこを押すか」まで具体的に、1回に1ステップずつ案内する
 - 選択肢を並べるより、こちらで決めて提案するのを好む
-- APIキーやトークンはチャットに貼らせない。GitHubへの登録は `gh secret set 名前` を実行してもらい、値はユーザー本人がターミナルに貼る（Claude側で値を見ない・扱わない）
+- APIキーやトークンは原則チャットに貼らせない。ただし2026-10-27以降、ユーザーが「自動でやって」と希望し、Vercel・Googleのキーはチャット経由で受け取った。GitHub Secrets への登録は、リポジトリの公開鍵で暗号化して一時ブランチのワークフロー（`GH_PAT` 使用）から行った（プロキシ経由では Secrets API に直接アクセスできない）
+- LPの短いURL：`https://axionsales.vercel.app`（Vercel のドメイン追加済み）。`/youtube` `/x` `/instagram` などは `?src=` 付きでLPへリダイレクト（`vercel.json`）
 
 ## このプロジェクトの目的
 毎朝7:47（日本時間）に、AIが `prompt.md`（ユーザー作成の投稿プロンプト）に沿ってその日の投稿を作り、X・Instagram に自動投稿する。
@@ -22,7 +23,8 @@
 | `autopost/image_card.py` | Instagram/LinkedIn用の1080x1350 **JPEG** 画像（濃紺×ゴールド、文字のみ）をPillowで生成。Instagram APIはPNG不可 |
 | `autopost/platforms.py` | X（OAuth1.0a, POST /2/tweets）、Instagram（graph.instagram.com, Instagramログイン版）、LinkedIn（/rest/posts, 個人アカウント投稿）|
 | `autopost/characters.py` / `assets/` | ショートのキャラクター2人。ユーザー提供の公式イラスト（2026-10-26）をアニメ向け切り抜きモデル（anime-seg isnetis）で切り抜いた `assets/apo.png`・`assets/tsunagari.png` を使う。アポくん＝行動派の営業マン・一人称「俺」・答える役（青）／つながりちゃん＝気配り上手・本音を引き出す役（ピンク）。話している方の後ろに色の光 |
-| `autopost/video.py` | YouTubeショート用の縦長動画（1080x1920）。prompt.md 11章の `short_dialogue` をもとに2人が会話（話す方が光って跳ね、聞く方は少し暗く、吹き出しに1文字ずつ表示）、最後にアポくんが無料リストを案内。任意の bgm.mp3。imageio-ffmpeg で書き出し。ショート再生画面で隠れる右180px・下520pxには大事なものを置かない |
+| `autopost/video.py` | YouTubeショート用の縦長動画（1080x1920）。prompt.md 11章の `short_dialogue` をもとに2人が会話（話す方が光って跳ね、聞く方は少し暗く、吹き出しに1文字ずつ表示）、最後にアポくんが無料リストを案内。BGMは `autopost/bgm.py` が毎回オリジナル曲を作曲（投稿内容から曲調・コード進行・キーが決まる。bgm.mp3 を置けば優先）。imageio-ffmpeg で書き出し。ショート再生画面で隠れる右180px・下520pxには大事なものを置かない |
+| `autopost/bgm.py` | ショートのBGMをnumpyで作曲（王道進行・丸サ進行など×ポップ/ダンス/チル）。ヒット曲は自動投稿だとミュート・著作権違反になるため使わない（2026-10-28 ユーザーに説明済み） |
 | `autopost/voice.py` | ショートの声。VOICEVOX ENGINE（Docker `voicevox/voicevox_engine:cpu-0.26.0`、Actions内で起動）で読み上げ。アポくん＝白上虎太郎(12)、つながりちゃん＝冥鳴ひまり(14)。各キャラの規約によりYouTube説明欄に「VOICEVOX:名前」を自動で入れる。エンジンが無ければ声なしで続行 |
 | `autopost/main.py` | `generate` / `publish` / `preview` コマンド。直近14日の投稿を被り防止に渡す。キー未設定のSNSはスキップ、成功済みSNSは再実行時スキップ。LinkedIn用本文は現プロンプトでは作らない |
 | `../.github/workflows/axion_daily_post.yml` | 毎日 22:47 UTC 実行（working-directory: axion-autopost）。手動実行は dry_run=1 生成のみ／0 投稿／preview 表示のみ／video ショート動画を作って artifact（short-preview）に置く |
@@ -44,7 +46,7 @@ Instagramは画像を公開URLから取りに来るため、画像をリポジ�
 | Instagram | ✅ 自動投稿稼働。10/23 にテスト投稿成功。トークン自動延長（GH_PAT）も成功 |
 | Secrets | ✅ ANTHROPIC_API_KEY / X_API_KEY / X_API_SECRET / X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET / IG_ACCESS_TOKEN / GH_PAT 登録済み |
 | 投稿プロンプト | ✅ 10/23 に brand.md → prompt.md（ユーザー作成）へ切り替え |
-| YouTube | 🛠 2026-10-26 にショート動画の生成・投稿を実装。チャンネル作成済み。Google Cloud（YouTube Data API v3、OAuth同意画面を本番、OAuthクライアント）→ OAuth Playground で refresh token → `YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` 登録待ち。`YT_PRIVACY`（Actions の Variables）で unlisted にできる |
+| YouTube | ✅ 2026-10-28 に設定完了。Google Cloud プロジェクト `axion-sns`（OAuth同意画面は本番、ホームページ `https://axionsales.vercel.app`、プライバシーポリシー `/axion-privacy.html`）。`YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` 登録済み（チャンネル「AXION SALES」で確認）。`YT_PRIVACY`（Actions の Variables）で unlisted にできる |
 | LinkedIn | ⏸ 保留。会社ページ作成時に「つながりの数が不足」で作れず。つながりが10人前後になったら再挑戦。現プロンプトはLinkedIn用本文を作らないので、再開時はプロンプトの出力に linkedin を足す |
 
 ## 今後やること
