@@ -233,11 +233,11 @@ def fake_voice_post(url, **kw):
 real_vpost, real_vget = voice.requests.post, voice.requests.get
 voice.requests.post = fake_voice_post
 voice.requests.get = lambda url, **kw: FakeVoiceRes([{"name": "白上虎太郎", "styles": [{"id": 12}]},
-                                                     {"name": "冥鳴ひまり", "styles": [{"id": 14}]}])
+                                                     {"name": "春日部つむぎ", "styles": [{"id": 8}]}])
 audio = voice.synth("DMで送ってね", "apo")
 check(len(audio) == 2400 and vcalls[0][1]["params"]["text"] == "ディーエムで送ってね"
       and vcalls[1][1]["json"]["speedScale"] == voice.SPEED["apo"], "声：VOICEVOXで読み上げ（DMはディーエムと読む）")
-check(voice.credits() == ["VOICEVOX:白上虎太郎", "VOICEVOX:冥鳴ひまり"], "声：説明欄に入れるクレジット")
+check(voice.credits() == ["VOICEVOX:白上虎太郎", "VOICEVOX:春日部つむぎ"], "声：説明欄に入れるクレジット")
 voice.requests.post, voice.requests.get = real_vpost, real_vget
 
 yt_calls = []
