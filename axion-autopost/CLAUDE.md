@@ -37,7 +37,7 @@
 
 Instagramは画像を公開URLから取りに来るため、画像をリポジトリにcommitして `raw.githubusercontent.com` のURL（サブフォルダ込み、`main.public_url`）を渡している。**リポジトリは Public 必須。**
 
-2026-10-28：対象を全国・業種限定なしに変更（ユーザー指示）。LP（`axion-sales.html`）・プロフィール文（`sns/PROFILES.md`）・ショート動画から「名古屋」「建設・不動産専門」を外した（LPフッターの事務所住所は残す）。`prompt.md` はまだ名古屋・建設向けのまま（ユーザー作成のため要確認）
+2026-10-28：対象を全国・業種限定なしに変更（ユーザー指示）。LP（`axion-sales.html`）・プロフィール文（`sns/PROFILES.md`）・ショート動画から「名古屋」「建設・不動産専門」を外した（LPフッターの事務所住所は残す）。同日、ユーザー指示で `prompt.md` も全国・業種問わずに書き換え（1章の対象、3章の悩みバンクを業種横断に、6章のハッシュタグ、8章の地域、9章の例）。Instagram画像のフッターも「営業代行｜AXION SALES」
 
 同じリポジトリの `sns/`（posts.csv 方式の予約投稿）は旧方式。二重投稿を避けるため `sns-post.yml` の定期実行は停止済み。LP（`axion-sales.html`）・プロフィール文（`sns/PROFILES.md`）は引き続き使う。
 
