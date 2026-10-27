@@ -7,16 +7,25 @@
   "redirects": [
     {
       "source": "/:src(x|instagram|youtube|linkedin|form)",
-      "has": [{ "type": "host", "value": "axionsales.vercel.app" }],
-      "destination": "/?src=:src",
+      "has": [
+        {
+          "type": "host",
+          "value": "axionsales.vercel.app"
+        }
+      ],
+      "destination": "/axion-sales.html?src=:src",
       "permanent": false
-    }
-  ],
-  "rewrites": [
+    },
     {
       "source": "/",
-      "has": [{ "type": "host", "value": "axionsales.vercel.app" }],
-      "destination": "/axion-sales.html"
+      "has": [
+        {
+          "type": "host",
+          "value": "axionsales.vercel.app"
+        }
+      ],
+      "destination": "/axion-sales.html",
+      "permanent": false
     }
   ]
 }
