@@ -238,6 +238,7 @@ class Collector:
         found: list[Candidate] = []
         seen: set[str] = set()
         empty_searches = 0
+        written = 0  # companies.csv に書き出し済みの件数（途中で止まっても集めた分を残すため、検索1回ごとに書く）
         try:
             for industry, query in self.queries():
                 if len(found) >= max_new:
@@ -273,10 +274,13 @@ class Collector:
                     existing.add(result.name, result.url)
                     found.append(result)
                     self.log(f"  追加: {result.name} {result.url} [{result.industry}]")
+                self._save_state()
+                self._write(found[written:])
+                written = len(found)
         finally:
             self.close()
             self._save_state()
-            self._write(found)
+            self._write(found[written:])
         return found
 
     def run_import(self, path: str, max_new: int) -> list[Candidate]:
