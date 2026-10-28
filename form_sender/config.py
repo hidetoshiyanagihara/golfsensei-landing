@@ -106,7 +106,7 @@ EXCLUDED_DOMAINS = [
     "kensetumap.com", "kensetsu-navi", "houzz.jp", "suumocounter", "lifull.com", "e-tsuhan",
     "kenchikukenken.co.jp", "gaihekiguide.co.jp", "nagoya-gaiheki-tosou.com", "xn--3kqvs447ab16b.com",
     "nagoya-cci.or.jp", "city.nagoya.jp", "aichi.jp", "go.jp", "lg.jp", "ac.jp", "ed.jp",
-    "estina-shop.net",
+    "estina-shop.net", "kensetsu-bank.jp",
 ]
 
 # 大手・上場企業（社名に含まれていたら除外）
@@ -120,7 +120,7 @@ LARGE_COMPANY_NAMES = [
     "エイブル", "アパマン", "ミニミニ", "大東建託", "レオパレス", "スターツ", "センチュリー21",
     "LIXIL", "TOTO", "関電工", "きんでん", "トーエネック", "九電工", "中電工", "高砂熱学",
     "ダイダン", "三機工業", "新日本空調", "朝日工業社", "大気社", "日比谷総合設備", "中部電力",
-    "東邦ガス", "ニッカホーム", "朝日住宅", "名鉄", "トヨタ", "デンソー", "アイシン", "岡崎製材",
+    "東邦ガス", "ニッカホーム", "朝日住宅", "名鉄", "トヨタ", "デンソー", "アイシン", "岡崎製材", "鶴弥",
 ]
 
 # 上場・大手を示すページ内の記載
