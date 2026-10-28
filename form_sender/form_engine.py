@@ -534,11 +534,18 @@ def find_refusal(text: str) -> str | None:
 
 
 def has_captcha(page: Page) -> str | None:
-    """画面に表示される認証があれば理由を返す。見えない reCAPTCHA（v3 / invisible）は対象外。"""
+    """認証があれば理由を返す。見えない reCAPTCHA（v3 / invisible）は config.SKIP_INVISIBLE_CAPTCHA のときだけ対象。"""
     for fr in _frames(page):
         url = fr.url or ""
-        if re.search(r"recaptcha/(api2|enterprise)/anchor", url) and "size=invisible" not in url:
+        if re.search(r"recaptcha/(api2|enterprise)/anchor", url) and (
+                config.SKIP_INVISIBLE_CAPTCHA or "size=invisible" not in url):
             return "reCAPTCHA（チェックボックス/画像認証）あり"
+        if config.SKIP_INVISIBLE_CAPTCHA:
+            try:
+                if fr.locator("script[src*='recaptcha'], .grecaptcha-badge, iframe[src*='recaptcha']").count() > 0:
+                    return "reCAPTCHA（見えない認証）あり"
+            except Exception:
+                pass
         if re.search(r"hcaptcha|challenges\.cloudflare", url, re.I):
             return "hCaptcha/Turnstile 等の認証あり"
         for sel in CAPTCHA_SELECTORS:
