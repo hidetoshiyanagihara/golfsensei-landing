@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 call_list.csv
 prospects*.csv
+letters.jsonl
