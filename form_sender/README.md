@@ -15,6 +15,7 @@ GitHub Actions（`.github/workflows/form_sales.yml`）が平日10:13に自動で
 5. **送信**：`message_saas.txt`（宛名・自己紹介・無料リスト20件・結び・連絡先）に本文を入れて送る。1回最大10件（`config.SAAS_SEND_PER_RUN`）
 
 - 本番の送信は `form_sender/LIVE_ON` があるときだけ行う（テストで文面と入力を確かめてから置く）
+- **AIのクレジットは自動投稿を優先する方針（2026-10-29）**。テスト実行や `LIVE_ON` を置く前に、かかる費用を柳原さんに伝えて了承をもらう
 - 手動実行：Actions → Form sales (SaaS) → Run workflow（mode=test で入力まで・送らない）
 - **リポジトリが公開のため**、送り先・調査メモ・文面・結果は `state.enc`（鍵は Secrets の `FORM_STATE_KEY`。柳原さんが決めた合言葉）に暗号化して保存し、ログには会社名を出さない。
   手元で見るとき：`FORM_STATE_KEY=… python vault.py open` → `companies.csv` / `research.jsonl` / `result.csv`
