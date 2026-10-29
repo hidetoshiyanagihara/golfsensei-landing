@@ -74,6 +74,12 @@ BGMは毎回オリジナル曲を自動で作曲して流します（ポップ�
 - **失敗したら** → GitHubから通知メールが届きます。Actions で「Re-run jobs」すれば、成功済みのSNSは飛ばして失敗分だけやり直します
 - **止めたい** → Actions → Daily SNS post → 右上「…」→ Disable workflow
 
+### フォローする相手リスト（毎朝）
+営業代行を必要としていそうな会社・人（中小企業向けSaaSの社長・営業責任者、資金調達や営業募集を発表した会社の公式など）を、毎朝AIが探してリストにします。
+**見る場所**：https://github.com/hidetoshiyanagihara/golfsensei-landing/blob/main/axion-autopost/follow/latest.md （スマホのブックマークにどうぞ）
+リンクを押して「フォロー」を押すだけ。1日 X 7人・Instagram 3人まで、一度載せた相手は二度と載せません（`follow/history.json`）。
+自動でフォローはしません（Instagram・Xの規約違反になり、アカウントが止められると自動投稿も止まるため）。
+
 ### 定期的にやること
 - **LinkedIn：60日ごとにトークン再発行**（LinkedInの仕様で自動延長できません）。上の手順4をやり直して `LI_ACCESS_TOKEN` を上書き
 - Instagram：毎週月曜に自動で延長されるので不要

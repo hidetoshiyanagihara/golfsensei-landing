@@ -278,5 +278,40 @@ check(meta["status"]["privacyStatus"] == "public" and meta["snippet"]["title"] =
       "YouTube：公開範囲は未設定（空文字）なら public")
 platforms.requests.post, platforms.requests.put = real_post, real_put
 
+# ---- フォローする相手リスト（AIは差し替え）
+from autopost import follow  # noqa: E402
+
+
+class FakeFollowClient:
+    def __init__(self):
+        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self.create))
+        self.calls = []
+
+    def create(self, **kw):
+        self.calls.append(kw)
+        text = "メモ" if "tools" in kw else json.dumps({"accounts": [
+            {"platform": "x", "handle": "@saas_ceo", "name": "山田", "who": "株式会社A 代表", "why_now": "資金調達を発表",
+             "source": "https://example.com/n", "reply_idea": "資金調達おめでとうございます！"},
+            {"platform": "x", "handle": "https://x.com/old_one", "name": "既出", "who": "B", "why_now": "", "source": "",
+             "reply_idea": ""},
+            {"platform": "x", "handle": "bad handle!", "name": "不正", "who": "C", "why_now": "", "source": "", "reply_idea": ""},
+            {"platform": "instagram", "handle": "saas.official", "name": "SaaS公式", "who": "株式会社D", "why_now": "新サービス",
+             "source": "", "reply_idea": "あ" * 100},
+        ]}, ensure_ascii=False)
+        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text=text)])
+
+
+fc = FakeFollowClient()
+picked = follow.clean(follow.find_accounts(fc, ["x:old_one"]), ["x:old_one"])
+check([a["handle"] for a in picked["x"]] == ["saas_ceo"] and picked["x"][0]["url"] == "https://x.com/saas_ceo",
+      "フォロー候補：@やURLを外し、不正な名前・一度載せた相手は除く")
+check(picked["instagram"][0]["url"] == "https://www.instagram.com/saas.official/" and picked["instagram"][0]["reply_idea"] == "",
+      "フォロー候補：Instagramのリンクを作り、長すぎるひとこと案は載せない")
+check(fc.calls[0]["fallbacks"] == "default" and "web_search" in str(fc.calls[0]["tools"]),
+      "フォロー候補：Web検索で探し、断られたら別モデルでやり直す設定")
+md = follow.to_markdown(follow.today(), picked)
+check("https://x.com/saas_ceo" in md and "資金調達おめでとうございます" in md and "[出典](https://example.com/n)" in md,
+      "フォロー候補：リンク・理由・出典・ひとこと案をまとめる")
+
 print(f"\n{'全テスト成功' if not failures else f'{len(failures)} 件失敗'}")
 sys.exit(1 if failures else 0)

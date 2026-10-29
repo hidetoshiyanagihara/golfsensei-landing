@@ -1,0 +1,43 @@
+# 毎朝「フォローする相手リスト」を作る（axion-autopost/follow/latest.md）。フォローは柳原さんが手で押す（自動フォローは規約違反のため）。
+name: Follow list
+
+on:
+  schedule:
+    - cron: "17 22 * * *"   # 毎朝 7:17（日本時間）。GitHubの混雑で遅れることがあります
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: follow-list
+  cancel-in-progress: false
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: axion-autopost
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install "anthropic>=2.1"
+
+      - name: フォローする相手を探す
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -m autopost.follow
+
+      - name: リストを保存
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add follow
+          git commit -m "フォローする相手リスト $(TZ=Asia/Tokyo date +%F)" || exit 0
+          for i in 1 2 3; do git pull --rebase --autostash -q && git push && break; sleep 5; done
