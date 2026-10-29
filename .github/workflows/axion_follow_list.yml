@@ -1,9 +1,8 @@
 # 毎朝「フォローする相手リスト」を作る（axion-autopost/follow/latest.md）。フォローは柳原さんが手で押す（自動フォローは規約違反のため）。
 name: Follow list
 
+# 2026-10-29 ユーザーの指示で毎朝の自動実行は止めた（AIの費用を投稿に回すため）。必要なときだけ手動で実行する
 on:
-  schedule:
-    - cron: "17 22 * * *"   # 毎朝 7:17（日本時間）。GitHubの混雑で遅れることがあります
   workflow_dispatch:
 
 permissions:
