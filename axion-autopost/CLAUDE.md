@@ -29,7 +29,7 @@
 | `autopost/main.py` | `generate` / `publish` / `preview` コマンド。直近14日の投稿を被り防止に渡す。キー未設定のSNSはスキップ、成功済みSNSは再実行時スキップ。LinkedIn用本文は現プロンプトでは作らない |
 | `../.github/workflows/axion_daily_post.yml` | 毎日 22:47 UTC 実行（working-directory: axion-autopost）。手動実行は dry_run=1 生成のみ／0 投稿／preview 表示のみ／video ショート動画を作って artifact（short-preview）に置く |
 | `../.github/workflows/axion_refresh_ig_token.yml` | 毎週月曜にInstagramトークンを延長し、`gh secret set` で上書き（`GH_PAT` が必要）|
-| `autopost/follow.py` / `follow/` | 毎朝「フォローする相手リスト」（`follow/latest.md`、日付.md、`history.json`）。Claude（`claude-opus-5-5`）のWeb検索で中小企業向けSaaSの社長・営業責任者・資金調達/営業募集した会社の公式を X 7・Instagram 3 探す。フォローはユーザーが手で押す（自動フォローは規約違反のため 2026-10-29 に断って代替として作成）。`../.github/workflows/axion_follow_list.yml` が 22:17 UTC |
+| `autopost/follow.py` / `follow/` | 毎朝「フォローする相手リスト」（`follow/latest.md`、日付.md、`history.json`）。Claude（`claude-opus-5-5`）のWeb検索で中小企業向けSaaSの社長・営業責任者・資金調達/営業募集した会社の公式を X 7・Instagram 3 探す。フォローはユーザーが手で押す（自動フォローは規約違反のため 2026-10-29 に断って代替として作成）。`../.github/workflows/axion_follow_list.yml`（2026-10-29 ユーザー指示で定期実行は停止。手動実行のみ） |
 | `posts/日付.json` | 生成内容と各SNSの結果（`ok:` / `error:` / `skipped`）|
 | `history.json` | 過去テーマの記録 |
 | `README.md` | ユーザー向けのセットアップ手順・運用・トラブル対応 |
