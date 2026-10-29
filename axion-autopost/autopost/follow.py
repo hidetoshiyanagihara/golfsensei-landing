@@ -25,9 +25,9 @@ HISTORY = FOLLOW / "history.json"
 MODEL = os.environ.get("FOLLOW_MODEL") or "claude-opus-5-5"
 # 安全のための自動判定で断られたときは、Anthropic が推奨する別モデルで自動的にやり直す
 FALLBACK = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
-COMPANY_TOOLS = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 6}]
+COMPANY_TOOLS = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 10}]
 PROFILE_TOOLS = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 4}]
-COMPANIES = 8
+COMPANIES = 6
 WANT = {"x": 7, "instagram": 3}
 REPLY_MAX = 70
 HANDLE_RE = {"x": re.compile(r"^[A-Za-z0-9_]{1,15}$"), "instagram": re.compile(r"^[A-Za-z0-9_.]{1,30}$")}
@@ -126,7 +126,9 @@ def find_companies(client, history: list[str]) -> list[dict]:
     done = "、".join(h[8:] for h in history if h.startswith("company:")) or "（なし）"
     notes, _ = _ask(client, f"直近2か月以内に、資金調達・営業やインサイドセールスの募集・新サービスの発表をした、中小企業向けの国内SaaSを"
                             f"{COMPANIES}社探してください。会社ごとに、サービスと誰向けか・代表や営業責任者の名前・今フォローする理由と出典URLを"
-                            f"箇条書きでまとめてください。次の会社はすでに調べたので除く：{done}", tools=COMPANY_TOOLS)
+                            f"箇条書きでまとめてください。資金調達まとめ記事・PR TIMES・求人サイトなど、複数の会社が載っているページから探すと早いです。"
+                            f"深追いせず、見つかった分だけでかまいません。次の会社はすでに調べたので除く：{done}", tools=COMPANY_TOOLS)
+    print(f"会社探しのメモ：\n{notes[:2000]}\n---")
     data, _ = _ask(client, "次のメモを指定の形式に写してください。メモにない会社や事実は足さない。\n\n" + notes,
                    schema=COMPANY_SCHEMA, effort="low")
     return json.loads(data)["companies"]
