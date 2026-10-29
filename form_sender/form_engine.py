@@ -652,8 +652,65 @@ def apply_plan(fr: Frame, plan: Plan) -> None:
         try:
             loc.check(timeout=3000)
         except Exception:
-            # 見えないチェックボックスはラベルをクリック／JS で選択
-            loc.evaluate("el => { el.checked = true; el.dispatchEvent(new Event('change', {bubbles: true})); el.dispatchEvent(new Event('click', {bubbles: true})); }")
+            # 見えないチェックボックスは要素の click()（React 等は checked を書き換えるだけでは状態が変わらない）、
+            # だめならラベルをクリック
+            if not (_native_click(loc) or _click_label(fr, loc)):
+                loc.evaluate("el => { el.checked = true; el.dispatchEvent(new Event('change', {bubbles: true})); el.dispatchEvent(new Event('click', {bubbles: true})); }")
+
+
+LABEL_JS = r"""
+el => {
+  const lab = (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) || el.closest('label');
+  if (!lab) return false;
+  lab.setAttribute('data-axion-label', '1');
+  return true;
+}
+"""
+
+
+def _native_click(loc) -> bool:
+    try:
+        return bool(loc.evaluate("el => { if (!el.checked) el.click(); return el.checked; }"))
+    except Exception:
+        return False
+
+
+def _click_label(fr: Frame, loc) -> bool:
+    try:
+        if not loc.evaluate(LABEL_JS):
+            return False
+        lab = fr.locator("[data-axion-label='1']").first
+        lab.click(timeout=3000)
+        fr.evaluate("() => document.querySelectorAll('[data-axion-label]').forEach(e => e.removeAttribute('data-axion-label'))")
+        return bool(loc.evaluate("el => el.checked"))
+    except Exception:
+        return False
+
+
+# 送信ボタンの上に重なる Cookie 同意バナー等を閉じるためのボタン（画面に固定表示された要素の中だけ探す）
+OVERLAY_JS = r"""
+() => {
+  const re = /^(同意する|同意して閉じる|すべて同意|すべて許可|許可する|拒否する|閉じる|OK|Accept( all)?|Allow( all)?|I agree|Got it|Close|×)$/i;
+  for (const el of document.querySelectorAll('button, a, [role=button]')) {
+    let p = el, fixed = false;
+    while (p && p !== document.body) { const pos = getComputedStyle(p).position; if (pos === 'fixed' || pos === 'sticky') { fixed = true; break; } p = p.parentElement; }
+    const t = (el.innerText || el.getAttribute('aria-label') || '').trim();
+    const r = el.getBoundingClientRect();
+    if (fixed && r.width > 0 && r.height > 0 && re.test(t)) { el.setAttribute('data-axion-overlay', '1'); return t; }
+  }
+  return null;
+}
+"""
+
+
+def _dismiss_overlay(fr: Frame) -> bool:
+    try:
+        if fr.evaluate(OVERLAY_JS):
+            fr.locator("[data-axion-overlay='1']").first.click(timeout=3000)
+            return True
+    except Exception:
+        pass
+    return False
 
 
 SUBMIT_JS = r"""
@@ -693,7 +750,14 @@ def _click_submit(fr: Frame, root, phase: str) -> str | None:
     label = fr.evaluate(SUBMIT_JS, [root, phase])
     if not label:
         return None
-    fr.locator("[data-axion-submit='1']").first.click(timeout=8000)
+    btn = fr.locator("[data-axion-submit='1']").first
+    try:
+        btn.click(timeout=8000)
+    except Exception:
+        # Cookie バナー等が重なって押せないときは、閉じてからもう一度だけ押す
+        if not (_dismiss_overlay(fr) or _dismiss_overlay(fr.page.main_frame)):
+            raise
+        btn.click(timeout=8000)
     return label
 
 
