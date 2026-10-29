@@ -11,6 +11,7 @@ SCREENSHOT_DIR = BASE_DIR / "screenshots"
 COLLECT_STATE = BASE_DIR / ".collect_state.json"
 RESEARCH_JSONL = BASE_DIR / "research.jsonl"      # SaaS向け：1社ごとの調査メモ・判断・送った文面
 DISCOVER_STATE = BASE_DIR / ".discover_state.json"
+MESSAGE_FREE_TXT = BASE_DIR / "message_free.txt"   # 無料版：社名・ニュースの見出し・書き出しを差し込む決まった文面
 MESSAGE_SAAS_TXT = BASE_DIR / "message_saas.txt"   # SaaS向け：宛名・自己紹介・無料リスト・連絡先（本文はAIが会社ごとに書く）
 
 # ---------------------------------------------------------------- 送信者情報

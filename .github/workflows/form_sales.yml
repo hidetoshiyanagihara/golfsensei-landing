@@ -1,6 +1,7 @@
-# SaaS向けのフォーム営業（form_sender/）。平日の朝、送り先を探し、1社ずつ事前調査して営業文を作り、問い合わせフォームから送る。
+# フォーム営業・無料版（form_sender/free.py）。平日の朝、PR TIMES のニュースから送り先を拾い、決まった文面で問い合わせフォームから送る。
+# AI（Claude）は使わないのでクレジットはかからない。AIで1社ずつ調べる版は python main.py saas（費用がかかるため止めている）
 # リポジトリは公開なので、送り先・調査メモ・結果は暗号化した form_sender/state.enc にだけ残し、ログには会社名を出さない。
-name: Form sales (SaaS)
+name: Form sales
 
 on:
   schedule:
@@ -29,8 +30,6 @@ jobs:
       MODE: ${{ github.event.inputs.mode || 'live' }}
       COUNT: ${{ github.event.inputs.count || '10' }}
       FORM_STATE_KEY: ${{ secrets.FORM_STATE_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      FORM_AI_MODEL: ${{ vars.FORM_AI_MODEL }}   # 空なら claude-opus-5-5
     defaults:
       run:
         working-directory: form_sender
@@ -62,9 +61,9 @@ jobs:
         if: steps.gate.outputs.go == 'true'
         run: python vault.py open
 
-      - name: 探す・調べる・書く・送る
+      - name: 探す・送る
         if: steps.gate.outputs.go == 'true'
-        run: python main.py saas --mode "$MODE" --count "$COUNT"
+        run: python main.py free --mode "$MODE" --count "$COUNT"
 
       - name: 記録を暗号化して保存
         if: always() && steps.gate.outputs.go == 'true'

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rdf:RDF xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><channel rdf:about="https://prtimes.jp/index.rdf"><title>PR TIMES</title></channel>
+<item rdf:about="https://prtimes.jp/main/html/rd/p/000000001.000000001.html"><title>テストSaaS、シリーズAで3億円の資金調達を実施</title><link>https://prtimes.jp/main/html/rd/p/000000001.000000001.html</link><dc:corp>株式会社テストSaaS</dc:corp></item>
+<item rdf:about="https://prtimes.jp/main/html/rd/p/000000002.000000002.html"><title>秋の新メニューが登場</title><dc:corp>テスト食堂</dc:corp></item>
+</rdf:RDF>
