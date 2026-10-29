@@ -282,6 +282,10 @@ platforms.requests.post, platforms.requests.put = real_post, real_put
 from autopost import follow  # noqa: E402
 
 
+def _text(t):
+    return SimpleNamespace(type="text", text=t)
+
+
 class FakeFollowClient:
     def __init__(self):
         self.beta = SimpleNamespace(messages=SimpleNamespace(create=self.create))
@@ -289,26 +293,44 @@ class FakeFollowClient:
 
     def create(self, **kw):
         self.calls.append(kw)
-        text = "メモ" if "tools" in kw else json.dumps({"accounts": [
-            {"platform": "x", "handle": "@saas_ceo", "name": "山田", "who": "株式会社A 代表", "why_now": "資金調達を発表",
-             "source": "https://example.com/n", "reply_idea": "資金調達おめでとうございます！"},
-            {"platform": "x", "handle": "https://x.com/old_one", "name": "既出", "who": "B", "why_now": "", "source": "",
-             "reply_idea": ""},
-            {"platform": "x", "handle": "bad handle!", "name": "不正", "who": "C", "why_now": "", "source": "", "reply_idea": ""},
-            {"platform": "instagram", "handle": "saas.official", "name": "SaaS公式", "who": "株式会社D", "why_now": "新サービス",
-             "source": "", "reply_idea": "あ" * 100},
-        ]}, ensure_ascii=False)
-        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text=text)])
+        prompt = kw["messages"][0]["content"]
+        fmt = kw["output_config"].get("format")
+        if kw.get("tools") == follow.COMPANY_TOOLS:
+            content = [_text("会社のメモ")]
+        elif fmt and "companies" in fmt["schema"]["properties"]:
+            content = [_text(json.dumps({"companies": [
+                {"company": "株式会社A", "product": "勤怠SaaS", "people": "山田", "why_now": "資金調達を発表",
+                 "source": "https://example.com/n"},
+                {"company": "株式会社B", "product": "予約SaaS", "people": "", "why_now": "営業を募集", "source": ""},
+            ]}, ensure_ascii=False))]
+        elif kw.get("tools") == follow.PROFILE_TOOLS:
+            urls = (["https://x.com/saas_ceo", "https://x.com/old_one", "https://x.com/search?q=a",
+                     "https://twitter.com/a_official/status/1", "https://www.instagram.com/saas.official/",
+                     "https://example.com/news"] if "株式会社A" in prompt else ["https://example.com/only"])
+            content = [SimpleNamespace(type="web_search_tool_result", content=[SimpleNamespace(url=u) for u in urls]),
+                       _text("アカウントのメモ")]
+        else:
+            enum = fmt["schema"]["properties"]["accounts"]["items"]["properties"]["account"]["enum"]
+            picks = [("x:saas_ceo", "山田", "株式会社A 代表", "資金調達おめでとうございます！"),
+                     ("x:old_one", "既出", "株式会社A", ""), ("instagram:saas.official", "A公式", "株式会社A 公式", "あ" * 100)]
+            content = [_text(json.dumps({"accounts": [
+                {"account": a, "name": n, "who": w, "reply_idea": r} for a, n, w, r in picks if a in enum]},
+                ensure_ascii=False))]
+        return SimpleNamespace(stop_reason="end_turn", content=content)
 
 
+check(follow.profiles_in(["https://x.com/saas_ceo", "https://twitter.com/a_official/status/1", "https://x.com/search?q=a",
+                          "https://www.instagram.com/saas.official/", "https://www.instagram.com/p/abc/"])
+      == [("x", "saas_ceo"), ("x", "a_official"), ("instagram", "saas.official")],
+      "フォロー候補：検索結果のURLからプロフィールだけを取り出す")
 fc = FakeFollowClient()
-picked = follow.clean(follow.find_accounts(fc, ["x:old_one"]), ["x:old_one"])
+picked, checked = follow.collect(fc, ["x:old_one"])
 check([a["handle"] for a in picked["x"]] == ["saas_ceo"] and picked["x"][0]["url"] == "https://x.com/saas_ceo",
-      "フォロー候補：@やURLを外し、不正な名前・一度載せた相手は除く")
+      "フォロー候補：検索結果に出てきたアカウントだけ・一度載せた相手は除く")
 check(picked["instagram"][0]["url"] == "https://www.instagram.com/saas.official/" and picked["instagram"][0]["reply_idea"] == "",
       "フォロー候補：Instagramのリンクを作り、長すぎるひとこと案は載せない")
-check(fc.calls[0]["fallbacks"] == "default" and "web_search" in str(fc.calls[0]["tools"]),
-      "フォロー候補：Web検索で探し、断られたら別モデルでやり直す設定")
+check(checked == ["株式会社A", "株式会社B"] and fc.calls[0]["fallbacks"] == "default",
+      "フォロー候補：調べた会社を記録し、断られたら別モデルでやり直す設定")
 md = follow.to_markdown(follow.today(), picked)
 check("https://x.com/saas_ceo" in md and "資金調達おめでとうございます" in md and "[出典](https://example.com/n)" in md,
       "フォロー候補：リンク・理由・出典・ひとこと案をまとめる")
