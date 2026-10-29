@@ -307,7 +307,7 @@ class FakeFollowClient:
             urls = (["https://x.com/saas_ceo", "https://x.com/old_one", "https://x.com/search?q=a",
                      "https://twitter.com/a_official/status/1", "https://www.instagram.com/saas.official/",
                      "https://example.com/news"] if "株式会社A" in prompt else ["https://example.com/only"])
-            content = [SimpleNamespace(type="web_search_tool_result", content=[SimpleNamespace(url=u) for u in urls]),
+            content = [SimpleNamespace(type="web_search_tool_result", content=[SimpleNamespace(url=u, title=f"T:{u}") for u in urls]),
                        _text("アカウントのメモ")]
         else:
             enum = fmt["schema"]["properties"]["accounts"]["items"]["properties"]["account"]["enum"]
@@ -319,9 +319,10 @@ class FakeFollowClient:
         return SimpleNamespace(stop_reason="end_turn", content=content)
 
 
-check(follow.profiles_in(["https://x.com/saas_ceo", "https://twitter.com/a_official/status/1", "https://x.com/search?q=a",
-                          "https://www.instagram.com/saas.official/", "https://www.instagram.com/p/abc/"])
-      == [("x", "saas_ceo"), ("x", "a_official"), ("instagram", "saas.official")],
+check(follow.profiles_in([("https://x.com/saas_ceo", "山田 (@saas_ceo) / X"), ("https://twitter.com/a_official/status/1", ""),
+                          ("https://x.com/search?q=a", ""), ("https://www.instagram.com/saas.official/", ""),
+                          ("https://www.instagram.com/p/abc/", "")])
+      == {("x", "saas_ceo"): "山田 (@saas_ceo) / X", ("x", "a_official"): "", ("instagram", "saas.official"): ""},
       "フォロー候補：検索結果のURLからプロフィールだけを取り出す")
 fc = FakeFollowClient()
 picked, checked = follow.collect(fc, ["x:old_one"])
@@ -329,6 +330,7 @@ check([a["handle"] for a in picked["x"]] == ["saas_ceo"] and picked["x"][0]["url
       "フォロー候補：検索結果に出てきたアカウントだけ・一度載せた相手は除く")
 check(picked["instagram"][0]["url"] == "https://www.instagram.com/saas.official/" and picked["instagram"][0]["reply_idea"] == "",
       "フォロー候補：Instagramのリンクを作り、長すぎるひとこと案は載せない")
+check("T:https://x.com/saas_ceo" in fc.calls[3]["messages"][0]["content"], "フォロー候補：検索結果のタイトルも渡して本人か判断させる")
 check(checked == ["株式会社A", "株式会社B"] and fc.calls[0]["fallbacks"] == "default",
       "フォロー候補：調べた会社を記録し、断られたら別モデルでやり直す設定")
 md = follow.to_markdown(follow.today(), picked)

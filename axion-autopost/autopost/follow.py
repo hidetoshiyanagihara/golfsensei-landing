@@ -88,8 +88,8 @@ def key(platform: str, handle: str) -> str:
     return f"{platform}:{handle.lstrip('@').lower()}"
 
 
-def _ask(client, user: str, tools=None, schema=None, effort="medium") -> tuple[str, list[str]]:
-    """回答の文章と、Web検索の結果に出てきたURLの一覧を返す。検索が長引いて一時停止（pause_turn）したら再開する"""
+def _ask(client, user: str, tools=None, schema=None, effort="medium") -> tuple[str, list[tuple[str, str]]]:
+    """回答の文章と、Web検索の結果に出てきた（URL, タイトル）の一覧を返す。検索が長引いて一時停止（pause_turn）したら再開する"""
     messages = [{"role": "user", "content": user}]
     output_config = {"effort": effort}
     if schema:
@@ -102,7 +102,7 @@ def _ask(client, user: str, tools=None, schema=None, effort="medium") -> tuple[s
         resp = client.beta.messages.create(messages=messages, **kwargs)
         for block in resp.content:
             if block.type == "web_search_tool_result" and isinstance(block.content, list):  # 失敗時は一覧ではなくエラー
-                urls += [r.url for r in block.content if getattr(r, "url", None)]
+                urls += [(r.url, getattr(r, "title", "") or "") for r in block.content if getattr(r, "url", None)]
         if resp.stop_reason != "pause_turn":
             break
         messages = [messages[0], {"role": "assistant", "content": resp.content}]
@@ -111,20 +111,20 @@ def _ask(client, user: str, tools=None, schema=None, effort="medium") -> tuple[s
     return "".join(b.text for b in resp.content if b.type == "text").strip(), urls
 
 
-def profiles_in(urls: list[str]) -> list[tuple[str, str]]:
-    """URLの一覧から、X・Instagram のプロフィールURLだけを（媒体, アカウント名）で取り出す"""
-    out = []
-    for url in urls:
+def profiles_in(results: list[tuple[str, str]]) -> dict[tuple[str, str], str]:
+    """検索結果から、X・Instagram のプロフィールだけを {(媒体, アカウント名): 検索結果のタイトル} で取り出す"""
+    out = {}
+    for url, title in results:
         for p, rx in PROFILE_IN_URL.items():
             m = rx.match(url)
-            if m and m.group(1).lower() not in NOT_PROFILES and (p, m.group(1)) not in out:
-                out.append((p, m.group(1)))
+            if m and m.group(1).lower() not in NOT_PROFILES:
+                out.setdefault((p, m.group(1)), title)
     return out
 
 
 def find_companies(client, history: list[str]) -> list[dict]:
     done = "、".join(h[8:] for h in history if h.startswith("company:")) or "（なし）"
-    notes, _ = _ask(client, f"直近2か月以内に、資金調達・営業やインサイドセールスの募集・新サービスの発表をした、中小企業向けの国内SaaSを"
+    notes, _ = _ask(client, f"直近2か月以内に、資金調達・営業やインサイドセールスの募集・新サービスの発表をした、会社や店舗向けの国内SaaS・ITサービスを"
                             f"{COMPANIES}社探してください。会社ごとに、サービスと誰向けか・代表や営業責任者の名前・今フォローする理由と出典URLを"
                             f"箇条書きでまとめてください。資金調達まとめ記事・PR TIMES・求人サイトなど、複数の会社が載っているページから探すと早いです。"
                             f"深追いせず、見つかった分だけでかまいません。次の会社はすでに調べたので除く：{done}", tools=COMPANY_TOOLS)
@@ -136,14 +136,15 @@ def find_companies(client, history: list[str]) -> list[dict]:
 
 def find_profiles(client, company: dict) -> list[dict]:
     """1社分。検索結果に出てきたプロフィールURLの中から、その会社・人のものだけを選ばせる"""
-    _, urls = _ask(client, f"{company['company']}（{company['product']}）の公式アカウントと、代表・営業責任者"
+    _, results = _ask(client, f"{company['company']}（{company['product']}）の公式アカウントと、代表・営業責任者"
                            f"（{company['people'] or '名前は未確認'}）の X と Instagram を Web検索で探してください。"
                            "「会社名 X」「会社名 instagram」「代表の名前 X」のように検索してください。", tools=PROFILE_TOOLS)
-    found = profiles_in(urls)
-    print(f"  {company['company']}：検索結果 {len(urls)}件、うちプロフィール {len(found)}件")
+    found = profiles_in(results)
+    print(f"  {company['company']}：検索結果 {len(results)}件、うちプロフィール {len(found)}件")
     if not found:
         return []
     handles = [f"{p}:{h}" for p, h in found]
+    listing = "\n".join(f"- {p}:{h}（検索結果のタイトル：{t or 'なし'}）" for (p, h), t in found.items())
     schema = {
         "type": "object",
         "properties": {"accounts": {"type": "array", "items": {
@@ -161,9 +162,10 @@ def find_profiles(client, company: dict) -> list[dict]:
         "additionalProperties": False,
     }
     data, _ = _ask(client, f"会社：{company['company']}（{company['product']}）\n代表・営業責任者：{company['people'] or '未確認'}\n"
-                           f"最近の動き：{company['why_now']}\n\n検索結果に出てきたアカウント：{'、'.join(handles)}\n\n"
-                           "この中から、この会社の公式アカウントと、この会社の代表・営業責任者本人のアカウントだけを選んでください。"
-                           "別の会社・別人・メディア・ファンのアカウントは選ばない。確信が持てなければ選ばない。",
+                           f"最近の動き：{company['why_now']}\n\n検索結果に出てきたアカウント：\n{listing}\n\n"
+                           "この中から、この会社の公式アカウントと、この会社の代表・営業責任者本人のアカウントを選んでください。"
+                           "タイトルやアカウント名に会社名・サービス名・本人の名前が入っていれば、本人のものと判断してよい。"
+                           "別の会社・同姓同名の別人・メディア・ファンのアカウントは選ばない。",
                    schema=schema, effort="low")
     out = []
     for a in json.loads(data)["accounts"]:
