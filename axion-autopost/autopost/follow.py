@@ -112,6 +112,8 @@ def find_accounts(client, history: list[str]) -> list[dict]:
                          "箇条書きでまとめてください。", tools=TOOLS)
     data = json.loads(_ask(client, "次のメモを指定の形式に写してください。メモにない相手や事実は足さない。\n\n" + notes,
                            schema=SCHEMA, effort="low"))
+    # 何が見つかったかをログに残す（リスト自体も公開のため、ログに出してよい）
+    print(f"調査メモ（{len(notes)}字）：\n{notes[:3000]}\n---\n候補 {len(data['accounts'])}件")
     return data["accounts"]
 
 
@@ -122,6 +124,7 @@ def clean(accounts: list[dict], history: list[str]) -> dict[str, list[dict]]:
     for a in accounts:
         p, h = a["platform"], a["handle"].strip().lstrip("@").split("/")[-1].split("?")[0]
         if not HANDLE_RE[p].match(h) or h.lower() in NOT_PROFILES or key(p, h) in seen:
+            print(f"  除外：{p} {a['handle']!r}")
             continue
         if len(out[p]) >= WANT[p]:
             continue
