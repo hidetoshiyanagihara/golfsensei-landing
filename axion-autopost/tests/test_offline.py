@@ -30,12 +30,13 @@ main.ROOT, main.POSTS, main.IMAGES, main.HISTORY = tmp, tmp / "posts", tmp / "im
 main.PROMPT, main.MEMO = tmp / "prompt.md", tmp / "memo.md"
 main.MEMO.write_text("今週、清掃現場で管理会社の担当者と話した", encoding="utf-8")
 GOOD = {
-    "theme": "繁忙期の仕込み", "target": "名古屋のリフォーム会社の社長",
+    "theme": "繁忙期の仕込み", "target": "名古屋のリフォーム会社の社長", "pain": "紹介案件しか取れない",
     "x_post": "「今月は断るほど忙しい」\nその3ヶ月後に暇な月が来るリフォーム会社は多いです。\n原因は営業力じゃなく、忙しい時に仕込みが止まること。",
     "x_char_count": 70, "instagram_image_title": "忙しい月の次が怖い",
     "instagram_image_sub": "繁忙期こそ3ヶ月後のアポを仕込む",
     "instagram_caption": "本文\n\nDMで『リスト』と送ってください\n#名古屋リフォーム #愛知工務店 #営業代行",
-    "self_check": {"hook": 5, "target": 5, "concrete": 4, "insight": 4, "reason_to_contact": 4},
+    "hooks": [f"フック案{i}" for i in range(20)],
+    "score": {"hook": 16, "target": 16, "retention": 12, "share": 7, "save": 7, "originality": 7, "trust": 8, "lead": 4},
     "short_dialogue": [{"speaker": "tsunagari", "line": "うちは紹介でしか仕事来んよ"},
                        {"speaker": "apo", "line": "来る月って、選べます？"},
                        {"speaker": "apo", "line": "繁忙期こそ3ヶ月後を仕込みましょう"}],
@@ -43,7 +44,7 @@ GOOD = {
 replies = [
     '前置き {"theme": "x"}',
     json.dumps({**GOOD, "x_post": "あ" * 141}),
-    json.dumps({**GOOD, "self_check": {**GOOD["self_check"], "insight": 3}}),
+    json.dumps({**GOOD, "score": {**GOOD["score"], "hook": 5}}),
 ]
 calls_ai = []
 
@@ -75,7 +76,8 @@ try:
     gen_error = None
 except RuntimeError as e:
     gen_error = str(e)
-check(gen_error and "3回失敗" in gen_error and "自己チェック" in gen_error, "JSONなし・141字・自己チェック3点は作り直し、3回でエラー")
+check(gen_error and "3回失敗" in gen_error and "最終審査" in gen_error and "点" in gen_error,
+      "JSONなし・141字・最終審査70点未満は作り直し、3回でエラー")
 check("140字以内" in calls_ai[2]["messages"][0]["content"] or "141字" in calls_ai[2]["messages"][0]["content"],
       "作り直し時は前回の問題をAIに伝える")
 system = calls_ai[0]["system"]
@@ -83,13 +85,37 @@ check("{{today}}" not in system and "{{weekday}}" not in system and f"{d0:%Y年%
 check("元請け依存" in system and "古い投稿" not in system, "直近14日分の投稿だけを渡す")
 check("清掃現場で管理会社" in system, "memo.md を追加メモとして渡す")
 check("{{未確定。" in system, "指示文の {{ }} はそのまま残す")
+check("{{slot}}" not in system and generate.slot_for(d0) in system, "今日の枠を差し込む")
 check("清掃・管理の会社を経営" not in system, "プロンプトに代表の他事業の経歴は書かない")
 req = calls_ai[0]
 check(req["max_tokens"] >= 16000 and req["output_config"]["format"]["type"] == "json_schema",
       "考える分も含めた十分な上限と、JSON形式の指定（structured outputs）")
 schema_keys = set(req["output_config"]["format"]["schema"]["properties"])
-check(schema_keys == set(generate.REQUIRED_KEYS) | {"x_char_count", "self_check", "short_dialogue"},
+check(schema_keys == set(generate.REQUIRED_KEYS) | {"x_char_count", "hooks", "score", "short_dialogue"},
       "出力形式は prompt.md の12章と同じ")
+from datetime import date  # noqa: E402
+check([generate.slot_for(date(2026, 11, d)) for d in (2, 3, 4, 5, 6, 7, 8)]
+      == ["本音・痛み", "有益：ノウハウ", "有益：比較", "実験・検証", "有益：判断の材料", "ゼロから記録", "本音・痛み（誤解に答える）"],
+      "曜日ごとの枠")
+fridays = [date(2026, 11, 6) + timedelta(days=7 * k) for k in range(8)]
+check(sum(generate.slot_for(f) == generate.OFFER for f in fridays) == 2, "無料リストの案内は4週に1回だけ")
+low = {**GOOD, "score": {**GOOD["score"], "hook": 5}}
+try:
+    generate.check_post(low, "有益：比較")
+    check(False, "70点未満は作り直し")
+except ValueError:
+    check(True, "70点未満は作り直し")
+check(generate.check_post(low, generate.EXPERIMENT)["score_total"] < 70, "実験の枠は70点未満でも出してよい")
+try:
+    generate.check_post({**GOOD, "hooks": ["1つだけ"]})
+    check(False, "フック案が少なすぎる出力は作り直し")
+except ValueError:
+    check(True, "フック案が少なすぎる出力は作り直し")
+try:
+    generate.check_post({**GOOD, "score": {**GOOD["score"], "lead": 9}})
+    check(False, "配点を超える点数は作り直し")
+except ValueError:
+    check(True, "配点を超える点数は作り直し")
 
 calls_ai.clear()
 for bad, why in ((GOOD["short_dialogue"][:2], "回"), ([{"speaker": "tsunagari", "line": "あ" * 37}] * 4, "長すぎる"),
