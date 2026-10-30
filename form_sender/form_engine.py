@@ -645,6 +645,11 @@ def apply_plan(fr: Frame, plan: Plan) -> None:
     for idx, value in plan.fills:
         loc = fr.locator(f"[data-axion-idx='{idx}']")
         loc.fill(value, timeout=5000)
+        # 「ハイフン無し」の注意が欄の外にあり読み取れなかった場合：入力後にエラーになったら数字だけで入れ直す
+        if re.fullmatch(r"[\d-]+", value) and "-" in value and loc.evaluate(
+                "el => { el.dispatchEvent(new Event('blur', {bubbles: true})); el.dispatchEvent(new FocusEvent('focusout', {bubbles: true}));"
+                " return el.getAttribute('aria-invalid') === 'true' || (el.validity && !el.validity.valid); }"):
+            loc.fill(value.replace("-", ""), timeout=5000)
     for idx, value in plan.selects:
         fr.locator(f"[data-axion-idx='{idx}']").select_option(value=value, timeout=5000)
     for idx in plan.checks:
