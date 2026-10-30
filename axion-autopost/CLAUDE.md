@@ -18,9 +18,9 @@
 ## 構成
 | ファイル | 役割 |
 |---|---|
-| `prompt.md` | システムプロンプト（使っていい事実・曜日別テーマ・型・禁止事項・自己チェック・出力JSON）。ユーザーが2026-10-23に作成。`{{today}}` `{{weekday}}` `{{recent_posts}}` `{{memo}}` だけ差し込み、他の `{{ }}` は指示文として残す |
-| `memo.md` | 追加メモ（任意）。代表の最近の気づき。空なら「（なし）」 |
-| `autopost/generate.py` | Claude API（`claude-sonnet-5-5`）でX・Instagramの文章をJSON生成。X140字超・URL・禁止表現・自己チェック3点以下は再生成（最大3回） |
+| `prompt.md` | システムプロンプト。ユーザーが2026-10-23に作成、2026-10-30 にユーザー了承のうえ成長戦略（https://claude.ai/artifact/EEwfLARPbgTDeTm3ZcPscF）に合わせて書き換え：ポジション「営業を考え続けている人が結果として代行もやっている」、経営者の痛み、今日の枠（比率 有益40/本音25/実験20/活動10/訴求5）、フック20個から選ぶ、100点審査（70点未満は作り直し、実験枠は除く）、契約0社の公開可。`{{today}}` `{{weekday}}` `{{slot}}` `{{recent_posts}}` `{{memo}}` だけ差し込み、他の `{{ }}` は指示文として残す |
+| `memo.md` | 代表の活動・数字・気づき（週5分で書き足してもらう）。投稿に使ってよい数字はここにあるものだけ。2026-10-30 に現在地の実数を記入 |
+| `autopost/generate.py` | Claude API（`claude-sonnet-5-5`）でX・Instagram・ショートの会話をJSON生成。今日の枠は `slot_for`（曜日で決定、金曜の無料リスト案内はISO週番号が4の倍数の週だけ）。X140字超・URL・禁止表現・フック10個未満・審査の配点外・合計70点未満（実験枠は除く）は再生成（最大3回）。投稿JSONに slot / pain / hooks / score / score_total を残す（週次分析用） |
 | `autopost/image_card.py` | Instagram/LinkedIn用の1080x1350 **JPEG** 画像（濃紺×ゴールド、文字のみ）をPillowで生成。Instagram APIはPNG不可 |
 | `autopost/platforms.py` | X（OAuth1.0a, POST /2/tweets）、Instagram（graph.instagram.com, Instagramログイン版）、LinkedIn（/rest/posts, 個人アカウント投稿）|
 | `autopost/characters.py` / `assets/` | ショートのキャラクター2人。ユーザー提供の公式イラスト（2026-10-26）をアニメ向け切り抜きモデル（anime-seg isnetis）で切り抜いた `assets/apo.png`・`assets/tsunagari.png` を使う。アポくん＝行動派の営業マン・一人称「俺」・答える役（青）／つながりちゃん＝気配り上手・本音を引き出す役（ピンク）。話している方の後ろに色の光 |
