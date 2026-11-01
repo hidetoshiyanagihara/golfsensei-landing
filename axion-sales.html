@@ -147,6 +147,10 @@
   }
   textarea { min-height: 96px; resize: vertical; }
   .form-note { font-size: 12px; color: var(--sub); }
+  [hidden] { display: none !important; }
+  .thanks { background: #fff; color: var(--ink); border-radius: 12px; padding: 28px 20px; text-align: center; }
+  .thanks strong { color: var(--navy); font-size: 18px; }
+  .thanks p { margin-top: 10px; font-size: 14px; color: var(--sub); }
   .alt { text-align: center; margin-top: 24px; font-size: 14px; }
   .alt a { color: #fff; font-weight: 700; }
   .tel { font-size: 24px; font-weight: 900; letter-spacing: 0.04em; text-decoration: none; display: inline-block; margin-top: 4px; }
@@ -280,7 +284,7 @@
   <div class="wrap">
     <p class="eyebrow">CONTACT</p>
     <h2>無料リスト・無料相談</h2>
-    <p class="intro">送信するとメールアプリが開きます。内容を確認して、そのまま送信してください。</p>
+    <p class="intro">ご入力いただき「申し込む」を押すと、そのまま送信されます。</p>
     <form id="contactForm">
       <label>ご希望
         <select name="request">
@@ -295,12 +299,17 @@
           <option>士業・コンサル</option><option>人材・教育</option><option>小売・サービス</option><option>その他</option>
         </select>
       </label>
+      <label><span>メールアドレス<span class="req">必須</span></span><input name="email" type="email" required autocomplete="email"></label>
       <label>電話番号<input name="tel" type="tel" autocomplete="tel"></label>
       <label>商圏（営業したいエリア）<input name="area" placeholder="例：関東全域、大阪市内など"></label>
       <label>増やしたいお客さま・ご相談内容<textarea name="message" placeholder="例：中小の製造業の会社と取引を増やしたい。相談は平日の午後が都合がいいです。"></textarea></label>
-      <button class="btn" type="submit">メールで申し込む</button>
-      <p class="form-note">メールアプリが開かない場合は、yanagihara.axionsales@outlook.jp まで直接ご連絡ください。</p>
+      <button class="btn" type="submit">申し込む</button>
+      <p class="form-note">送信がうまくいかない場合は、yanagihara.axionsales@outlook.jp まで直接ご連絡ください。<a href="/axion-privacy.html">プライバシーポリシー</a></p>
     </form>
+    <div class="thanks" id="thanks" hidden>
+      <strong>お申し込みありがとうございます。</strong>
+      <p>内容を確認して、メールかお電話でご連絡します。</p>
+    </div>
     <div class="alt">
       お電話でも受け付けています<br>
       <a class="tel" href="tel:09066164210">090-6616-4210</a>
@@ -319,30 +328,43 @@
 </footer>
 
 <script>
-  // ?src=x などの流入元をメール件名に入れ、SNS ごとの相談数を数えられるようにする
+  // 申し込みは Googleフォーム「AXION SALES お申し込み」に送る（回答はフォームの持ち主にメールで通知される）
+  // ?src=x などの流入元も一緒に送り、SNS ごとの相談数を数えられるようにする
   const SOURCES = { x: 'X', instagram: 'Instagram', youtube: 'YouTube', linkedin: 'LinkedIn', form: 'フォーム営業' };
   const src = new URLSearchParams(location.search).get('src') || '';
   const srcLabel = SOURCES[src] || (src ? src.slice(0, 20) : '直接');
+  const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeU7gw6H24IUqJwFDfikqnoM04O7nwpA1YSvNEPaksscGTgew/formResponse';
+  const ENTRY = {   // ホームページの欄 → Googleフォームの質問
+    request: 'entry.1715589096',   // ご希望
+    company: 'entry.508102086',    // 会社名
+    name: 'entry.1391082854',      // お名前
+    email: 'entry.897470112',      // メールアドレス
+    tel: 'entry.1720605040',       // 電話番号
+    industry: 'entry.1730893332',  // 業種
+    area: 'entry.286516246',       // 商圏
+    message: 'entry.1346185344',   // ご相談内容
+  };
+  const ENTRY_SOURCE = 'entry.1919626788';  // 流入元
 
-  document.getElementById('contactForm').addEventListener('submit', (e) => {
+  document.getElementById('contactForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;
-    const v = (name) => f.elements[name].value.trim();
-    const subject = `[${srcLabel}経由] ${v('request')}の申込（${v('company')}）`;
-    const body = [
-      `ご希望：${v('request')}`,
-      `会社名：${v('company')}`,
-      `お名前：${v('name')}`,
-      `業種：${v('industry')}`,
-      `電話番号：${v('tel')}`,
-      `商圏：${v('area')}`,
-      '',
-      '増やしたいお客さま・ご相談内容：',
-      v('message'),
-    ].join('\n');
-    location.href = 'mailto:yanagihara.axionsales@outlook.jp'
-      + '?subject=' + encodeURIComponent(subject)
-      + '&body=' + encodeURIComponent(body);
+    const button = f.querySelector('button');
+    const data = new URLSearchParams();
+    for (const [field, entry] of Object.entries(ENTRY)) data.append(entry, f.elements[field].value.trim());
+    data.append(ENTRY_SOURCE, srcLabel);
+    button.disabled = true;
+    button.textContent = '送信しています…';
+    try {
+      // Googleフォームは別のサイトなので返事の中身は読めない（no-cors）。通信できれば受け付けられている
+      await fetch(FORM_URL, { method: 'POST', mode: 'no-cors', body: data });
+      f.hidden = true;
+      document.getElementById('thanks').hidden = false;
+    } catch (err) {
+      button.disabled = false;
+      button.textContent = '申し込む';
+      alert('送信できませんでした。通信状況をご確認のうえ、もう一度お試しいただくか、yanagihara.axionsales@outlook.jp までご連絡ください。');
+    }
   });
 </script>
 </body>
