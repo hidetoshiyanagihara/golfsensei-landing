@@ -605,6 +605,22 @@ def apply_plan(fr: Frame, plan: Plan) -> None:
             loc.evaluate("el => { el.checked = true; el.dispatchEvent(new Event('change', {bubbles: true})); el.dispatchEvent(new Event('click', {bubbles: true})); }")
 
 
+def lost_fills(fr: Frame, plan: Plan, fields: list[dict]) -> list[str]:
+    """入れたはずの値が消えた欄（画面の作りで入力が反映されない欄）の名前。送ると中身の欠けた問い合わせになるので、その会社は送らない"""
+    lost = []
+    for idx, value in plan.fills:
+        if not value:
+            continue
+        try:
+            now = fr.locator(f"[data-axion-idx='{idx}']").input_value(timeout=2000)
+        except Exception:
+            continue
+        if not now.strip():
+            f = next((x for x in fields if x.get("idx") == idx), {})
+            lost.append(f.get("label") or f.get("placeholder") or f.get("name") or f"{idx}番目の欄")
+    return lost
+
+
 SUBMIT_JS = r"""
 (args) => {
   const [root, phase] = args;
@@ -743,6 +759,10 @@ def process_company(page: Page, name: str, url: str, message: str, live: bool, s
         apply_plan(fr, plan)
     except Exception as e:
         return Outcome("失敗", f"入力中にエラー: {str(e).splitlines()[0][:120]}")
+    page.wait_for_timeout(800)
+    lost = lost_fills(fr, plan, fields)
+    if lost:
+        return Outcome("スキップ", f"入力が反映されない欄がある（{'、'.join(lost)[:60]}）")
 
     if not live:
         fr.evaluate("() => document.querySelectorAll('textarea[data-axion-idx]').forEach(t => t.scrollTop = 0)")

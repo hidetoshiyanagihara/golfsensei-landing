@@ -58,6 +58,12 @@ check(prtimes.judge(R(title="営業代行サービスを開始", company="株式
 check(prtimes.judge(R(title="新サービス提供開始", company="NTTテスト株式会社", **base)) == "大手グループの会社", "大手グループは外す")
 check(prtimes.judge(R(title="旅行アプリに新機能", company="株式会社C", **{**base, "signal": "launch"})) != "",
       "個人向けアプリの新機能は外す")
+check(prtimes.judge(R(title="VTuberと企業をつなぐプラットフォームを正式リリース", company="株式会社D", **base)) != ""
+      and prtimes.judge(R(title="営業リストの作成代行の料金を調査", company="株式会社E", **base)) != "",
+      "VTuber・マッチングアプリ・営業支援の会社は外す")
+check(prtimes.judge(R(title="千葉道場ファンドからシリーズAの資金調達", company="株式会社F", **base)) == "",
+      "「ファンド」は外す理由にしない")
+check(prtimes.parse_company('<dl class="_container_x"><dt>URL</dt><dd>-</dd></dl>')["URL"] == "", "URLが「-」なら公式サイトなし")
 
 print("== 送り先探し→テスト→本番（疑似サイト）")
 releases = [
@@ -65,6 +71,8 @@ releases = [
       site=f"http://127.0.0.11:{P}/", industry="情報通信", listed="未上場", capital="1億円", signal="funding"),
     R(url="https://prtimes.jp/r/2", title="営業お断りの会社、新サービスを提供開始", company="お断り建設",
       site=f"http://127.0.0.12:{P}/", industry="情報通信", listed="未上場", capital="1億円", signal="launch"),
+    R(url="https://prtimes.jp/r/4", title="消える欄、シリーズAで資金調達", company="株式会社消える欄",
+      site=f"http://127.0.0.17:{P}/", industry="情報通信", listed="未上場", capital="1億円", signal="funding"),
     R(url="https://prtimes.jp/r/3", title="大手の新サービス", company="上場株式会社",
       site=f"http://127.0.0.16:{P}/", industry="情報通信", listed="東証プライム", capital="100億円", signal="launch"),
 ]
@@ -76,12 +84,13 @@ for k, v in res.items():
     print(f"     {k}: {v['結果']} / {v['理由']}")
 check(res["株式会社テスト工務店"]["結果"] == "成功", "決まった文面でフォームに入力（テスト）")
 check("営業お断り" in res["お断り建設"]["理由"], "営業お断りの会社は送らない")
-check("上場株式会社" not in res and len(common.load_companies()) == 2, "上場企業は候補に入れない")
+check("入力が反映されない" in res["株式会社消える欄"]["理由"], "入れた値が消える欄があるフォームには送らない")
+check("上場株式会社" not in res and len(common.load_companies()) == 3, "上場企業は候補に入れない")
 posts = json.loads(urllib.request.urlopen(f"http://127.0.0.11:{P}/__posts").read())
 check(posts == [], "テストでは送信しない")
 
 free.run(5, live=True, wait=False)
-check({"https://prtimes.jp/r/1", "https://prtimes.jp/r/3"} <= seen[-1] and len(common.load_companies()) == 2,
+check({"https://prtimes.jp/r/1", "https://prtimes.jp/r/3"} <= seen[-1] and len(common.load_companies()) == 3,
       "見たニュース（見送った分も）は二度候補にしない")
 posts = json.loads(urllib.request.urlopen(f"http://127.0.0.11:{P}/__posts").read())
 body = next((p["data"] for p in posts if p["host"] == "127.0.0.11"), {}).get("body", [""])[0].replace("\r\n", "\n")

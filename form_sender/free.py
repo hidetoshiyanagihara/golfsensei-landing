@@ -51,6 +51,14 @@ def news_for(url: str) -> dict | None:
     return found
 
 
+def still_ok(news: dict) -> bool:
+    """候補にしたときのニュースを、いまの条件でもう一度見る（条件を厳しくしたら、前に入れた候補にも効かせる）"""
+    r = prtimes.Release(url=news.get("ニュース", ""), title=news.get("見出し", ""), company=news.get("社名", ""),
+                        site=news.get("URL", ""), industry=news.get("業種", ""), listed=news.get("上場", ""),
+                        capital=news.get("資本金", ""), signal=news.get("動き", ""))
+    return prtimes.judge(r) == ""
+
+
 def build_letter(company: str, title: str, signal: str) -> tuple[str, str]:
     title = title if len(title) <= TITLE_MAX else title[:TITLE_MAX - 1] + "…"
     text = config.MESSAGE_FREE_TXT.read_text(encoding="utf-8")
@@ -94,7 +102,7 @@ def run(count: int, live: bool, headed: bool = False, wait: bool = True) -> None
             log("本日の送信上限に達しています")
             return
     discover_more(mode)
-    targets = [c for c in pending(mode) if news_for(c["URL"])]
+    targets = [c for c in pending(mode) if (n := news_for(c["URL"])) and still_ok(n)]
     log(f"{mode}モード：候補 {len(targets)}社 / 今回 最大{count}件")
     config.SCREENSHOT_DIR.mkdir(exist_ok=True)
 
