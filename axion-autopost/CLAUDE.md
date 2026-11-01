@@ -53,6 +53,12 @@ Instagramは画像を公開URLから取りに来るため、画像をリポジ�
 | YouTube | ✅ 2026-10-28 に設定完了。Google Cloud プロジェクト `axion-sns`（OAuth同意画面は本番、ホームページ `https://axionsales.vercel.app`、プライバシーポリシー `/axion-privacy.html`）。`YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` 登録済み（チャンネル「AXION SALES」で確認）。`YT_PRIVACY`（Actions の Variables）で unlisted にできる |
 | LinkedIn | ⏸ 保留。会社ページ作成時に「つながりの数が不足」で作れず。つながりが10人前後になったら再挑戦。現プロンプトはLinkedIn用本文を作らないので、再開時はプロンプトの出力に linkedin を足す |
 
+## フォーム営業（form_sender/、2026-11-01 本番開始）
+- 無料版（`free.py`、AIを使わない）。平日10:13に PR TIMES のニュースから送り先を拾い、1日最大10社に決まった文面で送る
+- 記録は `form_sender/state.enc`（暗号化）。鍵は Secrets の `FORM_STATE_KEY`（合言葉は柳原さんが保管。チャットで共有済み。リポジトリには書かない）
+- 本番は `form_sender/LIVE_ON` があるときだけ。止めるときはこのファイルを消す
+- 11/1 のテスト入力で見つけた問題（値が消える欄、VTuber・マッチングアプリ・営業支援の会社の混入）は修正済み
+
 ## 今後やること
 - LinkedIn（上記）：会社ページ作成 → developer app（Share on LinkedIn ＋ Sign In with LinkedIn using OpenID Connect）→ OAuth Token Tools でスコープ `openid profile w_member_social` のトークン発行 → `LI_ACCESS_TOKEN` 登録
 - 料金・成果保証が確定したら `prompt.md` の1章を更新
