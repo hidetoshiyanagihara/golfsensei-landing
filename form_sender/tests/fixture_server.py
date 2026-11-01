@@ -88,6 +88,16 @@ SITES = {
         "/": H("ディブ空調", '<a href="/contact.html">お問い合わせはこちら</a>'),
         "/contact.html": H("お問い合わせ", FORM_F),
     },
+    "127.0.0.17": {  # 会社名の欄が、ほかの欄に移ると空に戻る（実際のサイトで見つかった作り）
+        "/": H("消える欄のサイト", '<a href="/contact/">お問い合わせ</a>'),
+        "/contact/": H("お問い合わせ", """<form method="post" action="/confirm"><table>
+<tr><th>会社名</th><td><input type="text" id="co" placeholder="2文字以上入力"></td></tr>
+<tr><th>お名前</th><td><input type="text" name="name" required></td></tr>
+<tr><th>メール</th><td><input type="email" name="mail" required></td></tr>
+<tr><th>内容</th><td><textarea name="b" required></textarea></td></tr></table>
+<input type="submit" value="送信"></form>
+<script>document.getElementById('co').addEventListener('blur', e => { e.target.value = ''; });</script>"""),
+    },
     # --- リスト作成テスト用（検索結果から辿る）
     "127.0.0.21": {
         "/": H("有限会社みどり設備｜名古屋市緑区の給排水設備工事", '<a href="/gaiyo.html">会社案内</a><p>給排水設備工事</p>'),

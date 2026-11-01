@@ -32,11 +32,12 @@ SIGNALS = [
 SAAS_RE = re.compile(r"SaaS|クラウド|AI|DX|アプリ|プラットフォーム|システム|ツール|ソフトウェア")
 # 同業や対象外（営業代行・人材など）
 EXCLUDE_RE = re.compile(r"営業代行|テレアポ|コールセンター|インサイドセールス代行|営業支援代行|人材派遣|人材紹介|求人広告"
-                        r"|フォーム営業|フォームDM|アポ獲得|リスト作成代行"
+                        r"|フォーム営業|フォームDM|アポ獲得|リスト作成代行|営業リスト|作成代行|商談化|営業支援|営業コンサル"
+                        r"|マッチングアプリ|恋活|婚活|推し活|VTuber|Vtuber|ゲーム|アーティスト|ファンクラブ|ファンコミュニティ"
                         r"|出版|新聞|放送|テレビ|雑誌|文芸|書籍|ラジオ|映画|ドラマ|アニメ|音楽|ライブ|コンサート")
 # 会社・店舗向け（BtoB）らしさ。個人向けアプリなどは外す
 B2B_RE = re.compile(r"法人|企業|業務|BtoB|B2B|SaaS|DX|営業|管理|経営|店舗|事業者|自治体|医療機関|導入|自社|Biz|ビジネス|"
-                    r"バックオフィス|人事|労務|会計|経理|請求|採用|マーケティング|顧客|EC|物流|建設|不動産|製造")
+                    r"バックオフィス|人事|労務|会計|経理|請求|採用|マーケティング|顧客|物流|建設|不動産|製造")
 # 大手グループの子会社（社名の頭で判断）
 LARGE_GROUP_RE = re.compile(r"^(株式会社\s*)?(NTT|KDDI|ソフトバンク|富士通|NEC|日立|パナソニック|トヨタ|三菱|三井|住友|ソニー|楽天|"
                             r"リクルート|サイバーエージェント|ヤフー|LINEヤフー|GMO|電通|博報堂|大日本印刷|凸版|TOPPAN|日本郵政|JR)")
@@ -109,6 +110,8 @@ def parse_company(html: str) -> dict:
         for dt, dd in re.findall(r"<dt>(.*?)</dt>\s*<dd>(.*?)</dd>", block.group(1), re.S):
             link = re.search(r'href="(https?://[^"]+)"', dd)
             info[_clean(dt)] = link.group(1) if link and _clean(dt) == "URL" else _clean(dd)
+    if not info.get("URL", "").startswith("http"):
+        info["URL"] = ""
     name = re.search(r'class="_companyName_[^"]*">(.*?)</', html, re.S)
     info["社名"] = _clean(name.group(1)) if name else ""
     return info
