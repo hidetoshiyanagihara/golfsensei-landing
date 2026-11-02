@@ -722,7 +722,7 @@ SUBMIT_JS = r"""
 (args) => {
   const [root, phase] = args;
   const scope = root || document;
-  const cands = Array.from(scope.querySelectorAll('button, input[type=submit], input[type=button], input[type=image], a[role=button], a.btn, a.button'));
+  const cands = Array.from(scope.querySelectorAll('button, input[type=submit], input[type=button], input[type=image], a[role=button], div[role=button], span[role=button], a.btn, a.button'));
   const label = (el) => ((el.innerText || el.value || el.alt || el.getAttribute('aria-label') || '') + '').replace(/\s+/g, '');
   const vis = (el) => { const r = el.getBoundingClientRect(); const st = getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'; };
   const ng = /戻る|修正|リセット|クリア|取り消|キャンセル|back|reset|clear|cancel|検索|search|ログイン|login|閉じる/i;
