@@ -1,6 +1,7 @@
 """【無料版の送り先探し】PR TIMES の新着ニュースから、営業を強化しそうな会社を拾う（AIを使わない）。
 
-- 新着RSS と、キーワード別の一覧（資金調達・シリーズA・SaaS など）からニュースを集める
+- 新着RSS と、キーワード検索（資金調達・シリーズA・SaaS など）からニュースを集める。
+  キーワード検索は PR TIMES の「もっと見る」と同じ仕組み（/api/search_release.php）で、過去のページまでさかのぼる
 - 見出しが「資金調達・新サービス・営業強化」などの動きで、業種が「情報通信」、未上場の会社だけを残す
 - 公式サイトのURL・代表者名などは、ニュースのページ下の会社情報から取る
 """
@@ -8,6 +9,7 @@ import random
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from html import unescape
 from urllib.parse import quote
 
@@ -18,9 +20,13 @@ import config
 BASE = "https://prtimes.jp"
 RSS_URL = f"{BASE}/index.rdf"
 KEYWORDS = ["資金調達", "シリーズA", "シリーズB", "プレシリーズA", "SaaS", "クラウドサービス", "提供開始",
-            "営業DX", "インサイドセールス", "業務効率化"]
+            "営業DX", "インサイドセールス", "業務効率化", "DX", "法人向け", "BtoB", "新機能", "販売代理店", "パートナー募集"]
+SEARCH_API = f"{BASE}/api/search_release.php"
+SEARCH_LIMIT = 40        # 検索1ページの件数
+SEARCH_MAX_PAGE = 25     # キーワードごとに、ここまでさかのぼる（40件×25ページ）
+MAX_AGE_DAYS = 120       # これより古いニュースは使わない（書き出しで「拝見し」と書くため）
 SLEEP = (1.0, 2.0)
-MAX_PAGES_PER_RUN = 80   # 1回に開くニュースのページ数の上限（相手のサーバーに負担をかけない）
+MAX_PAGES_PER_RUN = 400  # 1回に開くニュースのページ数の上限（相手のサーバーに負担をかけない）
 
 # 見出しの「動き」→ 営業文の書き出しを変える
 SIGNALS = [
@@ -102,6 +108,24 @@ def parse_list(html: str) -> list[Release]:
     return out
 
 
+def parse_search(data: dict) -> list[Release]:
+    """キーワード検索（JSON）から見出し・社名・日付。古いニュースは外す"""
+    out = []
+    oldest = datetime.now(timezone.utc) - timedelta(days=MAX_AGE_DAYS)
+    for a in data.get("articles") or []:
+        url, title = a.get("url") or "", _clean(a.get("title") or "")
+        if not url.startswith("/main/html/rd/p/") or not title:
+            continue
+        when = ((a.get("updated_at") or {}).get("origin") or "")
+        try:
+            if datetime.fromisoformat(when) < oldest:
+                continue
+        except ValueError:
+            pass
+        out.append(Release(url=BASE + url, title=title, company=_clean((a.get("provider") or {}).get("name") or "")))
+    return out
+
+
 def parse_company(html: str) -> dict:
     """ニュースのページ下の会社情報（URL・業種・上場・資本金・代表者名）と社名"""
     info = {}
@@ -149,31 +173,58 @@ def judge(r: Release) -> str:
     return ""
 
 
-def find(known_urls: set[str], log=print) -> list[Release]:
-    """新しいニュースから送り先の候補を返す（同じニュースは二度見ない）"""
-    f = Fetcher()
-    items: dict[str, Release] = {}
+def precheck(r: Release) -> bool:
+    """ニュースのページを開く前に、見出しと社名だけで外せるものを外す（相手のサーバーへの負担を減らす）"""
+    if not signal_of(r.title) or EXCLUDE_RE.search(f"{r.title} {r.company}"):
+        return False
+    return not (r.company and LARGE_GROUP_RE.search(r.company))
+
+
+def listings(f: "Fetcher", log=print):
+    """新着RSS → キーワード検索の1ページ目 → 2ページ目 … の順にニュースを出す（新しいものから）"""
     try:
-        for r in parse_rss(f.get(RSS_URL)):
-            items.setdefault(r.url, r)
+        yield from parse_rss(f.get(RSS_URL))
     except requests.RequestException as e:
         log(f"PR TIMES：新着RSSを読めない（{type(e).__name__}）")
-    for kw in KEYWORDS:
-        try:
-            for r in parse_list(f.get(f"{BASE}/topics/keywords/{quote(kw)}")):
-                items.setdefault(r.url, r)
-        except requests.RequestException:
+    alive = list(KEYWORDS)
+    for page in range(1, SEARCH_MAX_PAGE + 1):
+        for kw in list(alive):
+            try:
+                time.sleep(random.uniform(*SLEEP))
+                res = f.http.get(SEARCH_API, params={"page": page, "type": "search", "v": kw, "limit": SEARCH_LIMIT},
+                                 timeout=config.HTTP_TIMEOUT_SEC)
+                res.raise_for_status()
+                items = parse_search(res.json())
+            except (requests.RequestException, ValueError):
+                alive.remove(kw)
+                continue
+            if not items:
+                alive.remove(kw)   # このキーワードは古いニュースまで見終わった
+            yield from items
+        if not alive:
+            return
+
+
+def find(known_urls: set[str], log=print):
+    """新しいニュースから送り先の候補を1件ずつ返す（同じニュース・同じ会社は二度見ない）。
+    呼ぶ側が必要な数そろったところで止めればよい。ニュースのページは1回 MAX_PAGES_PER_RUN 件まで"""
+    f = Fetcher()
+    seen, companies = set(known_urls), set()
+    for r in listings(f, log):
+        if r.url in seen or not precheck(r) or (r.company and r.company in companies):
+            seen.add(r.url)
             continue
-    fresh = [r for r in items.values() if r.url not in known_urls and signal_of(r.title)]
-    log(f"PR TIMES：ニュース {len(items)}件、うち動きのある新しいもの {len(fresh)}件")
-    out = []
-    for r in fresh[:MAX_PAGES_PER_RUN]:
+        seen.add(r.url)
+        if f.pages >= MAX_PAGES_PER_RUN:
+            log(f"PR TIMES：ニュースのページを{MAX_PAGES_PER_RUN}件見たので、今日はここまで")
+            return
         try:
             info = parse_company(f.get(r.url))
         except requests.RequestException:
             continue
+        f.pages += 1
         r.company = r.company or info.get("社名", "")
+        companies.add(r.company)
         r.site, r.industry, r.listed = info.get("URL", ""), info.get("業種", ""), info.get("上場", "")
         r.capital, r.ceo, r.signal = info.get("資本金", ""), info.get("代表者名", ""), signal_of(r.title)
-        out.append(r)
-    return out
+        yield r
