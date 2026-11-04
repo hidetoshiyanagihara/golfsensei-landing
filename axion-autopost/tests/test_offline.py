@@ -84,7 +84,7 @@ system = calls_ai[0]["system"]
 check("{{today}}" not in system and "{{weekday}}" not in system and f"{d0:%Y年%m月%d日}" in system, "日付・曜日を差し込む")
 check("元請け依存" in system and "古い投稿" not in system, "直近14日分の投稿だけを渡す")
 check("清掃現場で管理会社" in system, "memo.md を追加メモとして渡す")
-check("{{未確定。" in system, "指示文の {{ }} はそのまま残す")
+check("{{なし。" in system, "指示文の {{ }} はそのまま残す")
 check("{{slot}}" not in system and generate.slot_for(d0) in system, "今日の枠を差し込む")
 check("清掃・管理の会社を経営" not in system, "プロンプトに代表の他事業の経歴は書かない")
 req = calls_ai[0]
