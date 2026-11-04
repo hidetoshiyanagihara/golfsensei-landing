@@ -17,6 +17,17 @@
       "permanent": false
     },
     {
+      "source": "/partner",
+      "has": [
+        {
+          "type": "host",
+          "value": "axionsales.vercel.app"
+        }
+      ],
+      "destination": "/axion-partner.html",
+      "permanent": false
+    },
+    {
       "source": "/privacy",
       "has": [
         {
