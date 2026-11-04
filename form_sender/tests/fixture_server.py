@@ -69,6 +69,10 @@ SITES = {
         "/contact/": H("お問い合わせ", FORM_A),
         "/company/": H("会社概要", "<table><tr><th>会社名</th><td>株式会社テスト工務店</td></tr><tr><th>所在地</th><td>〒460-0008 名古屋市中区栄1-2-3</td></tr><tr><th>従業員数</th><td>12名</td></tr><tr><th>資本金</th><td>1,000万円</td></tr><tr><th>事業内容</th><td>注文住宅・リフォーム</td></tr></table>"),
     },
+    "127.0.0.18": {  # 営業代行の会社（下請けの売り込み先）
+        "/": H("株式会社テスト営業代行", '<a href="/contact/">お問い合わせ</a><p>テレアポ代行・営業代行</p>'),
+        "/contact/": H("お問い合わせ", FORM_A),
+    },
     "127.0.0.12": {
         "/": H("お断り建設", '<a href="/inquiry">お問合せ</a>'),
         "/inquiry": H("お問合せ", "<p>※営業目的のお問い合わせはご遠慮ください。</p><form><input name='name'><input type='email' name='mail'><textarea name='b'></textarea></form>"),

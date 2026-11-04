@@ -37,13 +37,17 @@ SIGNALS = [
 # SaaS・ITサービスらしさ（業種が「情報通信」でないときの補助）
 SAAS_RE = re.compile(r"SaaS|クラウド|AI|DX|アプリ|プラットフォーム|システム|ツール|ソフトウェア")
 # 同業や対象外（営業代行・人材など）
-EXCLUDE_RE = re.compile(r"営業代行|テレアポ|コールセンター|インサイドセールス代行|営業支援代行|人材派遣|人材紹介|求人広告"
+EXCLUDE_RE = re.compile(r"営業代行|テレアポ|テレマーケティング|アポイント獲得|コールセンター|インサイドセールス代行|営業支援代行|人材派遣|人材紹介|求人広告"
                         r"|フォーム営業|フォームDM|アポ獲得|リスト作成代行|営業リスト|作成代行|商談化|営業支援|営業コンサル"
                         r"|マッチングアプリ|恋活|婚活|推し活|VTuber|Vtuber|ゲーム|アーティスト|ファンクラブ|ファンコミュニティ"
                         r"|出版|新聞|放送|テレビ|雑誌|文芸|書籍|ラジオ|映画|ドラマ|アニメ|音楽|ライブ|コンサート")
 # 会社・店舗向け（BtoB）らしさ。個人向けアプリなどは外す
 B2B_RE = re.compile(r"法人|企業|業務|BtoB|B2B|SaaS|DX|営業|管理|経営|店舗|事業者|自治体|医療機関|導入|自社|Biz|ビジネス|"
                     r"バックオフィス|人事|労務|会計|経理|請求|採用|マーケティング|顧客|物流|建設|不動産|製造")
+# 営業代行の会社（下請けの売り込み先。AGENCY_KEYWORDS で探し、judge_agency で判断）
+AGENCY_KEYWORDS = ["営業代行", "テレアポ代行", "インサイドセールス代行", "営業アウトソーシング", "アポイント獲得", "営業支援サービス"]
+AGENCY_RE = re.compile(r"営業代行|テレアポ代行|テレマーケティング|インサイドセールス代行|インサイドセールス支援|アポ(イント)?獲得"
+                       r"|営業支援(サービス|会社)|営業アウトソーシング|セールスアウトソーシング|フォーム営業|コールセンター")
 # 大手グループの子会社（社名の頭で判断）
 LARGE_GROUP_RE = re.compile(r"^(株式会社\s*)?(NTT|KDDI|ソフトバンク|富士通|NEC|日立|パナソニック|トヨタ|三菱|三井|住友|ソニー|楽天|"
                             r"リクルート|サイバーエージェント|ヤフー|LINEヤフー|GMO|電通|博報堂|大日本印刷|凸版|TOPPAN|日本郵政|JR)")
@@ -180,13 +184,13 @@ def precheck(r: Release) -> bool:
     return not (r.company and LARGE_GROUP_RE.search(r.company))
 
 
-def listings(f: "Fetcher", log=print):
+def listings(f: "Fetcher", log=print, keywords=KEYWORDS):
     """新着RSS → キーワード検索の1ページ目 → 2ページ目 … の順にニュースを出す（新しいものから）"""
     try:
         yield from parse_rss(f.get(RSS_URL))
     except requests.RequestException as e:
         log(f"PR TIMES：新着RSSを読めない（{type(e).__name__}）")
-    alive = list(KEYWORDS)
+    alive = list(keywords)
     for page in range(1, SEARCH_MAX_PAGE + 1):
         for kw in list(alive):
             try:
@@ -205,13 +209,33 @@ def listings(f: "Fetcher", log=print):
             return
 
 
-def find(known_urls: set[str], log=print):
+def judge_agency(r: Release) -> str:
+    """下請けの売り込み先（営業代行の会社）にするなら空文字、外すなら理由"""
+    if not AGENCY_RE.search(f"{r.title} {r.company}"):
+        return "営業代行の会社ではない"
+    if LARGE_GROUP_RE.search(r.company):
+        return "大手グループの会社"
+    if not r.site:
+        return "公式サイトのURLがない"
+    if r.listed and r.listed != "未上場":
+        return "上場企業"
+    cap = capital_yen(r.capital)
+    if cap and cap > MAX_CAPITAL_YEN:
+        return "資本金が大きい（大企業）"
+    return ""
+
+
+def precheck_agency(r: Release) -> bool:
+    return bool(AGENCY_RE.search(f"{r.title} {r.company}")) and not (r.company and LARGE_GROUP_RE.search(r.company))
+
+
+def find(known_urls: set[str], log=print, keywords=None, check=None):
     """新しいニュースから送り先の候補を1件ずつ返す（同じニュース・同じ会社は二度見ない）。
     呼ぶ側が必要な数そろったところで止めればよい。ニュースのページは1回 MAX_PAGES_PER_RUN 件まで"""
     f = Fetcher()
     seen, companies = set(known_urls), set()
-    for r in listings(f, log):
-        if r.url in seen or not precheck(r) or (r.company and r.company in companies):
+    for r in listings(f, log, keywords or KEYWORDS):
+        if r.url in seen or not (check or precheck)(r) or (r.company and r.company in companies):
             seen.add(r.url)
             continue
         seen.add(r.url)

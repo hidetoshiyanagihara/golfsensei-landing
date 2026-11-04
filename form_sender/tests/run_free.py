@@ -120,6 +120,29 @@ feed = iter([R(url=f"https://prtimes.jp/r/1{k}", title="法人向けクラウド
               for k in range(3)])
 check(free.discover_more("本番", 2, feed) == 2 and next(feed).company == "株式会社足す2",
       "候補は必要な数そろったところで探すのをやめ、続きは次に使う")
+print("== 営業代行の会社に、下請けとして売り込む")
+A = dict(industry="サービス業", listed="未上場", capital="1000万円")
+check(prtimes.judge_agency(R(url="u", title="テレアポ代行の新プランを提供開始", company="株式会社G", site="https://g.test", **A)) == ""
+      and prtimes.judge_agency(R(url="u", title="勤怠クラウドの新機能", company="株式会社H", site="https://h.test", **A)) != ""
+      and prtimes.judge(R(url="u", title="テレマーケティング事業を拡大", company="株式会社I", site="https://i.test",
+                          industry="情報通信", listed="未上場", capital="1億円", signal="sales")) != "",
+      "営業代行の会社だけを下請けの売り込み先にし、お客さま探しには混ぜない")
+agency_news = R(url="https://prtimes.jp/r/9", title="株式会社テスト営業代行、インサイドセールス代行を強化", company="株式会社テスト営業代行",
+                site=f"http://127.0.0.18:{P}/", industry="サービス業", listed="未上場", capital="1000万円", signal="sales")
+free.save_research({"日時": "2026-11-04 10:00", "社名": "株式会社テスト営業代行", "URL": "", "段階": "見送り",
+                    "ニュース": "https://prtimes.jp/r/9", "対象外の理由": "同業・対象外の業種"})
+check("https://prtimes.jp/r/9" not in free.known_release_urls(True) and "https://prtimes.jp/r/9" in free.known_release_urls(),
+      "お客さま探しで同業として見送ったニュースも、下請けの売り込み先としては見る")
+seen_kw = []
+prtimes.find = lambda known, log=print, keywords=None, check=None: (seen_kw.append(keywords), [agency_news])[1]
+free.run(3, live=True, wait=False, agency=True)
+posts = json.loads(urllib.request.urlopen(f"http://127.0.0.11:{P}/__posts").read())
+body = next((p["data"] for p in posts if p["host"] == "127.0.0.18"), {}).get("body", [""])[0].replace("\r\n", "\n")
+check(seen_kw[-1] == prtimes.AGENCY_KEYWORDS and body.startswith("株式会社テスト営業代行\nご担当者様")
+      and "協力会社（委託先）" in body and "インサイドセールス代行を強化" in body and "ご放念ください" in body,
+      "営業代行の会社には、下請け（協力会社）の文面で送る")
+check(not any(c["社名"] == "株式会社テスト営業代行" for c in free.ready("本番")),
+      "下請けの売り込み先は、お客さま向けの送信には混ざらない")
 long_title = "あ" * 80
 check("「" + "あ" * (free.TITLE_MAX - 1) + "…」" in free.build_letter("株式会社X", long_title, "")[1], "長い見出しは途中で切る")
 
