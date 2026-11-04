@@ -3,7 +3,7 @@
 1. 送り先を探す：PR TIMES の新着から、資金調達・新サービス・営業強化を発表した未上場のIT・SaaSの会社（prtimes.py）
 2. 送れるか確かめる：フォームなし・営業お断り・画像認証は外す
 3. 文面：message_free.txt に、社名・ニュースの見出し・動きに合わせた書き出しを入れる
-4. 送る：1回最大10件。記録は暗号化した state.enc（saas.py と同じファイル）に残し、ログに会社名を出さない
+4. 送る：1回最大10件。送れない会社（フォームなし等）が多くても10件に届くよう、候補が尽きたら探し足す。記録は暗号化した state.enc（saas.py と同じファイル）に残し、ログに会社名を出さない
 """
 import json
 import os
@@ -26,6 +26,8 @@ OPENINGS = {
     "sales": "営業を強めていく時期は、商談の数を増やす仕組みづくりと、そのための人手の確保が悩みどころだと思います。",
 }
 SUBJECT = "{社名}さまの新規商談づくりについて（見込み客リスト20件無料）"
+POOL_PER_SEND = 4    # 送れる会社はおよそ3社に1社なので、送りたい件数の4倍の候補をそろえる
+MAX_ROUNDS = 4       # 候補が尽きたときに探し足す回数の上限
 
 
 def known_release_urls() -> set[str]:
@@ -39,16 +41,20 @@ def known_release_urls() -> set[str]:
     return urls
 
 
-def news_for(url: str) -> dict | None:
-    """その会社を候補にしたときのニュース（見出し・動き）"""
+def news_index() -> dict[str, dict]:
+    """会社のURL → その会社を候補にしたときのニュース（見出し・動き）"""
     if not config.RESEARCH_JSONL.exists():
-        return None
-    found = None
+        return {}
+    index = {}
     for line in config.RESEARCH_JSONL.read_text(encoding="utf-8").splitlines():
         row = json.loads(line)
-        if row.get("URL") == url and row.get("見出し"):
-            found = row
-    return found
+        if row.get("URL") and row.get("見出し"):
+            index[row["URL"]] = row
+    return index
+
+
+def news_for(url: str) -> dict | None:
+    return news_index().get(url)
 
 
 def still_ok(news: dict) -> bool:
@@ -67,13 +73,20 @@ def build_letter(company: str, title: str, signal: str) -> tuple[str, str]:
     return SUBJECT.replace("{社名}", company)[:60], body.strip() + "\n"
 
 
-def discover_more(mode: str) -> int:
-    if len(pending(mode)) >= config.SAAS_POOL_MIN:
+def ready(mode: str) -> list[dict]:
+    """まだ試していない候補のうち、いまの条件でも送り先にしてよいもの"""
+    index = news_index()
+    return [c for c in pending(mode) if (n := index.get(c["URL"])) and still_ok(n)]
+
+
+def discover_more(mode: str, want: int, feed) -> int:
+    """PR TIMES から、新しい候補を want 社まで足す（feed は prtimes.find の続き）"""
+    if want <= 0:
         return 0
     known = load_companies()
     reg = Registry(known)
-    rows = []
-    for r in prtimes.find(known_release_urls(), log=log):
+    added = 0
+    for r in feed:
         why = prtimes.judge(r)
         entry = {"日時": f"{datetime.now():%Y-%m-%d %H:%M}", "社名": r.company, "URL": r.site, "段階": "候補",
                  "ニュース": r.url, "見出し": r.title, "動き": r.signal, "業種": r.industry, "上場": r.listed,
@@ -84,10 +97,13 @@ def discover_more(mode: str) -> int:
             continue
         reg.add(r.company, r.site)
         save_research(entry)
-        rows.append({"社名": r.company, "URL": r.site, "所在地": "", "業種": f"{r.industry}（PR TIMES）"})
-    append_rows(config.COMPANIES_CSV, COMPANY_FIELDS, rows)
-    log(f"送り先探し：{len(rows)}社を候補に追加")
-    return len(rows)
+        append_rows(config.COMPANIES_CSV, COMPANY_FIELDS,
+                    [{"社名": r.company, "URL": r.site, "所在地": "", "業種": f"{r.industry}（PR TIMES）"}])
+        added += 1
+        if added >= want:
+            break
+    log(f"送り先探し：{added}社を候補に追加")
+    return added
 
 
 def run(count: int, live: bool, headed: bool = False, wait: bool = True) -> None:
@@ -101,20 +117,27 @@ def run(count: int, live: bool, headed: bool = False, wait: bool = True) -> None
         if count <= 0:
             log("本日の送信上限に達しています")
             return
-    discover_more(mode)
-    targets = [c for c in pending(mode) if (n := news_for(c["URL"])) and still_ok(n)]
-    log(f"{mode}モード：候補 {len(targets)}社 / 今回 最大{count}件")
+    feed = iter(prtimes.find(known_release_urls(), log=log))
+    discover_more(mode, count * POOL_PER_SEND - len(ready(mode)), feed)
+    log(f"{mode}モード：候補 {len(ready(mode))}社 / 今回 最大{count}件")
     config.SCREENSHOT_DIR.mkdir(exist_ok=True)
 
-    sent = 0
+    sent, tried, rounds, i = 0, set(), 0, 0
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=not headed, executable_path=os.environ.get("CHROMIUM_PATH") or None)
         ctx = browser.new_context(locale="ja-JP", user_agent=config.USER_AGENT, viewport={"width": 1280, "height": 900})
         ctx.set_default_timeout(config.PAGE_TIMEOUT_MS)
         try:
-            for i, c in enumerate(targets, 1):
-                if sent >= count:
-                    break
+            while sent < count:
+                c = next((x for x in ready(mode) if x["URL"] not in tried), None)
+                if c is None:   # 候補を使い切った → 探し足す
+                    if rounds >= MAX_ROUNDS or not discover_more(mode, (count - sent) * POOL_PER_SEND, feed):
+                        log("候補が見つからないため、今日はここまで")
+                        break
+                    rounds += 1
+                    continue
+                i += 1
+                tried.add(c["URL"])
                 name, url = c["社名"], c["URL"]
                 page = ctx.new_page()
                 page.on("dialog", lambda d: d.accept())

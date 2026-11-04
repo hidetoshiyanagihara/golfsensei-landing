@@ -58,6 +58,9 @@ Instagramは画像を公開URLから取りに来るため、画像をリポジ�
 - 記録は `form_sender/state.enc`（暗号化）。鍵は Secrets の `FORM_STATE_KEY`（合言葉は柳原さんが保管。チャットで共有済み。リポジトリには書かない）
 - 本番は `form_sender/LIVE_ON` があるときだけ。止めるときはこのファイルを消す
 - 11/1 のテスト入力で見つけた問題（値が消える欄、VTuber・マッチングアプリ・営業支援の会社の混入）は修正済み
+- 実際の定時実行は16時半ごろ（GitHubの遅れ）。11/2〜11/4で11社送信（7・4・0）。送れるのはおよそ3社に1社
+- 11/4：「とにかく毎日10件」（柳原さん）。PR TIMES のキーワード検索 API（/api/search_release.php）で過去120日までさかのぼり、送りたい件数の4倍の候補をそろえ、尽きたら探し足す（試算：ニュース153件で条件に合う会社40社、約6分）
+- LPと紹介パートナー募集（/partner）の申し込みは Googleフォーム「AXION SALES お申し込み」に届く（通知メールは柳原さんのGmail）。パートナー募集は完全成果報酬・業務委託。報酬額は未定（決まるまでページに金額を書かない）
 
 ## 今後やること
 - LinkedIn（上記）：会社ページ作成 → developer app（Share on LinkedIn ＋ Sign In with LinkedIn using OpenID Connect）→ OAuth Token Tools でスコープ `openid profile w_member_social` のトークン発行 → `LI_ACCESS_TOKEN` 登録

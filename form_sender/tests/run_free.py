@@ -64,6 +64,21 @@ check(prtimes.judge(R(title="VTuberと企業をつなぐプラットフォーム
 check(prtimes.judge(R(title="千葉道場ファンドからシリーズAの資金調達", company="株式会社F", **base)) == "",
       "「ファンド」は外す理由にしない")
 check(prtimes.parse_company('<dl class="_container_x"><dt>URL</dt><dd>-</dd></dl>')["URL"] == "", "URLが「-」なら公式サイトなし")
+from datetime import datetime, timedelta, timezone  # noqa: E402
+now = datetime.now(timezone(timedelta(hours=9)))
+api = {"articles": [
+    {"url": "/main/html/rd/p/000000001.000000001.html", "title": "株式会社新SaaS、シリーズAで資金調達",
+     "provider": {"name": "株式会社新SaaS"}, "updated_at": {"origin": now.isoformat()}},
+    {"url": "/main/html/rd/p/000000002.000000002.html", "title": "古いニュース、新サービスを提供開始",
+     "provider": {"name": "株式会社古い"}, "updated_at": {"origin": (now - timedelta(days=200)).isoformat()}},
+]}
+got = prtimes.parse_search(api)
+check(len(got) == 1 and got[0].company == "株式会社新SaaS" and got[0].url.endswith("000000001.000000001.html"),
+      "キーワード検索（JSON）から見出しと社名を読み、古いニュースは外す")
+check(prtimes.precheck(R(url="u", title="シリーズAで資金調達", company="株式会社A"))
+      and not prtimes.precheck(R(url="u", title="秋の新メニュー", company="株式会社A"))
+      and not prtimes.precheck(R(url="u", title="新サービス提供開始", company="KDDIテスト株式会社")),
+      "ニュースのページを開く前に、動きのない見出し・大手は外す")
 
 print("== 送り先探し→テスト→本番（疑似サイト）")
 releases = [
@@ -100,6 +115,11 @@ check(body.startswith("株式会社テスト工務店\nご担当者様") and "�
 n = len(posts)
 free.run(5, live=True, wait=False)
 check(len(json.loads(urllib.request.urlopen(f"http://127.0.0.11:{P}/__posts").read())) == n, "送信済みの会社には再送しない")
+feed = iter([R(url=f"https://prtimes.jp/r/1{k}", title="法人向けクラウドの新サービス提供開始", company=f"株式会社足す{k}",
+                site=f"https://tasu{k}.test", industry="情報通信", listed="未上場", capital="1億円", signal="launch")
+              for k in range(3)])
+check(free.discover_more("本番", 2, feed) == 2 and next(feed).company == "株式会社足す2",
+      "候補は必要な数そろったところで探すのをやめ、続きは次に使う")
 long_title = "あ" * 80
 check("「" + "あ" * (free.TITLE_MAX - 1) + "…」" in free.build_letter("株式会社X", long_title, "")[1], "長い見出しは途中で切る")
 
