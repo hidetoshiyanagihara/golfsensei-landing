@@ -28,6 +28,17 @@
       "permanent": false
     },
     {
+      "source": "/apo",
+      "has": [
+        {
+          "type": "host",
+          "value": "axionsales.vercel.app"
+        }
+      ],
+      "destination": "/axion-caller.html",
+      "permanent": false
+    },
+    {
       "source": "/privacy",
       "has": [
         {
