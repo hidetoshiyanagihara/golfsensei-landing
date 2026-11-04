@@ -1,4 +1,5 @@
 # フォーム営業・無料版（form_sender/free.py）。平日の朝、PR TIMES のニュースから送り先を拾い、決まった文面で問い合わせフォームから送る。
+# あわせて、営業代行の会社に「下請け（協力会社）として受けます」と1日5件送る（main.py agency）。
 # AI（Claude）は使わないのでクレジットはかからない。AIで1社ずつ調べる版は python main.py saas（費用がかかるため止めている）
 # リポジトリは公開なので、送り先・調査メモ・結果は暗号化した form_sender/state.enc にだけ残し、ログには会社名を出さない。
 name: Form sales
@@ -14,6 +15,9 @@ on:
       count:
         description: "送る（テストは入力する）件数"
         default: "3"
+      agency_count:
+        description: "営業代行の会社に、下請けとして受けますと送る件数"
+        default: "2"
 
 permissions:
   contents: write
@@ -29,6 +33,7 @@ jobs:
     env:
       MODE: ${{ github.event.inputs.mode || 'live' }}
       COUNT: ${{ github.event.inputs.count || '10' }}
+      AGENCY_COUNT: ${{ github.event.inputs.agency_count || '5' }}
       FORM_STATE_KEY: ${{ secrets.FORM_STATE_KEY }}
     defaults:
       run:
@@ -64,6 +69,11 @@ jobs:
       - name: 探す・送る
         if: steps.gate.outputs.go == 'true'
         run: python main.py free --mode "$MODE" --count "$COUNT"
+
+      # 営業代行の会社に「下請け（協力会社）として受けます」と送る（2026-11-04 柳原さん指示。お客さま向けの10件とは別枠）
+      - name: 営業代行の会社に下請けの売り込み
+        if: steps.gate.outputs.go == 'true'
+        run: python main.py agency --mode "$MODE" --count "$AGENCY_COUNT"
 
       - name: 記録を暗号化して保存
         if: always() && steps.gate.outputs.go == 'true'
