@@ -1,0 +1,55 @@
+# ig-growth（新しい Instagram アカウント）のインサイトを公式 API で取得して data/ に記録する（任意）。
+# Secrets に IG_GROWTH_TOKEN が無いときは何もせずに終わる。投稿・いいね・フォローなどの操作は一切しない。
+# 注意：このリポジトリは Public のため、記録した数字（再生数など）も公開されます。
+name: IG growth insights
+
+on:
+  schedule:
+    - cron: "23 23 * * *"   # 毎朝 8:23（日本時間）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ig-growth-insights
+  cancel-in-progress: false
+
+jobs:
+  insights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HAS_TOKEN: ${{ secrets.IG_GROWTH_TOKEN != '' }}
+    defaults:
+      run:
+        working-directory: ig-growth
+    steps:
+      - name: トークンの確認
+        working-directory: .
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then echo "IG_GROWTH_TOKEN が未設定のためスキップします"; fi
+
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_TOKEN == 'true' }}
+
+      - uses: actions/setup-python@v5
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        with:
+          python-version: "3.12"
+
+      - name: インサイトを取得
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        env:
+          IG_GROWTH_TOKEN: ${{ secrets.IG_GROWTH_TOKEN }}
+        run: python tools/igtool.py insights --days 30
+
+      - name: 記録を保存
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/posts_log.csv data/followers_daily.csv
+          git commit -m "Instagram（ig-growth）のインサイト $(TZ=Asia/Tokyo date +%F)" || { echo "変更なし"; exit 0; }
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push
