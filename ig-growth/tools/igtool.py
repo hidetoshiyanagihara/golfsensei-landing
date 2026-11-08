@@ -49,11 +49,21 @@ def cmd_render(ids: list[str] | None = None, quiet: bool = False) -> list[str]:
                 (OUTPUT / "reels").mkdir(parents=True, exist_ok=True)
                 (OUTPUT / "reels" / f"{it.id}.srt").write_text(content.to_srt(it.telops), encoding="utf-8")
             made.append(f"{it.id}: 表紙＋字幕")
+        # 投稿のお知らせストーリーズ（自動投稿用）
+        if it.kind == "reel" and it.cover:
+            cover_img, story_title = OUTPUT / "reels" / f"{it.id}_cover.jpg", it.cover.get("title", "")
+        elif it.kind == "carousel" and it.slides:
+            cover_img, story_title = OUTPUT / "carousels" / it.id / "01.jpg", it.slides[0].get("title", "")
+        else:
+            continue
+        render.render_story_announce(it.id, story_title, cover_img, brand, OUTPUT / "stories" / "auto" / f"{it.id}.jpg")
     if not ids:
         render.render_story_templates(brand, OUTPUT / "stories")
         render.render_brand(brand, OUTPUT / "brand")
         made.append("ストーリーズ背景・アイコン・ハイライト表紙")
     write_gallery()
+    import prompts_page
+    made.append("プロンプト集ページ " + prompts_page.write_page())
     if not quiet:
         print("\n".join(made))
         for w in render.warnings:
@@ -96,6 +106,12 @@ def cmd_sync_log() -> int:
     have = {r["投稿ID"] for r in logs}
     items = {it.id: it for it in content.load_items()}
     added = 0
+    for r in logs:  # 台本があとから書かれた行は、フック型・尺を埋める
+        it = items.get(r["投稿ID"])
+        if it and not r.get("フック型"):
+            r["フック型"] = it.meta.get("フック型", "")
+        if it and it.telops and not r.get("尺(秒)"):
+            r["尺(秒)"] = str(int(round(it.telops[-1].end)))
     for r in read_csv(CALENDAR_CSV):
         if r["形式"] not in ("リール", "カルーセル") or r["ID"] in have:
             continue
@@ -201,6 +217,13 @@ def write_gallery() -> None:
         c = cal.get(rid, {})
         parts.append(f'<figure><a href="reels/{p.name}"><img loading=lazy src="reels/{p.name}"></a><figcaption>{rid} '
                      f'{c.get("日付", "")}<br><a href="reels/{rid}.srt">字幕 .srt</a></figcaption></figure>')
+    parts.append("</div><h2>リール動画（自動生成）</h2><div class=row>")
+    for p in sorted((OUTPUT / "videos").glob("*.mp4")) if (OUTPUT / "videos").exists() else []:
+        parts.append(f'<figure><video controls preload=none playsinline poster="reels/{p.stem}_cover.jpg" '
+                     f'src="videos/{p.name}" style="height:260px;border-radius:8px"></video><figcaption>{p.stem}</figcaption></figure>')
+    parts.append("</div><h2>お知らせストーリーズ（自動投稿用）</h2><div class=row>")
+    parts += [f'<a href="stories/auto/{p.name}"><img loading=lazy src="stories/auto/{p.name}"></a>'
+              for p in imgs(OUTPUT / "stories" / "auto", "*.jpg")]
     parts.append("</div><h2>ストーリーズ背景</h2><div class=row>")
     parts += [f'<a href="stories/{p.name}"><img loading=lazy src="stories/{p.name}"></a>'
               for p in imgs(OUTPUT / "stories", "*.jpg")]
@@ -213,7 +236,7 @@ def write_gallery() -> None:
 .row{{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px}}img{{height:260px;border-radius:8px;border:1px solid #E8E4DA}}
 figure{{margin:0;text-align:center;font-size:12px}}small{{color:#6B7280;font-weight:normal}}</style>
 <h1>投稿素材 {html.escape(brand['handle'])}</h1>
-<p>画像をタップ → 長押しで「写真に保存」。カルーセルは左から順番に選んで投稿します。</p>
+<p>投稿は自動で行われます（tools/publish.py）。手で投稿したいときは、画像をタップ → 長押しで「写真に保存」。<a href="prompts.html">プロンプト集ページ</a></p>
 {''.join(parts)}</html>"""
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "index.html").write_text(page, encoding="utf-8")

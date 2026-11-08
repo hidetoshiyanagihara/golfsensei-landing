@@ -6,6 +6,11 @@
   },
   "redirects": [
     {
+      "source": "/ai",
+      "destination": "/ig-growth/output/prompts.html",
+      "permanent": false
+    },
+    {
       "source": "/:src(x|instagram|youtube|linkedin|form)",
       "has": [
         {

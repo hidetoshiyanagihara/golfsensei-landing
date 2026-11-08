@@ -38,6 +38,8 @@ class Item:
     cover: dict = field(default_factory=dict)
     telops: list = field(default_factory=list)
     slides: list = field(default_factory=list)
+    video: dict = field(default_factory=dict)
+    prompt_text: str = ""
 
     @property
     def caption(self) -> str:
@@ -126,6 +128,13 @@ def parse_file(path: Path, kind: str) -> Item:
         item.telops = parse_telop(blocks["telop"])
     if "slides" in blocks:
         item.slides = parse_slides(blocks["slides"])
+    if "video" in blocks:
+        item.video = parse_kv_block(blocks["video"])
+    sec = re.search(r"^## 入力するプロンプト[^\n]*\n(.*?)(?=^## )", text, re.S | re.M)
+    if sec:
+        plain = re.findall(r"^```[ \t]*\n(.*?)^```", sec.group(1), re.S | re.M)
+        if plain:
+            item.prompt_text = plain[-1].strip()
     return item
 
 

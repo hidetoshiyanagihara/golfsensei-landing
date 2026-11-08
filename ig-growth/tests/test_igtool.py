@@ -151,5 +151,99 @@ def insights_merge_with_mock_api():
         assert "取得できず" in out
 
 
+@test
+def publisher_schedule_and_posting():
+    import json
+    import shutil
+    import publish
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for name in ("calendar_30days.csv",):
+            shutil.copy(common.CALENDAR_CSV, tmp / name)
+        shutil.copy(common.POSTS_LOG_CSV, tmp / "posts.csv")
+        shutil.copy(common.ROOT / "brand.json", tmp / "brand.json")
+        publish.CALENDAR_CSV, publish.POSTS_LOG_CSV = tmp / "calendar_30days.csv", tmp / "posts.csv"
+        publish.STATE_JSON, publish.ROOT = tmp / "published.json", tmp
+        import os
+        os.environ["IG_GROWTH_TOKEN"] = "dummy"
+        calls = []
+        seq = iter(range(1, 10_000))
+
+        def fake_api(method, path, params=None):
+            calls.append((method, path, dict(params or {})))
+            if path == "me":
+                return {"user_id": "U1", "username": "x"}
+            if path.endswith("/media"):
+                return {"id": f"c{next(seq)}"}
+            if path.endswith("/media_publish"):
+                return {"id": f"m{next(seq)}"}
+            if params and params.get("fields", "").startswith("status_code"):
+                return {"status_code": "FINISHED"}
+            if params and params.get("fields") == "permalink,timestamp":
+                return {"permalink": f"https://www.instagram.com/p/{path}/"}
+            raise AssertionError(path)
+
+        publish.api, publish.url_ok, publish.sleep = fake_api, (lambda u: True), (lambda s: None)
+        J = publish.JST
+        # 1) 11/15 19:05：C02（カルーセル10枚）だけ投稿
+        assert publish.run(dt.datetime(2026, 11, 15, 19, 5, tzinfo=J)) == 0
+        st = json.loads(publish.STATE_JSON.read_text())
+        assert list(st) == ["C02"] and st["C02"]["permalink"]
+        kids = [c for c in calls if c[2].get("is_carousel_item") == "true"]
+        assert len(kids) == 10 and kids[0][2]["image_url"].endswith("/carousels/C02/01.jpg")
+        car = [c for c in calls if c[2].get("media_type") == "CAROUSEL"][0]
+        assert car[2]["caption"].startswith("【保存版】") and "#プロンプト" in car[2]["caption"]
+        log = {r["投稿ID"]: r for r in common.read_csv(publish.POSTS_LOG_CSV)}
+        assert log["C02"]["投稿URL"].startswith("https://www.instagram.com/")
+        # 2) 19:45：C01 とお知らせストーリーズ S-C02 を投稿（フィードは1件だけ）
+        calls.clear()
+        publish.run(dt.datetime(2026, 11, 15, 19, 45, tzinfo=J))
+        st = json.loads(publish.STATE_JSON.read_text())
+        assert {"C01", "S-C02"} <= set(st) and "S-C01" not in st
+        assert any(c[2].get("media_type") == "STORIES" and c[2]["image_url"].endswith("/stories/auto/C02.jpg")
+                   for c in calls)
+        # 3) リール：動画と表紙の URL
+        calls.clear()
+        publish.run(dt.datetime(2026, 11, 16, 20, 5, tzinfo=J))
+        reel = [c for c in calls if c[2].get("media_type") == "REELS"][0][2]
+        assert reel["video_url"].endswith("/videos/R01.mp4") and reel["cover_url"].endswith("/reels/R01_cover.jpg")
+        # 4) 素材が未公開なら投稿しない
+        calls.clear()
+        publish.url_ok = lambda u: False
+        publish.run(dt.datetime(2026, 11, 17, 20, 5, tzinfo=J))
+        assert not any(c[1].endswith("media_publish") for c in calls)
+        # 5) 失敗は記録して終了コード 1
+        publish.url_ok = lambda u: True
+
+        def broken(method, path, params=None):
+            raise publish.PublishError("API エラー 400")
+        publish.api = broken
+        assert publish.run(dt.datetime(2026, 11, 17, 20, 5, tzinfo=J)) == 1
+        assert json.loads(publish.STATE_JSON.read_text())["R02"]["tries"] == 1
+
+
+@test
+def publisher_reschedules_when_started_late():
+    import json
+    import shutil
+    import publish
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        shutil.copy(common.CALENDAR_CSV, tmp / "cal.csv")
+        shutil.copy(common.POSTS_LOG_CSV, tmp / "posts.csv")
+        shutil.copy(common.ROOT / "brand.json", tmp / "brand.json")
+        publish.CALENDAR_CSV, publish.POSTS_LOG_CSV = tmp / "cal.csv", tmp / "posts.csv"
+        publish.STATE_JSON, publish.ROOT = tmp / "published.json", tmp
+        now = dt.datetime(2026, 11, 20, 10, 0, tzinfo=publish.JST)
+        msg = publish.reschedule_if_late(now, {})
+        assert msg and "5 日" in msg, msg
+        cal = {r["ID"]: r for r in common.read_csv(publish.CALENDAR_CSV)}
+        assert cal["C02"]["日付"] == "2026-11-20" and cal["R01"]["日付"] == "2026-11-21" and cal["R01"]["曜日"] == "土"
+        assert json.loads((tmp / "brand.json").read_text())["start_date"] == "2026-11-21"
+        log = {r["投稿ID"]: r for r in common.read_csv(publish.POSTS_LOG_CSV)}
+        assert log["R01"]["投稿日"] == "2026-11-21"
+        assert publish.reschedule_if_late(now, {}) is None   # 2 回目はずらさない
+
+
 if __name__ == "__main__":
     print(f"\n{len(PASSED)} tests passed")

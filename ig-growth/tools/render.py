@@ -594,3 +594,28 @@ def render_brand(brand: dict, out_dir: Path) -> list[Path]:
         paths.append(out_dir / f"highlight_{name}.jpg")
         img.save(paths[-1], "JPEG", quality=92)
     return paths
+
+
+def render_story_announce(item_id: str, title: str, cover_path: Path, brand: dict, out: Path) -> Path:
+    """投稿のお知らせストーリーズ（自動投稿用）。表紙を小さく見せて、プロフィールへ誘導する。"""
+    c = {k: hex2rgb(v) for k, v in brand["colors"].items()}
+    img = Image.new("RGB", (W, H_TALL), c["ink"])
+    d = ImageDraw.Draw(img)
+    y = 300
+    _, _, _, ph = pill(d, MARGIN, y, "新しい投稿", font("Bold", 40), c["orange"], c["white"], 30, 14)
+    y += ph + 50
+    if cover_path.exists():
+        cov = Image.open(cover_path).convert("RGB")
+        max_h = 1440 - y
+        tw = int(min(700, max_h * cov.width / cov.height))
+        th = int(tw * cov.height / cov.width)
+        cov = cov.resize((tw, th))
+        x = (W - tw) // 2
+        d.rounded_rectangle([x - 8, y - 8, x + tw + 8, y + th + 8], radius=24, fill=c["white"])
+        img.paste(cov, (x, y))
+        y += th + 40
+    hint = "プロフィールの最新投稿から見られます"
+    d.text(((W - font("Bold", 40).getlength(hint)) / 2, y), hint, font=font("Bold", 40), fill=c["orange"])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out, "JPEG", quality=92)
+    return out

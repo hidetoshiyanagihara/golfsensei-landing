@@ -49,8 +49,11 @@ def fetch_media(limit: int = 50) -> list[dict]:
     return data.get("data", [])
 
 
-def fetch_insights(media_id: str) -> tuple[dict, list[str]]:
-    """まとめて取得し、失敗したら 1 指標ずつ取り直す（その投稿の種類で使えない指標があるため）。"""
+_SUPPORTED: dict[str, list[str]] = {}   # 投稿の種類ごとに「取れた指標」を覚えて、2 件目からは 1 回で取る
+
+
+def fetch_insights(media_id: str, kind: str = "") -> tuple[dict, list[str]]:
+    """まとめて取得し、失敗したら 1 指標ずつ取り直す（投稿の種類によって使えない指標があるため）。"""
     got, skipped = {}, []
 
     def parse(resp):
@@ -60,14 +63,19 @@ def fetch_insights(media_id: str) -> tuple[dict, list[str]]:
             if isinstance(v, (int, float)):
                 got[m["name"]] = v
 
+    names = _SUPPORTED.get(kind) or list(METRICS)
     try:
-        parse(http_get(f"{media_id}/insights", {"metric": ",".join(METRICS)}))
+        parse(http_get(f"{media_id}/insights", {"metric": ",".join(names)}))
+        if kind in _SUPPORTED:
+            skipped = [n for n in METRICS if n not in names]
     except RuntimeError:
-        for name in METRICS:
+        for name in names:
             try:
                 parse(http_get(f"{media_id}/insights", {"metric": name}))
             except RuntimeError:
                 skipped.append(name)
+        if kind and got:
+            _SUPPORTED[kind] = [n for n in names if n not in skipped]
     return got, skipped
 
 
@@ -93,7 +101,7 @@ def run(days: int = 30) -> str:
             else:
                 unmatched.append(f"{ts:%m/%d %H:%M} {kind} {m['permalink']}")
                 continue
-        vals, skipped = fetch_insights(m["id"])
+        vals, skipped = fetch_insights(m["id"], kind)
         if "likes" not in vals and m.get("like_count") is not None:
             vals["likes"] = m["like_count"]
         if "comments" not in vals and m.get("comments_count") is not None:

@@ -3,8 +3,8 @@
 **コンセプト**：「その場でコピペして、今日の仕事が 1 つ早く終わる。」
 営業会社の代表が、仕事で実際に使っている AI の頼み方を、無料版だけで・コピペできる形で出す新しい Instagram アカウント。
 
-- 費用：初期 0 円・月額 0 円（Instagram アプリ・Canva 無料版・CapCut 無料版・Google ドキュメント／スプレッドシート・このフォルダのツール）
-- 有料 AI・有料 API は使わない。投稿は Instagram 公式アプリで手動（自動いいね・自動フォロー・自動 DM はしない）
+- 費用：初期 0 円・月額 0 円（GitHub Actions・Vercel・Meta 公式 Instagram API はいずれも無料枠。有料 AI・有料 API は使わない）
+- 投稿・記録・レポートは全自動。自動いいね・自動フォロー・自動 DM・自動コメントはしない
 - 目標（挑戦目標）：30 日 1,000 人／60 日 3,000 人／90 日 5,000 人
 
 既存の AXION SALES の SNS 自動投稿（`../axion-autopost/`）とは**別のアカウント・別の仕組み**です。
@@ -15,7 +15,7 @@
 
 | 順 | ファイル | 内容 |
 |---|---|---|
-| 1 | この README の「運用開始の手順」 | あなたがやること（全部で約 5 時間） |
+| 1 | この README の「自動でやること・あなたがやること」 | あなたがやるのは最初の 1 回・約 30 分だけ |
 | 2 | [docs/02_ジャンル選定.md](docs/02_ジャンル選定.md) | なぜこのジャンルか（比較表） |
 | 3 | [docs/03_コンセプト設計.md](docs/03_コンセプト設計.md) | ターゲット・5 つの柱・口調 |
 | 4 | [docs/04_アカウント名・プロフィール・デザイン.md](docs/04_アカウント名・プロフィール・デザイン.md) | 名前・プロフィール文・デザインのルール |
@@ -40,16 +40,18 @@ ig-growth/
 │   └─ competitor_research_sheet.csv  競合調査シート（アプリで30分調べて埋める）
 ├─ content/                     ← 投稿の中身（STEP5〜7）
 │   ├─ calendar_30days.csv         30日カレンダー（リール22・カルーセル10・ストーリーズ毎日）
-│   ├─ reels/R01〜R10_*.md         リール台本10本（タイトル・フック・台本・ナレーション・テロップ・撮影・キャプション・ハッシュタグ・CTA）
-│   ├─ carousels/C01〜C05_*.md     カルーセル原稿5本（スライドの文章・キャプション）
+│   ├─ reels/R01〜R22_*.md         リール台本22本（タイトル・フック・台本・ナレーション・テロップ・撮影・キャプション・ハッシュタグ・CTA）
+│   ├─ carousels/C01〜C10_*.md     カルーセル原稿10本（スライドの文章・キャプション）
 │   ├─ captions.csv                キャプション管理（自動生成）
 │   └─ ideas_backlog.csv           次回投稿候補リスト
-├─ assets/プロンプト集_無料配布.md  ← プロフィールのリンク先（Google ドキュメントに貼る）。#00〜#30
+├─ assets/プロンプト集_無料配布.md  ← プロフィールのリンク先の原稿（#00〜#34）。output/prompts.html に自動変換
 ├─ output/                      ← 投稿に使う画像（自動生成）
-│   ├─ index.html                  素材ギャラリー（スマホで開いて画像を保存）
-│   ├─ carousels/C01〜C05/         カルーセル画像（1080×1350）
+│   ├─ index.html                  素材ギャラリー
+│   ├─ prompts.html                プロンプト集ページ（/ai で公開）
+│   ├─ videos/R01〜R22.mp4         リール動画（自動生成）
+│   ├─ carousels/C01〜C10/         カルーセル画像（1080×1350）
 │   ├─ reels/                      リールの表紙（1080×1920）と字幕ファイル（.srt）
-│   ├─ stories/                    ストーリーズの背景6種
+│   ├─ stories/                    ストーリーズの背景6種・auto/ にお知らせストーリーズ
 │   └─ brand/                      アイコン3案・ハイライト表紙5種
 ├─ data/                        ← 数字の記録（STEP8）
 │   ├─ 管理シート.xlsx             Google スプレッドシート用（カレンダー・投稿実績・フォロワー推移・集計・改善案・候補…）
@@ -57,84 +59,70 @@ ig-growth/
 │   ├─ followers_daily.csv         フォロワー推移
 │   └─ improvements.csv            改善案管理
 ├─ reports/                     ← 週次レポート（自動生成）
-├─ tools/igtool.py              ← 制作・管理ツール
+├─ tools/igtool.py              ← 制作・管理ツール（publish.py＝自動投稿、video.py＝リール動画、insights.py＝数字の取得）
 └─ tests/test_igtool.py         ← オフラインのテスト
 ```
 
 ---
 
-## 運用開始の手順（あなたがやること）
+## 自動でやること・あなたがやること
 
-### ① 決めること（10分）— 下の 4 つを Claude Code かチャットで教えてください
-| 項目 | 初期設定（このまま進めてもよい） |
-|---|---|
-| アカウント名 | `@copipe_ai_shigoto`／名前の欄「コピペAI仕事術｜営業社長のAI活用」（候補は docs/04） |
-| 名乗り方 | 「営業会社の代表」とだけ書き、社名・本名は出さない |
-| 顔出し・声出し | どちらもなし（画面録画・手元・テロップのみ） |
-| 運用開始日 | 2026-11-16（月）。前日 11/15 に準備投稿 |
-
-アカウント名を変える場合：`brand.json` の `handle` を書き換えて `python tools/igtool.py render`（または Claude Code に「アカウント名を @○○ にして画像を作り直して」）。
-
-### ② アカウントを作る（20分）
-1. Instagram アプリ → 自分のプロフィール → 右上の名前 →「アカウントを追加」→「新しいアカウントを作成」
-2. ユーザーネームを入力（使えない場合は docs/04 の別候補）
-3. 設定 →「アカウントの種類とツール」→「プロアカウントに切り替える」→ **クリエイター** → カテゴリ「デジタルクリエイター」（または「教育」）
-4. プロフィールを編集
-   - 名前：`コピペAI仕事術｜営業社長のAI活用`
-   - 自己紹介：docs/04 の **A案** をコピーして貼る
-   - アイコン：`output/brand/icon_A.jpg`（③の方法で保存）
-
-### ③ 素材をスマホに保存する（10分）
-- GitHub アプリ（またはブラウザ）でこのリポジトリの `ig-growth/output/` を開き、画像を長押し →「写真に保存」
-- main ブランチに反映されたあとは、`https://golfsensei-landing.vercel.app/ig-growth/output/` をスマホで開くと一覧で保存できます（反映前は GitHub から）
-
-### ④ プロンプト集（プロフィールのリンク先）を作る（20分）
-1. Google ドキュメントで新しいドキュメントを作り、タイトルを「仕事で使うプロンプト集」に
-2. `assets/プロンプト集_無料配布.md` の「仕事で使うプロンプト集」以降をコピーして貼る（（アカウント名）を書き換える）
-3. 「共有」→ 一般的なアクセスを「**リンクを知っている全員**（閲覧者）」にしてリンクをコピー
-4. Instagram → プロフィールを編集 →「リンク」→「外部リンクを追加」→ URL を貼り、タイトル「仕事で使うプロンプト集（無料）」
-
-### ⑤ 準備投稿（Day0：11/15）（40分）
-1. **C01「はじめまして」**：＋ →「投稿」→ `output/carousels/C01/` の 01〜08 を順に選ぶ → キャプションは `content/carousels/C01_はじめまして.md` の「キャプション」と「ハッシュタグ」（`content/captions.csv` の「全文」列でも可）→ シェア
-2. **C02「頼み方の型」**：同様に 01〜10
-3. 2 つとも投稿の「…」→「プロフィールに固定」
-4. ストーリーズで C01 をシェア →「ハイライト」に追加（名前「はじめに」、カバー `output/brand/highlight_01_はじめに.jpg`）
-5. 30 分アプリ調査：docs/01 の 5 章 → `docs/competitor_research_sheet.csv` を埋める
-
-### ⑥ 管理シートを用意する（10分）
-1. `data/管理シート.xlsx` を Google ドライブにアップロード → 開く →「ファイル」→「Google スプレッドシートとして保存」
-2. 以後、数字はこのスプレッドシートに入れる（黄色の列だけ）。空欄＝未取得、0 と区別する
-
-### ⑦ 毎日の運用（Day1〜）
-| いつ | やること | 見るファイル |
+### 自動（GitHub Actions・無料）
+| いつ | 何を | 仕組み |
 |---|---|---|
-| 前の週末 | 翌週のリール 5 本を撮影・編集（1 本 30〜40 分） | `content/reels/R0X_*.md` の「映像構成・撮影リスト」 |
-| 投稿前 | 台本の「投稿前チェック」 | 同上 |
-| 20:00 | リール投稿（表紙は `output/reels/R0X_cover.jpg`、キャプションは md の「キャプション」＋「ハッシュタグ」） | カレンダー |
-| 12:10（水・土） | カルーセル投稿 | `output/carousels/` |
-| 投稿後 1 時間 | コメント全部に返信 | — |
-| 毎日 | ストーリーズ 1〜3 枚・同ジャンルの投稿に本気のコメント 3〜5 件（手動） | docs/08 |
-| 投稿 24〜48 時間後 | 数字をスプレッドシートの「投稿実績」へ | docs/07 の 0 章 |
-| 毎朝 | フォロワー数を「フォロワー推移」へ | — |
-| 日曜 | 週次レビュー（60分） | docs/07 |
+| 予定の時刻（リール 20:00、カルーセル 12:10） | カレンダーどおりにリール・カルーセルを投稿（キャプション・ハッシュタグ・表紙つき） | `IG growth post`（20 分ごと）→ `tools/publish.py` |
+| 投稿の 40 分後 | 「新しい投稿」のお知らせストーリーズ | 同上 |
+| 毎朝 8:23 | 再生数・リーチ・保存・シェア・フォロー数などを記録、フォロワー数を記録 | `IG growth insights` → `data/` |
+| 毎週日曜の朝 | 週次レポート（伸びた・伸びなかった投稿、柱・フック別の比較、目標ペース） | 同上 → `reports/` |
+| 毎週月曜 | トークンの延長（60 日で切れないように） | `Refresh Instagram token` |
+| 登録が遅れたとき | 未投稿の予定を丸ごと後ろへずらす（まとめて連投しない） | `tools/publish.py` |
 
-**リールの編集（CapCut 無料版）**
-1. 新しいプロジェクト → 画面録画した動画を追加 → 台本の秒数に合わせてカット・倍速
-2. テロップ：台本の「テロップ」欄を「テキスト」で入れる（PC 版 CapCut は `output/reels/R0X.srt` を字幕として読み込める場合あり）
-3. スタイル：白文字＋濃紺（#1B2333）の背景、画面の下 25% には置かない
-4. 書き出し：1080×1920・30fps → Instagram アプリでリール投稿 → 音源はアプリ内の「おすすめ」から → カバーは「カメラロールから追加」で表紙画像
-5. トライアル指定のリール（R08・R10 など）は、投稿画面の「トライアル」をオンにする（表示されない場合は通常投稿）
+- 投稿するものは全部このフォルダで作成済み：リール動画 22 本（`output/videos/`、文字アニメ＋プロンプト入力の演出＋オリジナル BGM、各 20 秒）、カルーセル 10 本、お知らせストーリーズ 32 枚
+- プロフィールのリンク先（プロンプト集）も自動で公開：**https://golfsensei-landing.vercel.app/ai** （コピーボタンつき。`assets/プロンプト集_無料配布.md` を直すと次の公開で反映）
+- 自動投稿を止める：`brand.json` の `"auto_post"` を `false` にする（Claude Code に「自動投稿を止めて」でも可）
+- いいね・フォロー・DM・コメントの自動化はしない（規約違反・アカウント停止の原因になるため）
 
-### ⑧ 毎週日曜：振り返り
-- スプレッドシートを「ファイル」→「ダウンロード」→「Microsoft Excel」で保存 → Claude Code に渡して
-  「ig-growth の管理シートを取り込んで、今週のレポートを作り、docs/07 の 6 つの問いに答えて、来週のカレンダーを直して」と依頼
-- 自分で動かす場合：`python tools/igtool.py import-sheet ダウンロードした.xlsx` → `python tools/igtool.py report`
+### あなたがやること（最初の 1 回だけ・約 30 分）
+Instagram の規約上、アカウント作成とログインが必要な操作は本人にしかできないため、ここだけお願いします。
+
+1. **アカウントを作る（10分）**
+   Instagram アプリ → プロフィール → 右上の名前 →「アカウントを追加」→「新しいアカウントを作成」→ ユーザーネーム `copipe_ai_shigoto`（使えなければ docs/04 の別案。**別の名前にしたら Claude Code に伝える**。画像・動画の名前を作り直します）
+2. **プロアカウントにする（2分）** ※自動投稿に必須
+   設定 →「アカウントの種類とツール」→「プロアカウントに切り替える」→ **クリエイター** → カテゴリ「デジタルクリエイター」
+3. **プロフィールを入れる（5分）**
+   - 名前：`コピペAI仕事術｜営業社長のAI活用`
+   - 自己紹介：docs/04 の **A案** をコピー
+   - リンク：`https://golfsensei-landing.vercel.app/ai`（タイトル「仕事で使うプロンプト集（無料）」）
+   - アイコン：`output/brand/icon_A.jpg`（GitHub アプリでこのファイルを開いて長押し →「写真に保存」）
+4. **投稿用のトークンを発行する（10分）** — AXION SALES のときと同じ画面です
+   [Meta for Developers](https://developers.facebook.com/apps/) → AXION SALES で作ったアプリ → Instagram →「Instagram ログインによる API 設定」→「アカウントを追加」で**新しいアカウント**でログイン → そのアカウントの「トークンを生成」
+   （権限は `instagram_business_basic` `instagram_business_content_publish` `instagram_business_manage_insights`。アプリが開発モードの場合は、新しいアカウントを「Instagram テスター」に追加して承認が必要なことがあります）
+5. **トークンを GitHub に登録する（2分）**
+   https://github.com/hidetoshiyanagihara/golfsensei-landing/settings/secrets/actions →「New repository secret」→ Name `IG_GROWTH_TOKEN`、Secret に 4 のトークン →「Add secret」
+   **トークンはチャットに貼らないでください。**
+6. **確認（任意）**：Actions →「IG growth post」→「Run workflow」（dry_run は 1）→ ログに投稿予定が出れば準備完了
+
+これで、予定日（最初は 11/15 19:00 の C02）から自動で投稿が始まります。登録が予定より遅れても、予定が自動で後ろにずれるので大丈夫です。
+
+### 自動化できないので、余裕があればやること（任意）
+| いつ | やること | 効果 |
+|---|---|---|
+| 最初の 2 投稿の後 | C01・C02 を「プロフィールに固定」（投稿の「…」から）。ハイライト「はじめに」を作る | プロフィールに来た人のフォロー率 |
+| 投稿後 1 時間 | コメントに返信（自動返信はしない方針） | コメント・関係づくり |
+| 毎日 10 分 | 同じジャンルの投稿に、本気のコメントを手で 3〜5 件 | 新しい人に見つけてもらう |
+| 好きなとき | ストーリーズでアンケート・質問箱（`output/stories/` の背景＋スタンプ） | 次の企画のネタ集め（API ではスタンプを付けられない） |
+
+### 週 1 回の振り返り
+日曜の朝に `reports/weekly_日付.md` ができます。Claude Code に
+「ig-growth の今週のレポートを見て、docs/07 の 6 つの問いに答えて、来週の企画を直して」
+と頼めば、台本の差し替え・新しい台本・画像と動画の作り直しまで行います。
+（自分で数字を入れたい場合は `data/管理シート.xlsx` を Google スプレッドシートで使い、`import-sheet` で取り込めます）
 
 ---
 
 ## ツールの使い方（tools/igtool.py）
 
-Python 3.10 以上・Pillow・openpyxl が必要（`pip install -r tools/requirements.txt`）。フォントは初回に自動ダウンロード。
+Python 3.10 以上・Pillow・openpyxl（動画は numpy・imageio-ffmpeg も）が必要（`pip install -r tools/requirements.txt`）。フォントは初回に自動ダウンロード。
 
 ```bash
 cd ig-growth
@@ -144,6 +132,9 @@ python tools/igtool.py check               # 文字数・ハッシュタグ数�
 python tools/igtool.py calendar --start 2026-11-23   # 運用開始日を変える（カレンダーの日付を振り直す）
 python tools/igtool.py report --start 2026-11-16 --end 2026-11-22
 python tools/igtool.py import-sheet 管理シート.xlsx
+python -c "import sys; sys.path.insert(0,'tools'); import video; video.render_videos(['R01'])"   # リール動画を作り直す
+python tools/publish.py plan               # 自動投稿の予定一覧
+python tools/publish.py run --dry-run      # 投稿せずに、いま何を投稿するかを表示
 python tests/test_igtool.py                # テスト（外部には接続しない）
 ```
 
@@ -152,14 +143,11 @@ python tests/test_igtool.py                # テスト（外部には接続し�
 - **カルーセル**（`content/carousels/*.md`）：```` ```slides ```` の中に `=== 種類` で 1 枚ずつ。種類は `cover` `text` `list` `prompt` `chat` `compare` `summary` `cta`。`**強調**` はオレンジ、`==マーカー==` は黄色の帯、`\n` で改行、`items:` の各行は `- 見出し｜説明`
 - 数字・実績は [docs/facts.md](docs/facts.md) にあるものだけ。新しい投稿のプロンプトは先にプロンプト集に追加してから
 
-### インサイトの自動取得（任意・無料）
-アプリから書き写す代わりに、Meta 公式の Instagram API（読み取りだけ）で数字を取得できます。
-1. [Meta for Developers](https://developers.facebook.com/) でアプリを作成 → Instagram →「Instagram ログインによる API 設定」→ 新しいアカウントを追加 → `instagram_business_basic` と `instagram_business_manage_insights` の権限でトークンを生成
-2. GitHub の Settings → Secrets and variables → Actions に `IG_GROWTH_TOKEN` として登録（**チャットやファイルには貼らない**）
-3. Actions の「IG growth insights」が毎朝 `data/posts_log.csv` と `data/followers_daily.csv` を更新
+### インサイトの自動取得
+上の手順 5 のトークンで、Actions の「IG growth insights」が毎朝 `data/posts_log.csv` と `data/followers_daily.csv` を更新します。
 - フォロワー外リーチ率・視聴維持率など API で取れない指標は空欄のまま（アプリで確認）
-- トークンは約 60 日で切れるので再発行して上書きする
-- **リポジトリが Public のため、記録した数字も公開されます**。気になる場合は使わず、スプレッドシート運用にしてください
+- トークンは毎週月曜に自動で延長されます（`GH_PAT` が登録済みのため）。延長に失敗したときは手順 4〜5 をやり直す
+- **リポジトリが Public のため、記録した数字も公開されます**
 
 ---
 
