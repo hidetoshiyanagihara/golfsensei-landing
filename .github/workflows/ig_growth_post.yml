@@ -1,0 +1,61 @@
+# ig-growth（新しい Instagram アカウント）の自動投稿。content/calendar_30days.csv の予定どおりに、
+# Meta 公式の Instagram API でリール・カルーセル・お知らせストーリーズを投稿する。
+# Secrets に IG_GROWTH_TOKEN が無いとき、または ig-growth/brand.json の auto_post が false のときは何もしない。
+# いいね・フォロー・DM・コメントの自動化はしない。
+name: IG growth post
+
+on:
+  schedule:
+    - cron: "7,27,47 * * * *"   # 20 分ごと（予定時刻を過ぎた投稿を 1 件ずつ出す）
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = 投稿せずに何をするかだけ表示 ／ 0 = 投稿する"
+        default: "1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ig-growth
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAS_TOKEN: ${{ secrets.IG_GROWTH_TOKEN != '' }}
+      DRY: ${{ github.event.inputs.dry_run || '0' }}
+    defaults:
+      run:
+        working-directory: ig-growth
+    steps:
+      - name: トークンの確認
+        working-directory: .
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then echo "IG_GROWTH_TOKEN が未設定のためスキップします（ig-growth/README.md の手順で登録）"; fi
+
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_TOKEN == 'true' }}
+
+      - uses: actions/setup-python@v5
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        with:
+          python-version: "3.12"
+
+      - name: 予定を過ぎた投稿を出す
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        env:
+          IG_GROWTH_TOKEN: ${{ secrets.IG_GROWTH_TOKEN }}
+        run: |
+          if [ "$DRY" = "1" ]; then python tools/publish.py run --dry-run; else python tools/publish.py run; fi
+
+      - name: 記録を保存
+        if: ${{ always() && env.HAS_TOKEN == 'true' && env.DRY != '1' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/published.json data/posts_log.csv content/calendar_30days.csv brand.json 2>/dev/null || true
+          git commit -m "Instagram（ig-growth）投稿の記録 $(TZ=Asia/Tokyo date '+%F %H:%M')" || { echo "変更なし"; exit 0; }
+          for i in 1 2 3; do git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break; sleep 5; done
