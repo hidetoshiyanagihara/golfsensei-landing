@@ -6,3 +6,4 @@ __pycache__/
 research.jsonl
 .discover_state.json
 screens.enc
+ss_*.csv

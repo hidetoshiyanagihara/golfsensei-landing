@@ -1,5 +1,6 @@
 # フォーム営業・無料版（form_sender/free.py）。平日の朝、PR TIMES のニュースから送り先を拾い、決まった文面で問い合わせフォームから送る。
 # あわせて、営業代行の会社に「下請け（協力会社）として受けます」と1日5件送る（main.py agency）。
+# 株式会社スターストラックとして、マンション管理会社に清掃の協力会社の案内を1日10件送る（main.py starstruck。form_sender/STARSTRUCK_ON があるときだけ本番）。
 # AI（Claude）は使わないのでクレジットはかからない。AIで1社ずつ調べる版は python main.py saas（費用がかかるため止めている）
 # リポジトリは公開なので、送り先・調査メモ・結果は暗号化した form_sender/state.enc にだけ残し、ログには会社名を出さない。
 name: Form sales
@@ -18,6 +19,9 @@ on:
       agency_count:
         description: "営業代行の会社に、下請けとして受けますと送る件数"
         default: "2"
+      ss_count:
+        description: "スターストラックとしてマンション管理会社に送る件数"
+        default: "3"
 
 permissions:
   contents: write
@@ -34,6 +38,7 @@ jobs:
       MODE: ${{ github.event.inputs.mode || 'live' }}
       COUNT: ${{ github.event.inputs.count || '10' }}
       AGENCY_COUNT: ${{ github.event.inputs.agency_count || '5' }}
+      SS_COUNT: ${{ github.event.inputs.ss_count || '10' }}
       FORM_STATE_KEY: ${{ secrets.FORM_STATE_KEY }}
     defaults:
       run:
@@ -74,6 +79,13 @@ jobs:
       - name: 営業代行の会社に下請けの売り込み
         if: steps.gate.outputs.go == 'true'
         run: python main.py agency --mode "$MODE" --count "$AGENCY_COUNT"
+
+      # 株式会社スターストラックの営業（2026-11-08 柳原さん指示）。本番は form_sender/STARSTRUCK_ON があるときだけ
+      - name: スターストラックとしてマンション管理会社に送る
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          if [ "$MODE" = "live" ] && [ ! -f STARSTRUCK_ON ]; then echo "STARSTRUCK_ON がないため送りません"; exit 0; fi
+          python main.py starstruck --mode "$MODE" --count "$SS_COUNT"
 
       - name: 記録を暗号化して保存
         if: always() && steps.gate.outputs.go == 'true'

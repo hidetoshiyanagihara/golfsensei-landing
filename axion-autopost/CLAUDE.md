@@ -64,6 +64,11 @@ Instagramは画像を公開URLから取りに来るため、画像をリポジ�
 - テレアポ担当募集（/apo、axion-caller.html、11/4）：在宅・業務委託・完全成果報酬、商談が実際に行われたアポ1件5,000円（税込）、月末締め翌月末払い。応募は同じGoogleフォームに「ご希望＝テレアポ担当応募」
 - LPと紹介パートナー募集（/partner）の申し込みは Googleフォーム「AXION SALES お申し込み」に届く（通知メールは柳原さんのGmail）。パートナー募集は完全成果報酬・業務委託。報酬は「初月の料金100%＋契約が続くかぎり毎月10%、お客さまの入金確認後に支払い」（11/4 柳原さん決定）。ページの文句は柳原さんが選んだ熱い調子（お前呼び）。根拠のない金額・「絶対稼げる」は書かない
 
+## スターストラックのフォーム営業（form_sender/starstruck.py、2026-11-08）
+- 株式会社スターストラック（柳原さんの清掃会社。マンション・アパートの共用部清掃）として、マンション管理会社に「共用部清掃の協力会社」の案内を送る。送り先はマンション管理業協会の会員一覧（愛知）。柳原さん指示で1社を除外（指紋で保持。社名はリポジトリに書かない）
+- 本番は `form_sender/STARSTRUCK_ON` があるときだけ。返信先は star.struck.hy@gmail.com（ホームページの問い合わせ先）
+- スターストラックの情報はAXIONのSNS・LPには出さない方針のまま（文面にも AXION の名前は出さない）
+
 ## 今後やること
 - LinkedIn（上記）：会社ページ作成 → developer app（Share on LinkedIn ＋ Sign In with LinkedIn using OpenID Connect）→ OAuth Token Tools でスコープ `openid profile w_member_social` のトークン発行 → `LI_ACCESS_TOKEN` 登録
 
