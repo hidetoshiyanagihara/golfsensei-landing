@@ -6,6 +6,17 @@
   },
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "copipe-ai.vercel.app"
+        }
+      ],
+      "destination": "/prompts",
+      "permanent": false
+    },
+    {
       "source": "/ai",
       "destination": "/ig-growth/output/prompts.html",
       "permanent": false
@@ -68,7 +79,7 @@
   ],
   "rewrites": [
     {
-      "source": "/",
+      "source": "/prompts",
       "has": [
         {
           "type": "host",
