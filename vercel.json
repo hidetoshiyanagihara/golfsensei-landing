@@ -65,5 +65,17 @@
       "destination": "/axion-sales.html",
       "permanent": false
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "copipe-ai.vercel.app"
+        }
+      ],
+      "destination": "/ig-growth/output/prompts.html"
+    }
   ]
 }

@@ -245,5 +245,29 @@ def publisher_reschedules_when_started_late():
         assert publish.reschedule_if_late(now, {}) is None   # 2 回目はずらさない
 
 
+@test
+def vercel_short_link_adds_domain_once():
+    import os
+    import vercel_domain as vd
+    os.environ["VERCEL_TOKEN"] = "dummy"
+    added = []
+
+    def fake(method, path, body=None, team=None):
+        if path == "/v2/teams":
+            return 200, {"teams": [{"id": "team_1"}]}
+        if path.endswith("/projects/golfsensei-landing") and method == "GET":
+            return (200, {}) if team == "team_1" else (404, {})
+        if path.endswith("/domains") and method == "GET":
+            return 200, {"domains": [{"name": d} for d in added]}
+        if path.endswith("/domains") and method == "POST":
+            added.append(body["name"])
+            return 200, {}
+        raise AssertionError(path)
+
+    vd.call = fake
+    assert vd.main() == 0 and added == ["copipe-ai.vercel.app"]
+    assert vd.main() == 0 and added == ["copipe-ai.vercel.app"]   # 2 回目は追加しない
+
+
 if __name__ == "__main__":
     print(f"\n{len(PASSED)} tests passed")
