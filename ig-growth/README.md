@@ -79,17 +79,17 @@ ig-growth/
 
 - 投稿するものは全部このフォルダで作成済み：リール動画 22 本（`output/videos/`、文字アニメ＋プロンプト入力の演出＋オリジナル BGM、各 20 秒）、カルーセル 10 本、お知らせストーリーズ 32 枚
 - プロフィールのリンク先（プロンプト集）も自動で公開：**https://copipe-ai.vercel.app** （コピーボタンつき。`assets/プロンプト集_無料配布.md` を直すと次の公開で反映）
-  - 短いアドレスは、下の手順 0 の Vercel トークンを登録すると自動で有効になります（それまでは https://golfsensei-landing.vercel.app/ai で同じページが開きます）
+  - 短いアドレスは 2026-11-09 に有効化済み（https://golfsensei-landing.vercel.app/ai でも同じページが開きます）
 - 自動投稿を止める：`brand.json` の `"auto_post"` を `false` にする（Claude Code に「自動投稿を止めて」でも可）
 - いいね・フォロー・DM・コメントの自動化はしない（規約違反・アカウント停止の原因になるため）
 
 ### あなたがやること（最初の 1 回だけ・約 30 分）
 Instagram の規約上、アカウント作成とログインが必要な操作は本人にしかできないため、ここだけお願いします。
 
-0. **短いリンクを有効にする（3分）**
+0. **短いリンクを有効にする（2026-11-09 完了済み・アドレスを変えるときだけ）**
    - Vercel のトークンを発行：https://vercel.com/account/tokens →「Create Token」→ 名前 `ig-growth`、Scope は golfsensei-landing のプロジェクトがあるアカウント（またはチーム）、Expiration は「1 day」で OK →「Create」→ 表示されたトークンをコピー
    - GitHub に登録：https://github.com/hidetoshiyanagihara/golfsensei-landing/settings/secrets/actions →「New repository secret」→ Name `VERCEL_TOKEN`、Secret に貼る →「Add secret」
-   - 3 時間以内に Actions の「IG growth short link」が自動で `copipe-ai.vercel.app` を追加します（すぐ試すなら Actions → IG growth short link →「Run workflow」）
+   - Actions → IG growth short link →「Run workflow」で `copipe-ai.vercel.app` を追加（**2026-11-09 完了済み**）
    - トークンを作らない方法：Vercel の golfsensei-landing プロジェクト → Settings → Domains → `copipe-ai.vercel.app` を Add（1 分）
 1. **アカウントを作る（10分）**
    Instagram アプリ → プロフィール → 右上の名前 →「アカウントを追加」→「新しいアカウントを作成」→ ユーザーネーム `copipe_ai_shigoto`（使えなければ docs/04 の別案。**別の名前にしたら Claude Code に伝える**。画像・動画の名前を作り直します）
