@@ -1,0 +1,29 @@
+# プロフィールのリンクを短いアドレス（ig-growth/brand.json の link_url）にするため、Vercel のプロジェクトにドメインを追加する。
+# Secrets に VERCEL_TOKEN が無いとき、またはすでに追加済みのときは何もしない（一度成功すれば以後は何もしない）。
+name: IG growth short link
+
+on:
+  schedule:
+    - cron: "37 */3 * * *"   # 3 時間ごとに確認（トークンを登録すれば、最長 3 時間以内に自動で追加される）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HAS_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
+    steps:
+      - name: トークンの確認
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then echo "VERCEL_TOKEN が未設定のためスキップします"; fi
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_TOKEN == 'true' }}
+      - name: 短いアドレスを追加
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: python3 ig-growth/tools/vercel_domain.py

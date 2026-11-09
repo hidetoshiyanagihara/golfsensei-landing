@@ -78,13 +78,19 @@ ig-growth/
 | 登録が遅れたとき | 未投稿の予定を丸ごと後ろへずらす（まとめて連投しない） | `tools/publish.py` |
 
 - 投稿するものは全部このフォルダで作成済み：リール動画 22 本（`output/videos/`、文字アニメ＋プロンプト入力の演出＋オリジナル BGM、各 20 秒）、カルーセル 10 本、お知らせストーリーズ 32 枚
-- プロフィールのリンク先（プロンプト集）も自動で公開：**https://golfsensei-landing.vercel.app/ai** （コピーボタンつき。`assets/プロンプト集_無料配布.md` を直すと次の公開で反映）
+- プロフィールのリンク先（プロンプト集）も自動で公開：**https://copipe-ai.vercel.app** （コピーボタンつき。`assets/プロンプト集_無料配布.md` を直すと次の公開で反映）
+  - 短いアドレスは、下の手順 0 の Vercel トークンを登録すると自動で有効になります（それまでは https://golfsensei-landing.vercel.app/ai で同じページが開きます）
 - 自動投稿を止める：`brand.json` の `"auto_post"` を `false` にする（Claude Code に「自動投稿を止めて」でも可）
 - いいね・フォロー・DM・コメントの自動化はしない（規約違反・アカウント停止の原因になるため）
 
 ### あなたがやること（最初の 1 回だけ・約 30 分）
 Instagram の規約上、アカウント作成とログインが必要な操作は本人にしかできないため、ここだけお願いします。
 
+0. **短いリンクを有効にする（3分）**
+   - Vercel のトークンを発行：https://vercel.com/account/tokens →「Create Token」→ 名前 `ig-growth`、Scope は golfsensei-landing のプロジェクトがあるアカウント（またはチーム）、Expiration は「1 day」で OK →「Create」→ 表示されたトークンをコピー
+   - GitHub に登録：https://github.com/hidetoshiyanagihara/golfsensei-landing/settings/secrets/actions →「New repository secret」→ Name `VERCEL_TOKEN`、Secret に貼る →「Add secret」
+   - 3 時間以内に Actions の「IG growth short link」が自動で `copipe-ai.vercel.app` を追加します（すぐ試すなら Actions → IG growth short link →「Run workflow」）
+   - トークンを作らない方法：Vercel の golfsensei-landing プロジェクト → Settings → Domains → `copipe-ai.vercel.app` を Add（1 分）
 1. **アカウントを作る（10分）**
    Instagram アプリ → プロフィール → 右上の名前 →「アカウントを追加」→「新しいアカウントを作成」→ ユーザーネーム `copipe_ai_shigoto`（使えなければ docs/04 の別案。**別の名前にしたら Claude Code に伝える**。画像・動画の名前を作り直します）
 2. **プロアカウントにする（2分）** ※自動投稿に必須
@@ -92,7 +98,7 @@ Instagram の規約上、アカウント作成とログインが必要な操作�
 3. **プロフィールを入れる（5分）**
    - 名前：`コピペAI仕事術｜営業社長のAI活用`
    - 自己紹介：docs/04 の **A案** をコピー
-   - リンク：`https://golfsensei-landing.vercel.app/ai`（タイトル「仕事で使うプロンプト集（無料）」）
+   - リンク：`https://copipe-ai.vercel.app`（タイトル「仕事で使うプロンプト集（無料）」）
    - アイコン：`output/brand/icon_A.jpg`（GitHub アプリでこのファイルを開いて長押し →「写真に保存」）
 4. **投稿用のトークンを発行する（10分）** — AXION SALES のときと同じ画面です
    [Meta for Developers](https://developers.facebook.com/apps/) → AXION SALES で作ったアプリ → Instagram →「Instagram ログインによる API 設定」→「アカウントを追加」で**新しいアカウント**でログイン → そのアカウントの「トークンを生成」

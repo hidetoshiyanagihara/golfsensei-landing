@@ -31,5 +31,7 @@
     "bubble_me": "#FFE3D6"
   },
   "media_base_url": "https://golfsensei-landing.vercel.app/ig-growth/output",
-  "auto_post": true
+  "auto_post": true,
+  "link_url": "https://copipe-ai.vercel.app",
+  "link_url_fallback": "https://golfsensei-landing.vercel.app/ai"
 }
