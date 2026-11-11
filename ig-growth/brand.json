@@ -1,0 +1,37 @@
+{
+  "_説明": "アカウント名などが決まったらここを書き換えて `python tools/igtool.py render` で画像を作り直す。auto_post を false にすると自動投稿が止まる",
+  "handle": "@copipe_ai_shigoto",
+  "display_name": "コピペAI仕事術",
+  "promise": "毎日1つ、コピペで使える頼み方",
+  "link_label": "仕事で使うプロンプト集（無料）",
+  "start_date": "2026-11-16",
+  "goals": [
+    [
+      30,
+      1000
+    ],
+    [
+      60,
+      3000
+    ],
+    [
+      90,
+      5000
+    ]
+  ],
+  "colors": {
+    "ink": "#1B2333",
+    "orange": "#FF6B2C",
+    "marker": "#FFE066",
+    "cream": "#FAF8F3",
+    "gray": "#6B7280",
+    "line": "#E8E4DA",
+    "white": "#FFFFFF",
+    "cover_sub": "#C9CED8",
+    "bubble_me": "#FFE3D6"
+  },
+  "media_base_url": "https://golfsensei-landing.vercel.app/ig-growth/output",
+  "auto_post": true,
+  "link_url": "https://copipe-ai.vercel.app",
+  "link_url_fallback": "https://golfsensei-landing.vercel.app/ai"
+}

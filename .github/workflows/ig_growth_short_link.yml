@@ -1,0 +1,28 @@
+# プロフィールのリンクを短いアドレス（ig-growth/brand.json の link_url）にするため、Vercel のプロジェクトにドメインを追加する。
+# 2026-11-09 に copipe-ai.vercel.app の追加は完了済み。アドレスを変えるときだけ手動で実行する
+# （Secrets に新しい VERCEL_TOKEN を登録 → Actions → IG growth short link → Run workflow）。
+name: IG growth short link
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HAS_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
+    steps:
+      - name: トークンの確認
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then echo "VERCEL_TOKEN が未設定のためスキップします"; fi
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_TOKEN == 'true' }}
+      - name: 短いアドレスを追加
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: python3 ig-growth/tools/vercel_domain.py

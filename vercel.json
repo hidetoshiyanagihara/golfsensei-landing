@@ -6,6 +6,22 @@
   },
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "copipe-ai.vercel.app"
+        }
+      ],
+      "destination": "/prompts",
+      "permanent": false
+    },
+    {
+      "source": "/ai",
+      "destination": "/ig-growth/output/prompts.html",
+      "permanent": false
+    },
+    {
       "source": "/:src(x|instagram|youtube|linkedin|form)",
       "has": [
         {
@@ -59,6 +75,18 @@
       ],
       "destination": "/axion-sales.html",
       "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/prompts",
+      "has": [
+        {
+          "type": "host",
+          "value": "copipe-ai.vercel.app"
+        }
+      ],
+      "destination": "/ig-growth/output/prompts.html"
     }
   ]
 }
