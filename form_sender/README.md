@@ -15,6 +15,18 @@ Python + Playwright。リスト作成 → 送信前チェック → フォーム
 
 テスト：`python tests/run_free.py`（PR TIMES は保存した見本、送信はローカルの疑似サイトのみ）
 
+## 株式会社スターストラックの営業（2026-11-08〜。`python main.py starstruck`）
+
+マンション管理会社に、スターストラックを共用部清掃の協力会社として案内します。AIは使わないので費用はかかりません。
+
+- 送り先：マンション管理業協会の「協会会員一覧」（公開）にある、愛知県に本社・支店がある会員会社。愛知の本社の会社が先、全国の会社の名古屋の支店があと。1社に1回だけ（同じ会社の別の支店には送らない）
+- 送らない会社：`starstruck.EXCLUDE`（柳原さん指示の1社。公開リポジトリなので社名でなく指紋で持つ）と、暗号化した `ss_ng.csv`
+- 文面：`message_starstruck.txt`。送り主・返信先は `starstruck.SENDER`（AXION SALES の名前は出さない）
+- 記録：`ss_companies.csv` / `ss_result.csv`（AXION とは別。`state.enc` に一緒に暗号化）
+- 平日に `form_sales.yml` が1日10件まで送る。**本番は `form_sender/STARSTRUCK_ON` があるときだけ**（止めるときはこのファイルを消す）
+- 2026-11-08 のテスト（送信なし）：会員一覧72件 → 重複と除外を除いて60社。18社を試して入力できたのは4社（画像認証・フォームなしが多い）。送れるのは全体で十数社の見込み
+- テスト：`python tests/run_starstruck.py`
+
 ## SaaS向け AIで1社ずつ調べる版（費用がかかるため止めている。`python main.py saas`）
 
 GitHub Actions（`.github/workflows/form_sales.yml`）が平日10:13に自動で動きます。1回の流れ：

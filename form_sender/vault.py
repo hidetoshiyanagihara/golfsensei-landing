@@ -20,6 +20,8 @@ import config
 
 STATE_ENC = config.BASE_DIR / "state.enc"
 FILES = [config.COMPANIES_CSV, config.NG_LIST_CSV, config.RESULT_CSV, config.RESEARCH_JSONL, config.DISCOVER_STATE]
+# 株式会社スターストラックのフォーム営業（starstruck.py）の送り先・送らない会社・結果
+FILES += [config.BASE_DIR / n for n in ("ss_companies.csv", "ss_ng.csv", "ss_result.csv")]
 
 
 def _fernet() -> Fernet:
