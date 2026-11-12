@@ -56,6 +56,17 @@ with starstruck.own_files():
         {"社名": "送った会社", "URL": "https://c.example.jp/", "結果": "成功", "理由": "", "日時": "2026-11-08 10:00", "モード": MODE_LIVE}])
     names = [c["社名"] for c in starstruck.pending(MODE_LIVE)]
     check(names == ["本社の会社", "支店の会社"], f"本社が先、送った会社と送らない会社は出さない（{names}）")
+print("== 途中で止まった会社")
+with starstruck.own_files():
+    import common
+    common.start_company("支店の会社", "https://a.example.jp/", MODE_LIVE)
+    check(config.INFLIGHT_JSON.exists(), "処理中の会社を書いておく")
+    common.skip_stuck(log=lambda m: None)
+    check(not config.INFLIGHT_JSON.exists(), "次の回の始めに印を消す")
+    names = [c["社名"] for c in starstruck.pending(MODE_LIVE)]
+    check(names == ["本社の会社"], f"止まった会社は二度と試さない（{names}）")
+    common.skip_stuck(log=lambda m: None)
+    check(len(common.load_results()) == 2, "印がなければ何もしない")
 check(config.RESULT_CSV.name == "result.csv", "終わったら AXION のファイルに戻す")
 
 print("\n結果: " + ("すべて成功" if not failures else f"{len(failures)}件 失敗"))

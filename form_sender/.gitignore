@@ -7,3 +7,5 @@ research.jsonl
 .discover_state.json
 screens.enc
 ss_*.csv
+.inflight.json
+.ss_inflight.json
