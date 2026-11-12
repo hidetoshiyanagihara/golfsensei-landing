@@ -1,5 +1,6 @@
 """CSV の読み書き・社名/URL の正規化など共通処理。"""
 import csv
+import hashlib
 import re
 import unicodedata
 from datetime import datetime
@@ -110,8 +111,27 @@ def load_companies() -> list[dict]:
     return read_csv(config.COMPANIES_CSV)
 
 
+# 暗号化した ng_list.csv とは別に、どの送り方でも送らない会社。リポジトリは公開なので
+# 社名・ドメインそのものではなく指紋（sha256 の先頭16桁）で持つ
+ALWAYS_NG = {
+    "0d2893ee54004ea8",  # 2026-11-12 柳原さん指示（社名）
+    "6b00a4f10e33d620",  # 同（ドメイン）
+}
+
+
+def fingerprint(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+class NgRegistry(Registry):
+    def contains(self, name: str, url: str) -> bool:
+        return super().contains(name, url) or bool(
+            (name and fingerprint(normalize_name(name)) in ALWAYS_NG)
+            or (url and fingerprint(domain_of(url)) in ALWAYS_NG))
+
+
 def load_ng() -> Registry:
-    return Registry(read_csv(config.NG_LIST_CSV))
+    return NgRegistry(read_csv(config.NG_LIST_CSV))
 
 
 def load_results() -> list[dict]:
