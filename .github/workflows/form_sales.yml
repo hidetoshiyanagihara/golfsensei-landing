@@ -72,6 +72,7 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: 記録を復号
+        id: open
         if: steps.gate.outputs.go == 'true'
         run: python vault.py open
 
@@ -99,8 +100,9 @@ jobs:
           if [ "$MODE" = "live" ] && [ ! -f STARSTRUCK_ON ]; then echo "STARSTRUCK_ON がないため送りません"; exit 0; fi
           python main.py starstruck --mode "$MODE" --count "$SS_COUNT"
 
+      # 復号できたときだけ保存する（復号の前に打ち切られた実行が空の記録で上書きした 2026-11-12 の事故の再発防止）
       - name: 記録を暗号化して保存
-        if: always() && steps.gate.outputs.go == 'true'
+        if: always() && steps.open.outcome == 'success'
         run: |
           python vault.py close
           git config user.name "github-actions[bot]"
