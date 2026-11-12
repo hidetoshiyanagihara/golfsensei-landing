@@ -63,6 +63,12 @@ DETAIL_BASE = "https://www.kanrikyo.or.jp/member/data/"
 AICHI = "22"            # 協会の検索の「愛知県」
 KIND_HQ, KIND_BRANCH = "本社", "支店"
 INDUSTRY = "マンション管理（管理業協会）"
+# 2つ目の送り先：日本賃貸住宅管理協会（日管協）の愛知県の会員（アパート・賃貸マンションの管理会社。2026-11-12 追加）
+JPM_LIST_URL = "https://www.jpm.jp/branch/list.php?cid=19"
+INDUSTRY_JPM = "賃貸住宅管理（日管協）"
+# 対応地域（名古屋市・尾張・豊田市周辺）。この住所の会社にだけ送る
+AREA_RE = re.compile(r"名古屋市|春日井|小牧|一宮|あま市|長久手|豊田市|清須|北名古屋|稲沢|日進|尾張旭|瀬戸|みよし|大府|東郷|豊明|津島|江南|岩倉|犬山|豊山|大口|扶桑|蟹江|甚目寺|大治")
+CORP_SHORT = {"（株）": "株式会社", "(株)": "株式会社", "（有）": "有限会社", "(有)": "有限会社", "（同）": "合同会社", "(同)": "合同会社"}
 
 
 def log(msg: str) -> None:
@@ -122,18 +128,65 @@ def branch_of(label: str) -> str:
     return parts[1].strip() if len(parts) == 2 else ""
 
 
+def full_name(name: str) -> str:
+    """「（株）アットイン」→「株式会社アットイン」、「○○不動産（株）」→「○○不動産株式会社」"""
+    name = re.sub(r"\s+", "", name)
+    for short, full in CORP_SHORT.items():
+        name = name.replace(short, full)
+    return name
+
+
+def jpm_members(http: requests.Session) -> list[tuple[str, str, str]]:
+    """日管協の愛知県の会員から (社名, 公式サイト, 住所)。サイトの載っていない会社は外す"""
+    r = http.get(JPM_LIST_URL, timeout=config.HTTP_TIMEOUT_SEC)
+    r.raise_for_status()
+    html = re.sub(r"<(script|style).*?</\1>", "", r.text, flags=re.S)
+    out = []
+    for block in re.findall(r"<dl>(.*?)</dl>", html, re.S):
+        dt = re.search(r"<dt>(.*?)</dt>", block, re.S)
+        if not dt:
+            continue
+        head = re.split(r'<div class="map_link"', dt.group(1))[0]
+        site = re.search(r'<a href="(https?://(?!maps\.google)[^"]+)"', head)
+        name = BeautifulSoup(head, "lxml").get_text(" ", strip=True)
+        addr = re.search(r'add_block">\s*(.*?)</div>', block, re.S)
+        addr = BeautifulSoup(addr.group(1), "lxml").get_text(" ", strip=True) if addr else ""
+        if name and site:
+            out.append((full_name(name), site.group(1).strip(), addr))
+    return out
+
+
 def discover(log=log) -> int:
-    """会員一覧から、まだ候補にしていない会社を ss_companies.csv に足す。足した数を返す"""
+    """まだ読んでいない名簿から、候補にしていない会社を ss_companies.csv に足す。足した数を返す"""
     http = requests.Session()
     http.headers.update({"User-Agent": config.USER_AGENT, "Accept-Language": "ja"})
-    known = Registry(load_companies())
+    companies = load_companies()
+    known = Registry(companies)
+    done_sources = {c.get("業種", "") for c in companies}
+    added = 0
+    if INDUSTRY_JPM not in done_sources:
+        try:
+            members = jpm_members(http)
+        except requests.RequestException as e:
+            log(f"日管協の会員一覧を読めませんでした（{type(e).__name__}）")
+            members = []
+        rows = []
+        for name, site, addr in members:
+            if not AREA_RE.search(addr) or known.contains(name, site) or excluded(name, site):
+                continue
+            known.add(name, site)
+            rows.append({"社名": name, "URL": site, "所在地": f"{KIND_HQ}:", "業種": INDUSTRY_JPM})
+        append_rows(config.COMPANIES_CSV, COMPANY_FIELDS, rows)
+        added += len(rows)
+        log(f"日管協（愛知）：会員 {len(members)}社 → 対応地域の {len(rows)}社を候補に追加")
+    if INDUSTRY in done_sources:
+        return added
     try:
         members = member_list(http)
     except requests.RequestException as e:
         log(f"会員一覧を読めませんでした（{type(e).__name__}）")
         return 0
     log(f"会員一覧：愛知の本社・支店 {len(members)}件")
-    added = 0
     for url, label, kind in members:
         time.sleep(random.uniform(0.8, 1.6))
         try:
@@ -157,6 +210,13 @@ def pending(mode: str) -> list[dict]:
         done = Registry([r for r in results if r.get("モード") == MODE_LIVE and (is_sent_row(r) or r.get("結果") == RESULT_SKIP)])
     else:
         done = Registry([r for r in results if r.get("モード") == MODE_TEST])
+    fails = {}
+    for r in results:   # 2回失敗した会社（サイトにつながらない等）はもう試さない
+        if r.get("モード") == mode and r.get("結果") == RESULT_FAIL:
+            fails[(r["社名"], r["URL"])] = fails.get((r["社名"], r["URL"]), 0) + 1
+    for (n, u), k in fails.items():
+        if k >= 2:
+            done.add(n, u)
     ng = load_ng()
     rows = [c for c in load_companies()
             if c.get("URL") and not done.contains(c["社名"], c["URL"]) and not ng.contains(c["社名"], c["URL"])
@@ -190,7 +250,7 @@ def _run(count: int, live: bool, headed: bool, wait: bool) -> None:
         if count <= 0:
             log("本日の送信上限に達しています")
             return
-    if not pending(mode):
+    if len(pending(mode)) < count * 4:   # 送れるのは5社に1社ほどなので、足りなければ名簿を足す
         discover()
     targets = pending(mode)
     log(f"スターストラック {mode}モード：候補 {len(targets)}社 / 今回 最大{count}件")

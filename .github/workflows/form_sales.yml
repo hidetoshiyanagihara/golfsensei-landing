@@ -93,7 +93,7 @@ jobs:
       # 株式会社スターストラックの営業（2026-11-08 柳原さん指示）。本番は form_sender/STARSTRUCK_ON があるときだけ
       - name: スターストラックとしてマンション管理会社に送る
         if: steps.gate.outputs.go == 'true'
-        timeout-minutes: 40
+        timeout-minutes: 60
         continue-on-error: true
         run: |
           if [ "$MODE" = "live" ] && [ ! -f STARSTRUCK_ON ]; then echo "STARSTRUCK_ON がないため送りません"; exit 0; fi
