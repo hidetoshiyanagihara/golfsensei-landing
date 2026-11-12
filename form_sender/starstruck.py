@@ -23,8 +23,8 @@ from bs4 import BeautifulSoup
 import config
 from common import (
     COMPANY_FIELDS, MODE_LIVE, MODE_TEST, RESULT_FAIL, RESULT_SKIP, RESULT_SUCCESS, SUBMITTED_PREFIX, Registry,
-    append_rows, domain_of, is_sent_row, load_companies, load_ng, load_results, normalize_name, record_result,
-    sent_today_count,
+    append_rows, domain_of, finish_company, is_sent_row, load_companies, load_ng, load_results, normalize_name,
+    record_result, sent_today_count, skip_stuck, start_company,
 )
 
 SENDER = {
@@ -55,6 +55,7 @@ PATHS = {
     "COMPANIES_CSV": config.BASE_DIR / "ss_companies.csv",
     "NG_LIST_CSV": config.BASE_DIR / "ss_ng.csv",
     "RESULT_CSV": config.BASE_DIR / "ss_result.csv",
+    "INFLIGHT_JSON": config.BASE_DIR / ".ss_inflight.json",
 }
 MESSAGE_TXT = config.BASE_DIR / "message_starstruck.txt"
 LIST_URL = "https://www.kanrikyo.or.jp/cgi-bin/memsearch/memsearch.cgi"
@@ -183,6 +184,7 @@ def _run(count: int, live: bool, headed: bool, wait: bool) -> None:
     from form_engine import precheck, process_company
 
     mode = MODE_LIVE if live else MODE_TEST
+    skip_stuck(log)
     if live:
         count = min(count, config.DAILY_SEND_LIMIT - sent_today_count(load_results()))
         if count <= 0:
@@ -208,6 +210,7 @@ def _run(count: int, live: bool, headed: bool, wait: bool) -> None:
                     break
                 i += 1
                 name, url = c["社名"], c["URL"]
+                start_company(name, url, mode)
                 page = ctx.new_page()
                 page.on("dialog", lambda d: d.accept())
                 try:
@@ -231,6 +234,7 @@ def _run(count: int, live: bool, headed: bool, wait: bool) -> None:
                     log(f"{i}社目：失敗（{type(e).__name__}）")
                 finally:
                     page.close()
+                    finish_company()
         finally:
             ctx.close()
             browser.close()

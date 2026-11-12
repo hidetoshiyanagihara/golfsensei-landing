@@ -22,6 +22,8 @@ STATE_ENC = config.BASE_DIR / "state.enc"
 FILES = [config.COMPANIES_CSV, config.NG_LIST_CSV, config.RESULT_CSV, config.RESEARCH_JSONL, config.DISCOVER_STATE]
 # 株式会社スターストラックのフォーム営業（starstruck.py）の送り先・送らない会社・結果
 FILES += [config.BASE_DIR / n for n in ("ss_companies.csv", "ss_ng.csv", "ss_result.csv")]
+# 処理の途中で止まった会社の印（次の回にその会社を飛ばすため。2026-11-12）
+FILES += [config.INFLIGHT_JSON, config.BASE_DIR / ".ss_inflight.json"]
 
 
 def _fernet() -> Fernet:

@@ -16,7 +16,7 @@ import config
 import prtimes
 from common import (
     COMPANY_FIELDS, MODE_LIVE, MODE_TEST, RESULT_FAIL, RESULT_SUCCESS, SUBMITTED_PREFIX, Registry, append_rows,
-    load_companies, load_results, record_result, sent_today_count,
+    finish_company, load_companies, load_results, record_result, sent_today_count, skip_stuck, start_company,
 )
 from saas import log, pending, save_research
 
@@ -120,6 +120,7 @@ def run(count: int, live: bool, headed: bool = False, wait: bool = True, agency:
     from form_engine import precheck, process_company
 
     mode = MODE_LIVE if live else MODE_TEST
+    skip_stuck(log)
     if live:
         count = min(count, config.DAILY_SEND_LIMIT - sent_today_count(load_results()))
         if count <= 0:
@@ -152,6 +153,7 @@ def run(count: int, live: bool, headed: bool = False, wait: bool = True, agency:
                 i += 1
                 tried.add(c["URL"])
                 name, url = c["社名"], c["URL"]
+                start_company(name, url, mode)
                 page = ctx.new_page()
                 page.on("dialog", lambda d: d.accept())
                 try:
@@ -178,6 +180,7 @@ def run(count: int, live: bool, headed: bool = False, wait: bool = True, agency:
                     log(f"{i}社目：失敗（{type(e).__name__}）")
                 finally:
                     page.close()
+                    finish_company()
         finally:
             ctx.close()
             browser.close()

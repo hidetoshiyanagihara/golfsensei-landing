@@ -33,7 +33,7 @@ concurrency:
 jobs:
   send:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     env:
       MODE: ${{ github.event.inputs.mode || 'live' }}
       COUNT: ${{ github.event.inputs.count || '10' }}
@@ -71,18 +71,26 @@ jobs:
         if: steps.gate.outputs.go == 'true'
         run: python vault.py open
 
+      # 1つの送り先で止まっても、ほかの送信が動くように、手順ごとに時間を区切って先へ進む（2026-11-12）
+      # 止まった会社は次の回に自動でスキップする（common.skip_stuck）
       - name: 探す・送る
         if: steps.gate.outputs.go == 'true'
+        timeout-minutes: 40
+        continue-on-error: true
         run: python main.py free --mode "$MODE" --count "$COUNT"
 
       # 営業代行の会社に「下請け（協力会社）として受けます」と送る（2026-11-04 柳原さん指示。お客さま向けの10件とは別枠）
       - name: 営業代行の会社に下請けの売り込み
         if: steps.gate.outputs.go == 'true'
+        timeout-minutes: 30
+        continue-on-error: true
         run: python main.py agency --mode "$MODE" --count "$AGENCY_COUNT"
 
       # 株式会社スターストラックの営業（2026-11-08 柳原さん指示）。本番は form_sender/STARSTRUCK_ON があるときだけ
       - name: スターストラックとしてマンション管理会社に送る
         if: steps.gate.outputs.go == 'true'
+        timeout-minutes: 40
+        continue-on-error: true
         run: |
           if [ "$MODE" = "live" ] && [ ! -f STARSTRUCK_ON ]; then echo "STARSTRUCK_ON がないため送りません"; exit 0; fi
           python main.py starstruck --mode "$MODE" --count "$SS_COUNT"

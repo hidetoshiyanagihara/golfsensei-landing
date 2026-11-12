@@ -142,6 +142,32 @@ def record_result(name: str, url: str, result: str, reason: str, mode: str) -> d
     return row
 
 
+def start_company(name: str, url: str, mode: str) -> None:
+    """これから処理する会社を書いておく。処理が終われば消す。残っていたら、その会社で止まったということ"""
+    import json
+    config.INFLIGHT_JSON.write_text(json.dumps({"社名": name, "URL": url, "モード": mode}, ensure_ascii=False),
+                                    encoding="utf-8")
+
+
+def finish_company() -> None:
+    config.INFLIGHT_JSON.unlink(missing_ok=True)
+
+
+def skip_stuck(log=print) -> None:
+    """前の回に処理の途中で止まった（時間切れで打ち切られた）会社を、スキップとして記録して二度と試さない。
+    同じ会社で毎回止まり、ほかの会社に送れなくなるのを防ぐ（2026-11-12）"""
+    import json
+    if not config.INFLIGHT_JSON.exists():
+        return
+    try:
+        row = json.loads(config.INFLIGHT_JSON.read_text(encoding="utf-8"))
+        record_result(row["社名"], row["URL"], RESULT_SKIP, "前回の処理中に止まった（時間切れ）", row.get("モード", MODE_LIVE))
+        log("前回の処理中に止まった会社を1社、スキップにしました")
+    except (ValueError, KeyError):
+        pass
+    finish_company()
+
+
 def build_message(company_name: str) -> str:
     text = config.MESSAGE_TXT.read_text(encoding="utf-8")
     return text.replace("{社名}", company_name).strip() + "\n"
