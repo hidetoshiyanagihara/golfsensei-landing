@@ -9,3 +9,4 @@ screens.enc
 ss_*.csv
 .inflight.json
 .ss_inflight.json
+.vault_opened
