@@ -65,6 +65,9 @@ main.cmd_publish()
 check(True, "AIのキー未設定で投稿がなくても失敗にしない")
 os.environ["ANTHROPIC_API_KEY"] = "dummy"
 
+# 審査の点数で作り直すかを確かめるため、今日の枠を「実験・検証」（70点未満でも出してよい枠）以外に固定する
+real_slot_for = generate.slot_for
+generate.slot_for = lambda d: "本音・痛み"
 # 直近の投稿（被り防止用）を用意
 d0 = main.today()
 (tmp / "posts").mkdir()
@@ -86,7 +89,7 @@ check("元請け依存" in system and "古い投稿" not in system, "直近14日
 check("清掃現場で管理会社" in system, "memo.md を追加メモとして渡す")
 check("{{なし。" in system, "指示文の {{ }} はそのまま残す")
 check("{{slot}}" not in system and generate.slot_for(d0) in system, "今日の枠を差し込む")
-check("清掃・管理の会社を経営" not in system, "プロンプトに代表の他事業の経歴は書かない")
+check("元俳優" in system and "清掃会社の会社名は出さない" in system, "代表の経歴と、その書き方のルールを渡す")
 req = calls_ai[0]
 check(req["max_tokens"] >= 16000 and req["output_config"]["format"]["type"] == "json_schema",
       "考える分も含めた十分な上限と、JSON形式の指定（structured outputs）")
@@ -94,6 +97,7 @@ schema_keys = set(req["output_config"]["format"]["schema"]["properties"])
 check(schema_keys == set(generate.REQUIRED_KEYS) | {"x_char_count", "hooks", "score", "short_dialogue"},
       "出力形式は prompt.md の12章と同じ")
 from datetime import date  # noqa: E402
+generate.slot_for = real_slot_for
 check([generate.slot_for(date(2026, 11, d)) for d in (2, 3, 4, 5, 6, 7, 8)]
       == ["本音・痛み", "有益：ノウハウ", "有益：比較", "実験・検証", "有益：判断の材料", "ゼロから記録", "本音・痛み（誤解に答える）"],
       "曜日ごとの枠")
@@ -119,7 +123,7 @@ except ValueError:
 
 calls_ai.clear()
 for bad, why in ((GOOD["short_dialogue"][:2], "回"), ([{"speaker": "tsunagari", "line": "あ" * 37}] * 4, "長すぎる"),
-                 ([{"speaker": "tsunagari", "line": "僕も清掃の仕事を"}] * 4, "禁止表現"),
+                 ([{"speaker": "tsunagari", "line": "スターストラックの話をすると"}] * 4, "禁止表現"),
                  ([{"speaker": "apo", "line": "DMで「リスト」と送ってね"}] * 4, "DM")):
     try:
         generate.check_post({**GOOD, "short_dialogue": bad})
@@ -127,11 +131,11 @@ for bad, why in ((GOOD["short_dialogue"][:2], "回"), ([{"speaker": "tsunagari",
     except ValueError as e:
         check(why in str(e), f"会話の検査：{why}なら作り直す")
 replies[:] = [json.dumps({**GOOD, "instagram_caption": "絶対に反響が出ます"}),
-              json.dumps({**GOOD, "x_post": "僕も清掃の現場側の人間なので"}), json.dumps(GOOD)]
+              json.dumps({**GOOD, "x_post": "レオパレスのCMが終わって"}), json.dumps(GOOD)]
 main.cmd_generate()
 day = d0.strftime("%Y-%m-%d")
 saved = json.loads((tmp / "posts" / f"{day}.json").read_text(encoding="utf-8"))
-check(len(calls_ai) == 3, "禁止表現（絶対・代表の他事業の「清掃」）を含む出力は作り直す")
+check(len(calls_ai) == 3, "禁止表現（絶対・スポンサー企業名など）を含む出力は作り直す")
 check(saved["x"] == GOOD["x_post"] and saved["instagram"] == GOOD["instagram_caption"]
       and saved["image_title"] == GOOD["instagram_image_title"] and saved["target"] == GOOD["target"],
       "新しい出力形式を投稿用に保存")
