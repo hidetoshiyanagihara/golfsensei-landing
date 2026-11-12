@@ -24,7 +24,7 @@ import config
 from common import (
     COMPANY_FIELDS, MODE_LIVE, MODE_TEST, RESULT_FAIL, RESULT_SKIP, RESULT_SUCCESS, SUBMITTED_PREFIX, Registry,
     append_rows, domain_of, finish_company, is_sent_row, load_companies, load_ng, load_results, normalize_name,
-    record_result, sent_today_count, skip_stuck, start_company,
+    record_result, sent_today_count, skip_stuck, start_company, Browser, COMPANY_LIMIT_SEC, CompanyTimeout, time_limit,
 )
 
 SENDER = {
@@ -261,9 +261,7 @@ def _run(count: int, live: bool, headed: bool, wait: bool) -> None:
 
     sent = i = 0
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=not headed, executable_path=os.environ.get("CHROMIUM_PATH") or None)
-        ctx = browser.new_context(locale="ja-JP", user_agent=config.USER_AGENT, viewport={"width": 1280, "height": 900})
-        ctx.set_default_timeout(config.PAGE_TIMEOUT_MS)
+        b = Browser(pw, headed)
         try:
             for c in targets:
                 if sent >= count:
@@ -271,10 +269,11 @@ def _run(count: int, live: bool, headed: bool, wait: bool) -> None:
                 i += 1
                 name, url = c["社名"], c["URL"]
                 start_company(name, url, mode)
-                page = ctx.new_page()
-                page.on("dialog", lambda d: d.accept())
+                page = b.new_page()
+                timed_out = False
                 try:
-                    out = precheck(page, url)
+                    with time_limit(COMPANY_LIMIT_SEC):
+                        out = precheck(page, url)
                     if out:
                         record_result(name, url, out.result, out.reason, mode)
                         log(f"{i}社目：{out.result}（{out.reason[:40]}）")
@@ -283,19 +282,26 @@ def _run(count: int, live: bool, headed: bool, wait: bool) -> None:
                     if sent and wait:
                         time.sleep(random.uniform(config.WAIT_MIN_SEC, config.WAIT_MAX_SEC))
                     shot = str(config.SCREENSHOT_DIR / f"{datetime.now():%Y%m%d_%H%M%S}_ss_{mode}_{i}.png")
-                    out = process_company(page, name, url, message, live, shot, subject=subject, sender=SENDER)
+                    with time_limit(COMPANY_LIMIT_SEC):
+                        out = process_company(page, name, url, message, live, shot, subject=subject, sender=SENDER)
                     record_result(name, url, out.result, out.reason, mode)
                     log(f"{i}社目：{out.result}（{out.reason[:40]}）")
                     if out.result == RESULT_SUCCESS or out.reason.startswith(SUBMITTED_PREFIX):
                         sent += 1
+                except CompanyTimeout:
+                    record_result(name, url, RESULT_SKIP, f"時間切れ（{COMPANY_LIMIT_SEC}秒で打ち切り）", mode)
+                    log(f"{i}社目：スキップ（時間切れ）")
+                    timed_out = True
                 except Exception as e:  # 想定外のエラーでも記録して次へ
                     first = (str(e).splitlines() or [type(e).__name__])[0]
                     record_result(name, url, RESULT_FAIL, f"予期しないエラー: {first[:150]}", mode)
                     log(f"{i}社目：失敗（{type(e).__name__}）")
                 finally:
-                    page.close()
+                    if timed_out:
+                        b.restart()
+                    else:
+                        b.close_page(page)
                     finish_company()
         finally:
-            ctx.close()
-            browser.close()
+            b.close()
     log(f"終了：{'送信' if live else 'テスト入力'} {sent}件")

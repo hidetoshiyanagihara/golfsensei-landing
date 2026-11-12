@@ -1,7 +1,9 @@
 """CSV の読み書き・社名/URL の正規化など共通処理。"""
+import contextlib
 import csv
 import hashlib
 import re
+import signal
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -160,6 +162,102 @@ def record_result(name: str, url: str, result: str, reason: str, mode: str) -> d
     row = {"社名": name, "URL": url, "結果": result, "理由": reason, "日時": now_str(), "モード": mode}
     append_rows(config.RESULT_CSV, RESULT_FIELDS, [row])
     return row
+
+
+class CompanyTimeout(Exception):
+    """1社の処理が時間内に終わらなかった"""
+
+
+COMPANY_LIMIT_SEC = 180   # 送れるか確かめる・入力して送る、それぞれの上限（2026-11-12：サイトによっては無限に待ち続けるため）
+
+
+def _kill_own_browsers() -> None:
+    """このプログラムが起動したブラウザ（子孫プロセスのうち chrome/chromium）だけを止める"""
+    import os
+    me = os.getpid()
+    parent = {}
+    for d in os.listdir("/proc"):
+        if d.isdigit():
+            try:
+                parent[int(d)] = int(open(f"/proc/{d}/stat").read().rsplit(")", 1)[1].split()[1])
+            except (OSError, ValueError, IndexError):
+                pass
+    for pid in parent:
+        p, depth = pid, 0
+        while p in parent and p != me and depth < 20:
+            p, depth = parent[p], depth + 1
+        if p != me or pid == me:
+            continue
+        try:
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read().decode(errors="ignore").lower()
+        except OSError:
+            continue
+        if "chrom" in cmd:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+
+
+@contextlib.contextmanager
+def time_limit(seconds: int):
+    """seconds 秒たっても終わらなければ、ブラウザを止めて CompanyTimeout にする。
+    （ページの中の処理が固まると Playwright は待ち続け、シグナルでも抜けられないため。2026-11-12）"""
+    import threading
+    fired = threading.Event()
+    timer = threading.Timer(seconds, lambda: (fired.set(), _kill_own_browsers()))
+    timer.daemon = True
+    timer.start()
+    try:
+        yield
+    except Exception as e:
+        timer.cancel()
+        if fired.is_set():
+            raise CompanyTimeout() from e
+        raise
+    timer.cancel()
+    if fired.is_set():
+        raise CompanyTimeout()
+
+
+class Browser:
+    """送信に使うブラウザ。1社で固まったら作り直して、次の会社に進めるようにする"""
+
+    def __init__(self, pw, headed: bool = False):
+        import os
+        self.pw, self.headed, self.path = pw, headed, os.environ.get("CHROMIUM_PATH") or None
+        self._open()
+
+    def _open(self) -> None:
+        self.browser = self.pw.chromium.launch(headless=not self.headed, executable_path=self.path)
+        self.ctx = self.browser.new_context(locale="ja-JP", user_agent=config.USER_AGENT,
+                                            viewport={"width": 1280, "height": 900})
+        self.ctx.set_default_timeout(config.PAGE_TIMEOUT_MS)
+
+    def new_page(self):
+        page = self.ctx.new_page()
+        page.on("dialog", lambda d: d.accept())   # 「送信しますか？」等の確認ダイアログ
+        return page
+
+    def close_page(self, page) -> None:
+        """ページを閉じる。閉じられなければブラウザごと作り直す"""
+        try:
+            with time_limit(20):
+                page.close()
+        except Exception:
+            self.restart()
+
+    def restart(self) -> None:
+        self.close()
+        self._open()
+
+    def close(self) -> None:
+        try:
+            with time_limit(20):
+                self.ctx.close()
+                self.browser.close()
+        except Exception:
+            pass
 
 
 def start_company(name: str, url: str, mode: str) -> None:
