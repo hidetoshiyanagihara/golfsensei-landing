@@ -51,6 +51,7 @@ with starstruck.own_files():
         {"社名": "本社の会社", "URL": "https://b.example.jp/", "所在地": "本社:", "業種": ""},
         {"社名": "外す管理株式会社", "URL": "https://skip.example.jp/", "所在地": "本社:", "業種": ""},
         {"社名": "送った会社", "URL": "https://c.example.jp/", "所在地": "本社:", "業種": ""},
+        {"社名": "賃貸の管理会社", "URL": "https://d.example.jp/", "所在地": "本社:", "業種": starstruck.INDUSTRY_JPM},
     ])
     append_rows(config.RESULT_CSV, RESULT_FIELDS, [
         {"社名": "送った会社", "URL": "https://c.example.jp/", "結果": "成功", "理由": "", "日時": "2026-11-08 10:00", "モード": MODE_LIVE}])

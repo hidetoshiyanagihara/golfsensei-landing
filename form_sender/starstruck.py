@@ -63,8 +63,7 @@ DETAIL_BASE = "https://www.kanrikyo.or.jp/member/data/"
 AICHI = "22"            # 協会の検索の「愛知県」
 KIND_HQ, KIND_BRANCH = "本社", "支店"
 INDUSTRY = "マンション管理（管理業協会）"
-# 2つ目の送り先：日本賃貸住宅管理協会（日管協）の愛知県の会員（アパート・賃貸マンションの管理会社。2026-11-12 追加）
-JPM_LIST_URL = "https://www.jpm.jp/branch/list.php?cid=19"
+# 日本賃貸住宅管理協会（日管協）の会員。11/12 に送り先に足したが、同日「目的は分譲マンションの高単価の清掃」（柳原さん）のため外した
 INDUSTRY_JPM = "賃貸住宅管理（日管協）"
 # 対応地域（名古屋市・尾張・豊田市周辺）。この住所の会社にだけ送る
 AREA_RE = re.compile(r"名古屋市|春日井|小牧|一宮|あま市|長久手|豊田市|清須|北名古屋|稲沢|日進|尾張旭|瀬戸|みよし|大府|東郷|豊明|津島|江南|岩倉|犬山|豊山|大口|扶桑|蟹江|甚目寺|大治")
@@ -136,70 +135,130 @@ def full_name(name: str) -> str:
     return name
 
 
-def jpm_members(http: requests.Session) -> list[tuple[str, str, str]]:
-    """日管協の愛知県の会員から (社名, 公式サイト, 住所)。サイトの載っていない会社は外す"""
-    r = http.get(JPM_LIST_URL, timeout=config.HTTP_TIMEOUT_SEC)
-    r.raise_for_status()
-    html = re.sub(r"<(script|style).*?</\1>", "", r.text, flags=re.S)
-    out = []
-    for block in re.findall(r"<dl>(.*?)</dl>", html, re.S):
-        dt = re.search(r"<dt>(.*?)</dt>", block, re.S)
-        if not dt:
-            continue
-        head = re.split(r'<div class="map_link"', dt.group(1))[0]
-        site = re.search(r'<a href="(https?://(?!maps\.google)[^"]+)"', head)
-        name = BeautifulSoup(head, "lxml").get_text(" ", strip=True)
-        addr = re.search(r'add_block">\s*(.*?)</div>', block, re.S)
-        addr = BeautifulSoup(addr.group(1), "lxml").get_text(" ", strip=True) if addr else ""
-        if name and site:
-            out.append((full_name(name), site.group(1).strip(), addr))
+MLIT_URL = "https://etsuran2.mlit.go.jp/TAKKEN/mansionKensaku.do"
+INDUSTRY_MLIT = "マンション管理（国交省の登録）"
+SEARCH_URLS = ("https://lite.duckduckgo.com/lite/?q={q}", "https://search.yahoo.co.jp/search?p={q}")
+NOT_OFFICIAL = ("duckduckgo.com", "yahoo.co.jp", "yimg.jp", "bing.com", "google.", "mlit.go.jp", "kanrikyo.or.jp",
+                "mansion-review", "mansionnote", "homes.co.jp", "suumo", "athome", "baseconnect", "salesnow", "wikipedia",
+                "indeed", "mynavi", "rikunabi", "doda", "en-japan", "jp.indeed", "townwork", "houjin", "ekiten",
+                "mapion", "navitime", "itp.ne.jp", "jpnumber", "facebook", "instagram", "x.com", "twitter", "youtube",
+                "stanby", "job", "recruit", "baitoru", "hellowork", "engage", "airwork", "careerindex", "tenshoku",
+                "kyujin", "hatarako", "jmty", "note.com", "ameblo", "prtimes", "nikkei", "tdb.co.jp", "tsr-net")
+
+
+def mlit_offices(http: requests.Session) -> list[tuple[str, str, str]]:
+    """国交省のマンション管理業者の登録（愛知県）から (商号, 事務所名, 所在地)。登録は分譲マンションの管理会社に義務なので、
+    協会に入っていない地元の管理会社も載っている"""
+    http.get(MLIT_URL.replace("mansionKensaku.do", "mansionKensaku.do?outPutKbn=1"), timeout=config.HTTP_TIMEOUT_SEC)
+    out, page, cmd = [], 1, "search"
+    while page <= 10:
+        data = {"CMD": cmd, "caller": "MS", "rdoSelect": "1", "rdoSelectJoken": "1", "kenCode": "23",
+                "rdoSelectSort": "1", "dispCount": "50", "dispPage": str(page), "sv_kenCode": "23",
+                "sv_dispCount": "50", "sv_rdoSelect": "1", "sv_rdoSelectJoken": "1", "sv_rdoSelectSort": "1",
+                "sv_dispPage": str(page)}
+        r = http.post(MLIT_URL, data=data, timeout=30)
+        r.raise_for_status()
+        html = r.content.decode("cp932", errors="replace")
+        rows = re.findall(r"js_ShowDetail\('\d+'\)\">(.*?)</a></td>\s*<td[^>]*>.*?</td>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>",
+                          html, re.S)
+        out += [(BeautifulSoup(a, "lxml").get_text(strip=True), BeautifulSoup(b, "lxml").get_text(strip=True),
+                 BeautifulSoup(c, "lxml").get_text(strip=True)) for a, b, c in rows]
+        pages = re.search(r'name="pageCount"[^>]*value="(\d+)"', html)
+        if not rows or not pages or page >= int(pages.group(1)):
+            break
+        page, cmd = page + 1, "next"
+        time.sleep(1.5)
     return out
 
 
+def find_site(http: requests.Session, name: str, city: str) -> str:
+    """社名で検索して公式サイトを探す。サイトの中に社名が書いてあるものだけを公式とみなす"""
+    from urllib.parse import quote, urlparse
+    q = quote(f"{name} {city} マンション管理")
+    for tpl in SEARCH_URLS:
+        try:
+            r = http.get(tpl.format(q=q), timeout=config.HTTP_TIMEOUT_SEC)
+        except requests.RequestException:
+            continue
+        seen = []
+        for href in re.findall(r'href="(https?://[^"]+)"', r.text):
+            host = urlparse(href).netloc.lower()
+            if not host or any(x in host for x in NOT_OFFICIAL) or host in seen:
+                continue
+            seen.append(host)
+            if len(seen) > 4:
+                break
+            root = f"{urlparse(href).scheme}://{host}/"
+            try:
+                page = http.get(root, timeout=config.HTTP_TIMEOUT_SEC)
+            except requests.RequestException:
+                continue
+            if "html" not in page.headers.get("Content-Type", "html"):
+                continue
+            text = BeautifulSoup(page.content, "lxml").get_text(" ", strip=True)
+            if normalize_name(name) and normalize_name(name) in normalize_name(text):
+                return root
+        time.sleep(random.uniform(1.0, 2.0))
+    return ""
+
+
 def discover(log=log) -> int:
-    """まだ読んでいない名簿から、候補にしていない会社を ss_companies.csv に足す。足した数を返す"""
+    """まだ読んでいない名簿から、候補にしていない会社を ss_companies.csv に足す。足した数を返す。
+    送り先は分譲マンションの管理会社だけ（高単価の共用部清掃を請け負うため。2026-11-12 柳原さん）"""
     http = requests.Session()
     http.headers.update({"User-Agent": config.USER_AGENT, "Accept-Language": "ja"})
     companies = load_companies()
     known = Registry(companies)
     done_sources = {c.get("業種", "") for c in companies}
     added = 0
-    if INDUSTRY_JPM not in done_sources:
+    if INDUSTRY not in done_sources:
         try:
-            members = jpm_members(http)
+            members = member_list(http)
         except requests.RequestException as e:
-            log(f"日管協の会員一覧を読めませんでした（{type(e).__name__}）")
+            log(f"会員一覧を読めませんでした（{type(e).__name__}）")
             members = []
-        rows = []
-        for name, site, addr in members:
-            if not AREA_RE.search(addr) or known.contains(name, site) or excluded(name, site):
+        log(f"管理業協会：愛知の本社・支店 {len(members)}件")
+        for url, label, kind in members:
+            time.sleep(random.uniform(0.8, 1.6))
+            try:
+                name, site = member_detail(http, url)
+            except requests.RequestException:
+                continue
+            if not name or not site or known.contains(name, site) or excluded(name, site):
                 continue
             known.add(name, site)
-            rows.append({"社名": name, "URL": site, "所在地": f"{KIND_HQ}:", "業種": INDUSTRY_JPM})
-        append_rows(config.COMPANIES_CSV, COMPANY_FIELDS, rows)
-        added += len(rows)
-        log(f"日管協（愛知）：会員 {len(members)}社 → 対応地域の {len(rows)}社を候補に追加")
-    if INDUSTRY in done_sources:
+            append_rows(config.COMPANIES_CSV, COMPANY_FIELDS,
+                        [{"社名": name, "URL": site, "所在地": f"{kind}:{branch_of(label)}", "業種": INDUSTRY}])
+            added += 1
+        log(f"管理業協会：{added}社を候補に追加")
         return added
-    try:
-        members = member_list(http)
-    except requests.RequestException as e:
-        log(f"会員一覧を読めませんでした（{type(e).__name__}）")
-        return 0
-    log(f"会員一覧：愛知の本社・支店 {len(members)}件")
-    for url, label, kind in members:
-        time.sleep(random.uniform(0.8, 1.6))
+    if INDUSTRY_MLIT not in done_sources:
         try:
-            name, site = member_detail(http, url)
-        except requests.RequestException:
-            continue
-        if not name or not site or known.contains(name, site) or excluded(name, site):
-            continue
-        known.add(name, site)
-        append_rows(config.COMPANIES_CSV, COMPANY_FIELDS,
-                    [{"社名": name, "URL": site, "所在地": f"{kind}:{branch_of(label)}", "業種": INDUSTRY}])
-        added += 1
-    log(f"送り先の候補に {added}社を追加")
+            offices = mlit_offices(http)
+        except requests.RequestException as e:
+            log(f"国交省の登録を読めませんでした（{type(e).__name__}）")
+            return 0
+        new = [(n, o, a) for n, o, a in offices if AREA_RE.search(a) and not known.contains(n, "")]
+        log(f"国交省の登録（愛知）：{len(offices)}事務所 → 対応地域でまだ候補にない会社 {len(new)}件。サイトを探します")
+        found = 0
+        for name, office, addr in new:
+            if known.contains(name, "") or excluded(name, ""):
+                continue
+            city = (re.search(r"(名古屋市\S+?区|\S+?市)", addr) or [""])[0]
+            site = find_site(http, name, city)
+            if not site or known.contains(name, site) or excluded(name, site):
+                continue
+            known.add(name, site)
+            # 事務所名が支店・営業所などのときだけ支店として宛てる（本店は社名がそのまま入っていることがある）
+            is_branch = re.search(r"支店|営業所|事業所|支社|オフィス|管理室|事業部|センター", office) and \
+                normalize_name(name) not in normalize_name(office)
+            branch = office if is_branch else ""
+            append_rows(config.COMPANIES_CSV, COMPANY_FIELDS,
+                        [{"社名": name, "URL": site, "所在地": f"{KIND_BRANCH if branch else KIND_HQ}:{branch}",
+                          "業種": INDUSTRY_MLIT}])
+            found += 1
+        log(f"国交省の登録：サイトが見つかった {found}社を候補に追加")
+        added += found
     return added
 
 
@@ -220,7 +279,7 @@ def pending(mode: str) -> list[dict]:
     ng = load_ng()
     rows = [c for c in load_companies()
             if c.get("URL") and not done.contains(c["社名"], c["URL"]) and not ng.contains(c["社名"], c["URL"])
-            and not excluded(c["社名"], c["URL"])]
+            and not excluded(c["社名"], c["URL"]) and c.get("業種") != INDUSTRY_JPM]   # 賃貸の管理会社には送らない
     return sorted(rows, key=lambda c: not c.get("所在地", "").startswith(KIND_HQ))
 
 
