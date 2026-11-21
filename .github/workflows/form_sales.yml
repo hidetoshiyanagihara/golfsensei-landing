@@ -1,5 +1,6 @@
 # フォーム営業・無料版（form_sender/free.py）。平日の朝、PR TIMES のニュースから送り先を拾い、決まった文面で問い合わせフォームから送る。
 # あわせて、営業代行の会社に「下請け（協力会社）として受けます」と1日5件送る（main.py agency）。
+# 株式会社スターストラックとして、マンション管理会社に清掃の協力会社の案内を1日10件送る（main.py starstruck。form_sender/STARSTRUCK_ON があるときだけ本番）。
 # AI（Claude）は使わないのでクレジットはかからない。AIで1社ずつ調べる版は python main.py saas（費用がかかるため止めている）
 # リポジトリは公開なので、送り先・調査メモ・結果は暗号化した form_sender/state.enc にだけ残し、ログには会社名を出さない。
 name: Form sales
@@ -18,6 +19,12 @@ on:
       agency_count:
         description: "営業代行の会社に、下請けとして受けますと送る件数"
         default: "2"
+      ss_count:
+        description: "スターストラックとしてマンション管理会社に送る件数"
+        default: "3"
+      only:
+        description: "starstruck = スターストラックだけ送る（AXION の送信はしない）／ all = 全部"
+        default: "all"
 
 permissions:
   contents: write
@@ -29,11 +36,13 @@ concurrency:
 jobs:
   send:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     env:
       MODE: ${{ github.event.inputs.mode || 'live' }}
       COUNT: ${{ github.event.inputs.count || '10' }}
       AGENCY_COUNT: ${{ github.event.inputs.agency_count || '5' }}
+      SS_COUNT: ${{ github.event.inputs.ss_count || '10' }}
+      ONLY: ${{ github.event.inputs.only || 'all' }}
       FORM_STATE_KEY: ${{ secrets.FORM_STATE_KEY }}
     defaults:
       run:
@@ -63,20 +72,37 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: 記録を復号
+        id: open
         if: steps.gate.outputs.go == 'true'
         run: python vault.py open
 
+      # 1つの送り先で止まっても、ほかの送信が動くように、手順ごとに時間を区切って先へ進む（2026-11-12）
+      # 止まった会社は次の回に自動でスキップする（common.skip_stuck）
       - name: 探す・送る
-        if: steps.gate.outputs.go == 'true'
+        if: steps.gate.outputs.go == 'true' && env.ONLY != 'starstruck'
+        timeout-minutes: 40
+        continue-on-error: true
         run: python main.py free --mode "$MODE" --count "$COUNT"
 
       # 営業代行の会社に「下請け（協力会社）として受けます」と送る（2026-11-04 柳原さん指示。お客さま向けの10件とは別枠）
       - name: 営業代行の会社に下請けの売り込み
-        if: steps.gate.outputs.go == 'true'
+        if: steps.gate.outputs.go == 'true' && env.ONLY != 'starstruck'
+        timeout-minutes: 30
+        continue-on-error: true
         run: python main.py agency --mode "$MODE" --count "$AGENCY_COUNT"
 
+      # 株式会社スターストラックの営業（2026-11-08 柳原さん指示）。本番は form_sender/STARSTRUCK_ON があるときだけ
+      - name: スターストラックとしてマンション管理会社に送る
+        if: steps.gate.outputs.go == 'true'
+        timeout-minutes: 60
+        continue-on-error: true
+        run: |
+          if [ "$MODE" = "live" ] && [ ! -f STARSTRUCK_ON ]; then echo "STARSTRUCK_ON がないため送りません"; exit 0; fi
+          python main.py starstruck --mode "$MODE" --count "$SS_COUNT"
+
+      # 復号できたときだけ保存する（復号の前に打ち切られた実行が空の記録で上書きした 2026-11-12 の事故の再発防止）
       - name: 記録を暗号化して保存
-        if: always() && steps.gate.outputs.go == 'true'
+        if: always() && steps.open.outcome == 'success'
         run: |
           python vault.py close
           git config user.name "github-actions[bot]"

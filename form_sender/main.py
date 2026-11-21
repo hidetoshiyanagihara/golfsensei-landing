@@ -8,6 +8,7 @@
   python main.py saas --mode test|live [--count 10]  # SaaS向け：探す→調べる→文面→送信を自動で
   python main.py free --mode test|live [--count 10]  # 無料版：PR TIMESから探す→決まった文面で送信
   python main.py agency --mode test|live [--count 5]  # 営業代行の会社に、下請けとして受けますと送る
+  python main.py starstruck --mode test|live [--count 10]  # 株式会社スターストラックとして、マンション管理会社に送る
   python main.py status                         # 件数の確認
 """
 import argparse
@@ -162,6 +163,11 @@ def cmd_agency(args) -> None:
     run(args.count or 5, live=args.mode == "live", headed=args.headed, wait=not args.no_wait, agency=True)
 
 
+def cmd_starstruck(args) -> None:
+    from starstruck import run
+    run(args.count or 10, live=args.mode == "live", headed=args.headed, wait=not args.no_wait)
+
+
 def cmd_status(args) -> None:
     results = load_results()
     companies = load_companies()
@@ -219,6 +225,13 @@ def main() -> None:
     p.add_argument("--no-wait", action="store_true")
     p.add_argument("--headed", action="store_true")
     p.set_defaults(func=cmd_agency)
+
+    p = sub.add_parser("starstruck", help="株式会社スターストラックとして、マンション管理会社に清掃の協力会社の案内を送る")
+    p.add_argument("--mode", choices=["test", "live"], default="test")
+    p.add_argument("--count", type=int, default=0)
+    p.add_argument("--no-wait", action="store_true")
+    p.add_argument("--headed", action="store_true")
+    p.set_defaults(func=cmd_starstruck)
 
     p = sub.add_parser("status", help="件数を表示")
     p.set_defaults(func=cmd_status)

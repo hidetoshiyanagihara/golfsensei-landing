@@ -1,0 +1,51 @@
+# フォーム営業の記録（form_sender/state.enc）を、過去のある時点の記録と合わせて戻す（手動実行のみ）。
+# 2026-11-12：復号前に打ち切られた実行が空の記録で上書きしたため、その直前（4b03ffc）の記録を今の記録に足して戻す。
+# 行は足し合わせるだけなので、何度実行しても記録は減らない。
+name: Form sales 記録を戻す
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_commit:
+        description: "足したい記録があるコミット（そのときの state.enc）"
+        default: "4b03ffc"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: form-sales
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORM_STATE_KEY: ${{ secrets.FORM_STATE_KEY }}
+    defaults:
+      run:
+        working-directory: form_sender
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install cryptography
+      - name: 今の記録を復号
+        run: python vault.py open
+      - name: 古い記録を足す
+        run: |
+          git show "${{ github.event.inputs.from_commit }}:form_sender/state.enc" > /tmp/old.enc
+          python vault.py merge /tmp/old.enc
+          for f in result.csv ss_result.csv companies.csv ss_companies.csv; do [ -f "$f" ] && echo "$f: $(($(wc -l < "$f") - 1)) 行"; done
+      - name: 暗号化して保存
+        run: |
+          python vault.py close
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.enc
+          git commit -m "フォーム営業の記録を戻す（${{ github.event.inputs.from_commit }} の記録を足す）" || exit 0
+          for i in 1 2 3; do git pull --rebase --autostash -q && git push && break; sleep 5; done
