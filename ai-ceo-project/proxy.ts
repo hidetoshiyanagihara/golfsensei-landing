@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, verifySession } from "./lib/security/session";
+import { SESSION_COOKIE, resolveSessionSecret, verifySession } from "./lib/security/session";
 
 /**
  * ログインしていないアクセスを /login に戻す（入口のチェック）。
  * 各ページと Server Action でも requireAuth() で再確認する。
  */
 export async function proxy(req: NextRequest) {
-  const ok = await verifySession(req.cookies.get(SESSION_COOKIE)?.value, process.env.SESSION_SECRET);
+  const ok = await verifySession(req.cookies.get(SESSION_COOKIE)?.value, resolveSessionSecret());
   if (!ok) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";

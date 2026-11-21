@@ -8,18 +8,19 @@ import { Flash, type FlashParams } from "@/components/common/Flash";
 export const metadata = { title: "設定" };
 
 const INTEGRATIONS: [string, string, boolean, string][] = [
+  ["データベース（Turso）", "TURSO_DATABASE_URL", !!process.env.TURSO_DATABASE_URL, "スマホから使う本番環境のデータ保存先。未設定のときはパソコン内のファイル（data/）を使います。"],
   ["Anthropic API（AI社員）", "ANTHROPIC_API_KEY", !!process.env.ANTHROPIC_API_KEY, "PHASE 2 で接続。キーはサーバー側だけで使い、ブラウザには出しません。"],
-  ["X / Instagram / YouTube への投稿", "（既存の axion-autopost が GitHub Actions で実施）", false, "Command Center からの自動投稿は未実装。各SNSの公式APIと規約を確認してから PHASE 4 で接続します。"],
-  ["note 販売・売上の自動取り込み", "—", false, "公式に使えるAPIの有無を確認してから判断します。それまでは財務画面で手入力します。"],
+  ["X / Instagram / YouTube への投稿", "—", false, "AI CEO PROJECT の新アカウントは、承認後に手で投稿します（自動投稿は各SNSの公式APIと規約を確認してから PHASE 4 で判断）。AXION SALES は既存の自動投稿が担当。"],
+  ["note（販売）", "—", false, "note には公開された販売APIがないため、売上は note の売上管理画面を見て財務画面に記録します。"],
   ["決済・広告出稿", "—", false, "支払い・契約・広告は代表者の承認が必須。自動化しません。"],
 ];
 
 export default async function SettingsPage({ searchParams }: { searchParams: FlashParams }) {
   const sp = await searchParams;
-  const db = getDb();
-  const s = repo.getSettings(db);
+  const db = await getDb();
+  const s = await repo.getSettings(db);
   const automation = s.automation_enabled === "true";
-  const logs = repo.recentAudit(db, 30);
+  const logs = await repo.recentAudit(db, 30);
 
   return (
     <>

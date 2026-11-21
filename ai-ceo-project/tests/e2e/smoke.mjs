@@ -76,6 +76,9 @@ try {
   }
   await page.goto(`${BASE}/dashboard`);
   check((await page.textContent("body")).includes("¥0"), "ダッシュボードの売上は実績0円");
+  await page.goto(`${BASE}/finance`);
+  check((await page.textContent("body")).includes("約¥722"), "note・カード決済の手数料の目安（4,980円→約722円）が出る");
+  await page.goto(`${BASE}/dashboard`);
   check((await page.textContent("body")).includes("自動投稿の結果を取り込んだ実績"), "取り込んだ投稿実績が表示される");
   await page.screenshot({ path: path.join(shots, "dashboard-desktop.png"), fullPage: true });
 
@@ -114,6 +117,19 @@ try {
   const approvedText = await page.locator("li:has-text('E2Eテストの下書き')").allTextContents();
   check(approvedText.some((t) => t.includes("承認済み")), `承認依頼 → 承認ができる ${approvedText.join(" | ").slice(0, 200)}`);
 
+  console.log("投稿した記録・新アカウント");
+  await act(page, () => page.fill("li:has-text('E2Eテストの下書き') input[name=url]", "https://x.com/example/status/1").then(() =>
+    page.click("li:has-text('E2Eテストの下書き') form:has(input[name=url]) button")));
+  check((await page.locator("li:has-text('E2Eテストの下書き')").count()) === 0, "承認済みの投稿を「投稿した」と記録すると待ち行列から消える");
+  const mk = await page.textContent("body");
+  check(mk.includes("新アカウント開設") && mk.includes("@ai_ceo_project"), "新アカウント開設キットが表示される");
+  check(mk.includes("X①：はじめまして"), "新アカウントの最初の下書きが待ち行列に入っている");
+  await page.selectOption("#m-account", "ai-ceo");
+  await page.selectOption("#m-platform", "x");
+  await page.fill("#m-value", "0");
+  await act(page, () => page.click("form:has(#m-value) button[type=submit]"));
+  check((await page.textContent("details:has-text('X')")).includes("開設済み"), "フォロワー数（0でも可）を記録すると「開設済み」になる");
+
   console.log("経営会議");
   await page.goto(`${BASE}/reports`);
   await page.click("text=経営会議を実行");
@@ -121,6 +137,7 @@ try {
   const rep = await page.textContent("body");
   check(rep.includes("1. 現状分析") && rep.includes("7. 翌日の行動計画"), "7項目の経営会議レポートが作られる");
   check(rep.includes("市場調査AIが未接続"), "未調査の項目は未調査と正直に書かれる");
+  check(rep.includes("新アカウント（note・Instagram・YouTube）が未開設"), "未開設の新アカウントが問題点に挙がる（開設済みのXは除く）");
   await page.screenshot({ path: path.join(shots, "meeting-desktop.png"), fullPage: true });
 
   console.log("サンプル表示");

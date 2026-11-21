@@ -9,13 +9,13 @@ import { Card, Notice, PageHeader, StatusPill, TableWrap, td, th } from "@/compo
 export const metadata = { title: "AI社員管理" };
 
 export default async function AgentsPage() {
-  const db = getDb();
-  const agents = repo.listAgents(db);
+  const db = await getDb();
+  const agents = await repo.listAgents(db);
   const month = jstMonth();
-  const errorCount = db.prepare("SELECT agent_id, COUNT(*) AS n FROM agent_runs WHERE status = 'error' GROUP BY agent_id").all() as { agent_id: string; n: number }[];
-  const errors = Object.fromEntries(errorCount.map((e) => [e.agent_id, e.n]));
-  const runCount = db.prepare("SELECT agent_id, COUNT(*) AS n FROM agent_runs GROUP BY agent_id").all() as { agent_id: string; n: number }[];
-  const runs = Object.fromEntries(runCount.map((e) => [e.agent_id, e.n]));
+  const [counts, costs] = await Promise.all([repo.agentRunCounts(db), repo.agentCostsByAgent(db, month)]);
+  const runs = Object.fromEntries(counts.map((e) => [e.agent_id, Number(e.runs)]));
+  const errors = Object.fromEntries(counts.map((e) => [e.agent_id, Number(e.errors)]));
+  const cost = Object.fromEntries(costs.map((e) => [e.agent_id, Number(e.c)]));
 
   return (
     <>
@@ -59,7 +59,7 @@ export default async function AgentsPage() {
                   </td>
                   <td className={`${td} whitespace-nowrap text-xs text-fg-muted`}>{MODEL_PRICING_USD_PER_MTOK[a.model]?.label ?? a.model}</td>
                   <td className={`${td} num whitespace-nowrap text-right`}>
-                    {yen(repo.agentCostInMonth(db, month, a.id))}
+                    {yen(cost[a.id] ?? 0)}
                     <p className="text-[11px] text-fg-subtle">上限 {yen(a.monthly_cap_jpy)}</p>
                   </td>
                 </tr>

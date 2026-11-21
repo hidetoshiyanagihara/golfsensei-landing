@@ -91,3 +91,17 @@ export function yen(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
   return (n < 0 ? "−" : "") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
 }
+
+/**
+ * note の手数料（公式ヘルプ記載の計算方法）：
+ *   事務手数料 = 売上 × 決済手段ごとの料率（クレジットカード 5% など）
+ *   プラットフォーム利用料 = (売上 − 事務手数料) × 10%（有料記事）
+ * 振込手数料（1回 270円）は売上1件ごとではなく振込のたびにかかるため、ここには含めない。
+ * 端数の扱いは公表されていないため「目安」として使い、実際の金額は note の売上管理画面の数字を記録する。
+ */
+export function noteFeeEstimate(priceJpy: number, paymentRate = 0.05, platformRate = 0.1): { fee: number; net: number; effectiveRate: number } {
+  const processing = priceJpy * paymentRate;
+  const platform = (priceJpy - processing) * platformRate;
+  const fee = Math.round(processing + platform);
+  return { fee, net: priceJpy - fee, effectiveRate: 1 - (1 - paymentRate) * (1 - platformRate) };
+}

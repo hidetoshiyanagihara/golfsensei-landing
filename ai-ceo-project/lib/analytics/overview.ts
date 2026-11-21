@@ -23,12 +23,24 @@ export type Overview = {
   automationEnabled: boolean;
 };
 
-export function buildOverview(db: DB, view: repo.View, now = new Date()): Overview {
+export async function buildOverview(db: DB, view: repo.View, now = new Date()): Promise<Overview> {
   const month = jstMonth(now);
-  const settings = repo.getSettings(db);
-  const sales = repo.salesInMonth(db, month, view);
-  const expenses = repo.expensesInMonth(db, month, view);
-  const agentCostJpy = repo.agentCostInMonth(db, month);
+  const [settings, sales, expenses, agentCostJpy, agents, stats, statusCounts, ideas, products, inquiries, productSales, followers, articleViews] =
+    await Promise.all([
+      repo.getSettings(db),
+      repo.salesInMonth(db, month, view),
+      repo.expensesInMonth(db, month, view),
+      repo.agentCostInMonth(db, month),
+      repo.listAgents(db),
+      repo.contentStats(db, month, view),
+      repo.countContentByStatus(db, view),
+      repo.listIdeas(db, view),
+      repo.listProducts(db, view),
+      repo.inquiriesInMonth(db, month, view),
+      repo.salesByProduct(db, month, view),
+      repo.latestMetrics(db, "followers", view),
+      repo.metricSumInMonth(db, "article_views", month, view),
+    ]);
   const pnl = computePnL(sales, expenses, agentCostJpy);
 
   const warn = repo.num(settings, "budget_warn_ratio", 0.8);
@@ -36,15 +48,14 @@ export function buildOverview(db: DB, view: repo.View, now = new Date()): Overvi
   const aiApiJpy = pnl.byCategory.ai_api;
   const aiBudget = evaluateBudget(repo.num(settings, "ai_api_monthly_cap_jpy", 10000), aiApiJpy, warn);
 
-  const agents = repo.listAgents(db);
   const byStatus: Record<string, number> = {};
   for (const a of agents) byStatus[a.status] = (byStatus[a.status] ?? 0) + 1;
 
-  const stats = repo.contentStats(db, month, view);
   const byPlatform: Record<string, { posted: number; failed: number }> = {};
   let posted = 0,
     failed = 0;
   for (const s of stats) {
+    s.n = Number(s.n);
     byPlatform[s.platform] ??= { posted: 0, failed: 0 };
     if (s.status === "posted") {
       byPlatform[s.platform].posted += s.n;
@@ -54,13 +65,9 @@ export function buildOverview(db: DB, view: repo.View, now = new Date()): Overvi
       failed += s.n;
     }
   }
-  const allContent = repo.listContent(db, view, { limit: 10000 });
-  const pendingApproval = allContent.filter((c) => c.status === "pending_approval").length;
-  const drafts = allContent.filter((c) => c.status === "draft").length;
-
-  const ideas = repo.listIdeas(db, view);
-  const products = repo.listProducts(db, view);
-  const inquiries = repo.inquiriesInMonth(db, month, view);
+  const countOf = (st: string) => Number(statusCounts.find((c) => c.status === st)?.n ?? 0);
+  const pendingApproval = countOf("pending_approval");
+  const drafts = countOf("draft");
 
   return {
     month,
@@ -70,9 +77,9 @@ export function buildOverview(db: DB, view: repo.View, now = new Date()): Overvi
     aiApiJpy,
     budget,
     aiBudget,
-    productSales: repo.salesByProduct(db, month, view),
-    followers: repo.latestMetrics(db, "followers", view),
-    articleViews: repo.metricSumInMonth(db, "article_views", month, view),
+    productSales,
+    followers,
+    articleViews,
     inquiries,
     agents: { total: agents.length, byStatus },
     content: { posted, failed, pendingApproval, drafts, byPlatform },

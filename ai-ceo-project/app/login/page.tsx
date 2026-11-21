@@ -27,7 +27,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <div className="space-y-3 text-sm">
               <p className="font-medium text-warn">初期設定が必要です</p>
               <p className="text-fg-muted">
-                ターミナルで <code className="rounded bg-navy-800 px-1.5 py-0.5 text-gold">npm run setup</code> を実行するとパスワードが発行されます。そのあと開発サーバーを起動し直してください。
+                パソコン：ターミナルで <code className="rounded bg-navy-800 px-1.5 py-0.5 text-gold">npm run setup</code> を実行し、開発サーバーを起動し直してください。
+              </p>
+              <p className="text-fg-muted">
+                Netlify：環境変数 <code className="text-gold">ADMIN_PASSWORD</code>（12文字以上）・<code className="text-gold">TURSO_DATABASE_URL</code>・<code className="text-gold">TURSO_AUTH_TOKEN</code> を設定し、もう一度デプロイしてください。
               </p>
             </div>
           ) : (

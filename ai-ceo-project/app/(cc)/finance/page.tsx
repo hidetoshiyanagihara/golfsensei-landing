@@ -2,7 +2,7 @@ import { getDb } from "@/lib/database/db";
 import * as repo from "@/lib/database/repo";
 import { getView } from "@/lib/view";
 import { addExpense, addSale, deleteRecord } from "@/app/actions";
-import { breakEvenUnits, computePnL, EXPENSE_CATEGORY_LABELS, OPERATING_CATEGORIES, yen, type ExpenseCategory } from "@/lib/finance/calc";
+import { breakEvenUnits, computePnL, EXPENSE_CATEGORY_LABELS, noteFeeEstimate, OPERATING_CATEGORIES, yen, type ExpenseCategory } from "@/lib/finance/calc";
 import { evaluateBudget } from "@/lib/automation/budget";
 import { jstDate, jstMonth } from "@/lib/time";
 import { Button, Card, DataBadge, Empty, Notice, PageHeader, TableWrap, td, th } from "@/components/common/ui";
@@ -24,22 +24,27 @@ function DeleteBtn({ table, id }: { table: string; id: number }) {
 
 export default async function FinancePage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const db = getDb();
+  const db = await getDb();
   const view = await getView();
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : jstMonth();
-  const settings = repo.getSettings(db);
-  const sales = repo.salesInMonth(db, month, view);
-  const expenses = repo.expensesInMonth(db, month, view);
-  const agentCost = repo.agentCostInMonth(db, month);
+  const settings = await repo.getSettings(db);
+  const sales = await repo.salesInMonth(db, month, view);
+  const expenses = await repo.expensesInMonth(db, month, view);
+  const agentCost = await repo.agentCostInMonth(db, month);
   const pnl = computePnL(sales, expenses, agentCost);
   const cap = repo.num(settings, "monthly_budget_jpy", 30000);
   const budget = evaluateBudget(cap, pnl.operatingExpenses, repo.num(settings, "budget_warn_ratio", 0.8));
-  const products = repo.listProducts(db, repo.ACTUAL_ONLY);
+  const products = await repo.listProducts(db, repo.ACTUAL_ONLY);
   const hasSample = sales.some((s) => s.data_kind === "sample") || expenses.some((e) => e.data_kind === "sample");
 
   // 損益分岐点（入力値で試算。結果は予測ではなく計算）
   const price = Number(sp.price) > 0 ? Number(sp.price) : products[0]?.price_jpy ?? 4980;
-  const fee = sp.fee !== undefined && Number(sp.fee) >= 0 && Number(sp.fee) < 1 ? Number(sp.fee) : 0.15;
+  // 初期値は note・クレジットカード決済の実質手数料率（事務手数料5%＋プラットフォーム利用料10%）
+  const noteCard = repo.num(settings, "note_card_fee_rate", 0.05);
+  const notePlatform = repo.num(settings, "note_platform_fee_rate", 0.1);
+  const noteRate = Math.round(noteFeeEstimate(1, noteCard, notePlatform).effectiveRate * 1000) / 1000;
+  const fee = sp.fee !== undefined && sp.fee !== "" && Number(sp.fee) >= 0 && Number(sp.fee) < 1 ? Number(sp.fee) : noteRate;
+  const sample = noteFeeEstimate(price, noteCard, notePlatform);
   const fixed = Number(sp.fixed) >= 0 && sp.fixed ? Number(sp.fixed) : pnl.operatingExpenses || cap;
   const be = breakEvenUnits(fixed, price, fee);
   const today = jstDate();
@@ -109,7 +114,9 @@ export default async function FinancePage({ searchParams }: { searchParams: SP }
             <p className="mt-3 text-sm">
               {be === null ? "この条件では1件あたりの手残りが0円以下のため、黒字になりません。" : <>月 <span className="num text-lg font-semibold text-gold">{be}件</span> 売れると固定費をまかなえます。</>}
             </p>
-            <p className="mt-1 text-xs text-fg-subtle">計算結果であり、売上の予測ではありません。手数料率の初期値 0.15 は仮定値です。販売先の実際の手数料を確認して入力してください。</p>
+            <p className="mt-1 text-xs text-fg-subtle">
+              計算結果であり、売上の予測ではありません。手数料率の初期値 {noteRate} は note のクレジットカード決済の場合（事務手数料{noteCard * 100}%＋プラットフォーム利用料{notePlatform * 100}%、note 公式ヘルプ記載の料率）。携帯キャリア決済などは料率が高くなります。振込のたびに別途 {yen(repo.num(settings, "note_payout_fee_jpy", 270))} かかります。
+            </p>
           </Card>
         </div>
       </div>
@@ -123,10 +130,13 @@ export default async function FinancePage({ searchParams }: { searchParams: SP }
             <div><label htmlFor="s-date">販売日</label><input id="s-date" name="sold_at" type="date" defaultValue={today} /></div>
             <div><label htmlFor="s-qty">数量</label><input id="s-qty" name="quantity" inputMode="numeric" defaultValue={1} /></div>
             <div><label htmlFor="s-gross">売上額（税込・円）</label><input id="s-gross" name="gross_jpy" inputMode="numeric" required /></div>
-            <div><label htmlFor="s-fee">決済手数料（円）</label><input id="s-fee" name="payment_fee_jpy" inputMode="numeric" defaultValue={0} /></div>
+            <div><label htmlFor="s-fee">手数料（円）</label><input id="s-fee" name="payment_fee_jpy" inputMode="numeric" defaultValue={0} /></div>
             <div><label htmlFor="s-refund">返金額（円）</label><input id="s-refund" name="refund_jpy" inputMode="numeric" defaultValue={0} /></div>
-            <div><label htmlFor="s-ch">販売経路</label><input id="s-ch" name="channel" placeholder="note など" /></div>
+            <div><label htmlFor="s-ch">販売経路</label><input id="s-ch" name="channel" defaultValue="note" /></div>
             <div className="col-span-2"><label htmlFor="s-note">メモ（購入者の個人情報は書かない）</label><input id="s-note" name="note" /></div>
+            <p className="col-span-2 text-xs text-fg-subtle">
+              手数料は note の売上管理画面に出る実際の金額を入れてください。目安：{yen(price)}・カード決済なら手数料 約{yen(sample.fee)}（手取り 約{yen(sample.net)}）。
+            </p>
             <div className="col-span-2"><Button>売上を記録</Button></div>
           </form>
         </Card>

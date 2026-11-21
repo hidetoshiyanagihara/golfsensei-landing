@@ -19,9 +19,9 @@ const PRODUCTION = [
 
 export default async function ProductsPage({ searchParams }: { searchParams: FlashParams }) {
   const sp = await searchParams;
-  const db = getDb();
+  const db = await getDb();
   const view = await getView();
-  const products = repo.listProducts(db, view);
+  const products = await repo.listProducts(db, view);
 
   return (
     <>

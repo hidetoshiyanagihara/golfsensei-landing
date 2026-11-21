@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { signSession, verifySession, passwordMatches, isLockedOut, recordFailure, clearFailures, SESSION_TTL_SECONDS } from "../../lib/security/session";
+import { signSession, verifySession, passwordMatches, SESSION_TTL_SECONDS } from "../../lib/security/session";
 
 const secret = "x".repeat(40);
 
@@ -33,10 +33,17 @@ test("パスワード比較", async () => {
   assert.equal(await passwordMatches("short", "short"), false); // 12文字未満の設定は無効
 });
 
-test("5回失敗でロック、15分で解除", () => {
-  const k = "ip-test";
-  clearFailures(k);
-  for (let i = 0; i < 5; i++) recordFailure(k, 0);
-  assert.equal(isLockedOut(k, 1000), true);
-  assert.equal(isLockedOut(k, 16 * 60 * 1000), false);
+import { resolveSessionSecret } from "../../lib/security/session";
+
+test("署名の鍵：SESSION_SECRET 優先、なければパスワード＋Tursoトークンから作る", () => {
+  const token = "t".repeat(40);
+  assert.equal(resolveSessionSecret({ SESSION_SECRET: secret }), secret);
+  assert.equal(resolveSessionSecret({ ADMIN_PASSWORD: "long-password-1", TURSO_AUTH_TOKEN: token }), `derived:v1:long-password-1:${token}`);
+  assert.equal(resolveSessionSecret({ ADMIN_PASSWORD: "long-password-1" }), undefined); // トークンなしは作らない
+  assert.equal(resolveSessionSecret({ ADMIN_PASSWORD: "short", TURSO_AUTH_TOKEN: token }), undefined);
+  // パスワードを変えると鍵が変わる（今までのログインは無効になる）
+  assert.notEqual(
+    resolveSessionSecret({ ADMIN_PASSWORD: "long-password-1", TURSO_AUTH_TOKEN: token }),
+    resolveSessionSecret({ ADMIN_PASSWORD: "long-password-2", TURSO_AUTH_TOKEN: token }),
+  );
 });

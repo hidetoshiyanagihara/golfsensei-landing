@@ -45,3 +45,13 @@ test("円表示", () => {
   assert.equal(yen(-500), "−¥500");
   assert.equal(yen(null), "—");
 });
+
+import { noteFeeEstimate } from "../../lib/finance/calc";
+
+test("note の手数料の目安（公式ヘルプの計算例：1,000円・カード決済で145円）", () => {
+  const r = noteFeeEstimate(1000);
+  assert.equal(r.fee, 145);
+  assert.equal(r.net, 855);
+  assert.ok(Math.abs(r.effectiveRate - 0.145) < 1e-9);
+  assert.equal(noteFeeEstimate(4980).fee, 722);
+});

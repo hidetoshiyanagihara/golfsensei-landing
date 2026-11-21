@@ -10,11 +10,11 @@ import { Card, Empty, PageHeader, StatusPill, TableWrap, td, th } from "@/compon
 
 export default async function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const db = getDb();
-  const agent = repo.getAgent(db, id);
+  const db = await getDb();
+  const agent = await repo.getAgent(db, id);
   const def = AGENTS.find((a) => a.id === id);
   if (!agent || !def) notFound();
-  const runs = repo.agentRuns(db, id);
+  const runs = await repo.agentRuns(db, id);
   const errors = runs.filter((r) => r.status === "error" || r.status === "blocked_budget");
   const price = MODEL_PRICING_USD_PER_MTOK[agent.model];
 
@@ -32,7 +32,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
             <div className="flex justify-between gap-2"><dt className="text-fg-muted">稼働状況</dt><dd><StatusPill status={agent.status} /></dd></div>
             <div className="flex justify-between gap-2"><dt className="text-fg-muted">使用モデル</dt><dd>{price?.label ?? agent.model}</dd></div>
             <div className="flex justify-between gap-2"><dt className="text-fg-muted">料金（100万トークン）</dt><dd className="num text-xs">入力 ${price?.input}／出力 ${price?.output}</dd></div>
-            <div className="flex justify-between gap-2"><dt className="text-fg-muted">今月の利用料金</dt><dd className="num">{yen(repo.agentCostInMonth(db, jstMonth(), id))}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-fg-muted">今月の利用料金</dt><dd className="num">{yen(await repo.agentCostInMonth(db, jstMonth(), id))}</dd></div>
             <div className="flex justify-between gap-2"><dt className="text-fg-muted">月間上限</dt><dd className="num">{yen(agent.monthly_cap_jpy)}</dd></div>
             <div className="flex justify-between gap-2"><dt className="text-fg-muted">最終実行</dt><dd className="num">{formatDateTimeJst(agent.last_run_at)}</dd></div>
           </dl>

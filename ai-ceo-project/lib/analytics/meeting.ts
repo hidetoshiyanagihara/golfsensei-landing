@@ -29,13 +29,15 @@ export type MeetingReport = {
 
 const PLATFORM_LABEL: Record<string, string> = { x: "X", instagram: "Instagram", youtube: "YouTube", note: "note", linkedin: "LinkedIn", other: "その他" };
 
-export function buildMeetingReport(db: DB, now = new Date()): MeetingReport {
+export async function buildMeetingReport(db: DB, now = new Date()): Promise<MeetingReport> {
   const v = repo.ACTUAL_ONLY; // 経営会議は実データだけで行う
-  const o = buildOverview(db, v, now);
-  const products = repo.listProducts(db, v);
-  const ideas = repo.listIdeas(db, v);
-  const goals = repo.listGoals(db);
-  const settings = repo.getSettings(db);
+  const [o, products, ideas, goals, settings] = await Promise.all([
+    buildOverview(db, v, now),
+    repo.listProducts(db, v),
+    repo.listIdeas(db, v),
+    repo.listGoals(db),
+    repo.getSettings(db),
+  ]);
   const start = settings.project_start_date ?? o.today;
   const day = daysBetween(start, o.today) + 1;
 
@@ -102,6 +104,18 @@ export function buildMeetingReport(db: DB, now = new Date()): MeetingReport {
     improvements.push("週1回、各SNSのフォロワー数をコンテンツ管理画面で記録する（API連携はPHASE 4）。");
     actions.push({ title: "各SNSの現在のフォロワー数を記録する", owner: "owner", detail: "X・Instagram・YouTube・note", requiresApproval: false });
   }
+  const opened = new Set(o.followers.filter((f) => f.account === "ai-ceo").map((f) => f.platform));
+  const notOpened = (["x", "note", "instagram", "youtube"] as const).filter((p) => !opened.has(p));
+  if (notOpened.length > 0) {
+    const names = notOpened.map((p) => PLATFORM_LABEL[p]).join("・");
+    problems.push(`AI CEO PROJECT の新アカウント（${names}）が未開設、またはフォロワー数が未記録です。`);
+    actions.push({
+      title: `AI CEO PROJECT の${names}のアカウントを開設する`,
+      owner: "owner",
+      detail: "コンテンツ画面の「新アカウント開設」にプロフィール文と手順。開設したらフォロワー数（0でも可）を記録",
+      requiresApproval: false,
+    });
+  }
   if (o.budget.level !== "ok") {
     problems.push(`月間予算の使用率が ${Math.round(o.budget.ratio * 100)}% です。`);
     improvements.push("予算の内訳を確認し、効果の低い支出を止める。");
@@ -156,21 +170,21 @@ export function buildMeetingReport(db: DB, now = new Date()): MeetingReport {
 }
 
 /** 会議の結果を保存し、翌日の行動計画をタスクに登録する（同じタイトルの未完了タスクがあれば作らない） */
-export function saveMeeting(db: DB, report: MeetingReport): number {
-  return db.transaction(() => {
-    const r = db
-      .prepare("INSERT INTO reports (kind, period, generated_by, content) VALUES ('meeting', ?, 'rule', ?)")
-      .run(report.date, JSON.stringify(report));
-    const id = Number(r.lastInsertRowid);
-    const exists = db.prepare("SELECT 1 FROM tasks WHERE title = ? AND status IN ('todo','doing')");
-    const insert = db.prepare(
-      "INSERT INTO tasks (title, detail, owner, due_date, requires_approval, source) VALUES (?, ?, ?, ?, ?, ?)",
-    );
-    for (const a of report.sections.actions) {
-      if (exists.get(a.title)) continue;
-      insert.run(a.title, a.detail, a.owner, addDays(report.date, 1), a.requiresApproval ? 1 : 0, `meeting:${id}`);
-    }
-    repo.audit(db, "system", "meeting.generated", `report:${id}`, { by: "rule", actions: report.sections.actions.length });
-    return id;
-  })();
+export async function saveMeeting(db: DB, report: MeetingReport): Promise<number> {
+  const open = new Set((await repo.openTasks(db, 1000)).map((t) => t.title));
+  const actions = report.sections.actions.filter((a) => !open.has(a.title));
+  // 1回の batch（1つのトランザクション）で、レポート・タスク・操作ログをまとめて保存する
+  const results = await db.batch(
+    [
+      { sql: "INSERT INTO reports (kind, period, generated_by, content) VALUES ('meeting', ?, 'rule', ?)", args: [report.date, JSON.stringify(report)] },
+      ...actions.map((a) => ({
+        sql: `INSERT INTO tasks (title, detail, owner, due_date, requires_approval, source)
+              VALUES (?, ?, ?, ?, ?, 'meeting:' || (SELECT MAX(id) FROM reports))`,
+        args: [a.title, a.detail, a.owner, addDays(report.date, 1), a.requiresApproval ? 1 : 0],
+      })),
+      repo.auditStmt("system", "meeting.generated", "report", { by: "rule", actions: actions.length }),
+    ],
+    "write",
+  );
+  return Number(results[0].lastInsertRowid);
 }

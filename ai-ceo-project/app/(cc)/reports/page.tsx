@@ -11,9 +11,9 @@ export const metadata = { title: "経営会議" };
 
 export default async function ReportsPage({ searchParams }: { searchParams: FlashParams }) {
   const sp = await searchParams;
-  const db = getDb();
-  const reports = repo.listReports(db);
-  const tasks = repo.openTasks(db);
+  const db = await getDb();
+  const reports = await repo.listReports(db);
+  const tasks = await repo.openTasks(db);
 
   return (
     <>

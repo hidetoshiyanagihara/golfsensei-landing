@@ -1,4 +1,4 @@
-import type { DB } from "./db";
+import { all, get, run, type DB } from "./db";
 import type { DataKind } from "./schema";
 import type { ExpenseCategory } from "../finance/calc";
 import type { QaItem } from "../rules";
@@ -12,35 +12,65 @@ function kindsSql(v: View, col = "data_kind"): { sql: string; params: string[] }
 }
 
 // ---------- settings ----------
-export function getSettings(db: DB): Record<string, string> {
-  const rows = db.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
+export async function getSettings(db: DB): Promise<Record<string, string>> {
+  const rows = await all<{ key: string; value: string }>(db, "SELECT key, value FROM settings");
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
 
 export function num(settings: Record<string, string>, key: string, fallback: number): number {
   const n = Number(settings[key]);
-  return Number.isFinite(n) ? n : fallback;
+  return settings[key] !== undefined && Number.isFinite(n) ? n : fallback;
 }
 
-export function setSetting(db: DB, key: string, value: string): void {
-  db.prepare(
-    "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-  ).run(key, value);
+export function setSettingStmt(key: string, value: string) {
+  return {
+    sql: "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+    args: [key, value],
+  };
 }
 
 // ---------- audit ----------
-export function audit(db: DB, actor: string, action: string, target = "", detail: unknown = ""): void {
-  db.prepare("INSERT INTO audit_log (actor, action, target, detail) VALUES (?, ?, ?, ?)").run(
-    actor,
-    action,
-    target,
-    typeof detail === "string" ? detail : JSON.stringify(detail),
-  );
+export function auditStmt(actor: string, action: string, target = "", detail: unknown = "") {
+  return {
+    sql: "INSERT INTO audit_log (actor, action, target, detail) VALUES (?, ?, ?, ?)",
+    args: [actor, action, target, typeof detail === "string" ? detail : JSON.stringify(detail)],
+  };
+}
+
+export async function audit(db: DB, actor: string, action: string, target = "", detail: unknown = ""): Promise<void> {
+  await db.execute(auditStmt(actor, action, target, detail));
 }
 
 export type AuditRow = { id: number; at: string; actor: string; action: string; target: string; detail: string };
-export function recentAudit(db: DB, limit = 30): AuditRow[] {
-  return db.prepare("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?").all(limit) as AuditRow[];
+export function recentAudit(db: DB, limit = 30): Promise<AuditRow[]> {
+  return all<AuditRow>(db, "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", [limit]);
+}
+
+// ---------- login attempts（サーバーが複数台でも共有できるようDBで管理） ----------
+const WINDOW_MS = 15 * 60 * 1000;
+export const MAX_FAILS_PER_KEY = 5;
+export const MAX_FAILS_GLOBAL = 30;
+
+export async function loginLocked(db: DB, key: string, now = Date.now()): Promise<boolean> {
+  await run(db, "DELETE FROM login_attempts WHERE first_at < ?", [now - WINDOW_MS]);
+  const rows = await all<{ key: string; count: number }>(db, "SELECT key, count FROM login_attempts");
+  const mine = rows.find((r) => r.key === key)?.count ?? 0;
+  const total = rows.reduce((a, r) => a + r.count, 0);
+  // 1つの接続元から5回、または全体で30回失敗したら15分止める（接続元を偽装した総当たりにも備える）
+  return mine >= MAX_FAILS_PER_KEY || total >= MAX_FAILS_GLOBAL;
+}
+
+export async function recordLoginFailure(db: DB, key: string, now = Date.now()): Promise<void> {
+  await run(
+    db,
+    `INSERT INTO login_attempts (key, count, first_at) VALUES (?, 1, ?)
+     ON CONFLICT(key) DO UPDATE SET count = count + 1`,
+    [key, now],
+  );
+}
+
+export async function clearLoginFailures(db: DB, key: string): Promise<void> {
+  await run(db, "DELETE FROM login_attempts WHERE key = ?", [key]);
 }
 
 // ---------- finance ----------
@@ -58,14 +88,14 @@ export type SaleRecord = {
   data_kind: DataKind;
 };
 
-export function salesInMonth(db: DB, month: string, v: View): SaleRecord[] {
+export function salesInMonth(db: DB, month: string, v: View): Promise<SaleRecord[]> {
   const k = kindsSql(v, "s.data_kind");
-  return db
-    .prepare(
-      `SELECT s.*, p.name AS product_name FROM sales s LEFT JOIN products p ON p.id = s.product_id
-       WHERE substr(s.sold_at, 1, 7) = ? AND ${k.sql} ORDER BY s.sold_at DESC, s.id DESC`,
-    )
-    .all(month, ...k.params) as SaleRecord[];
+  return all<SaleRecord>(
+    db,
+    `SELECT s.*, p.name AS product_name FROM sales s LEFT JOIN products p ON p.id = s.product_id
+     WHERE substr(s.sold_at, 1, 7) = ? AND ${k.sql} ORDER BY s.sold_at DESC, s.id DESC`,
+    [month, ...k.params],
+  );
 }
 
 export type ExpenseRecord = {
@@ -78,33 +108,40 @@ export type ExpenseRecord = {
   data_kind: DataKind;
 };
 
-export function expensesInMonth(db: DB, month: string, v: View): ExpenseRecord[] {
+export function expensesInMonth(db: DB, month: string, v: View): Promise<ExpenseRecord[]> {
   const k = kindsSql(v);
-  return db
-    .prepare(`SELECT * FROM expenses WHERE substr(spent_at, 1, 7) = ? AND ${k.sql} ORDER BY spent_at DESC, id DESC`)
-    .all(month, ...k.params) as ExpenseRecord[];
+  return all<ExpenseRecord>(
+    db,
+    `SELECT * FROM expenses WHERE substr(spent_at, 1, 7) = ? AND ${k.sql} ORDER BY spent_at DESC, id DESC`,
+    [month, ...k.params],
+  );
 }
 
 /** Command Center 内のAI実行で発生した費用（トークン数からの推計）。AI実行は常に実データ */
-export function agentCostInMonth(db: DB, month: string, agentId?: string): number {
-  const row = db
-    .prepare(
-      `SELECT COALESCE(SUM(cost_jpy), 0) AS c FROM agent_runs WHERE substr(started_at, 1, 7) = ? ${agentId ? "AND agent_id = ?" : ""}`,
-    )
-    .get(...(agentId ? [month, agentId] : [month])) as { c: number };
-  return row.c;
+export async function agentCostInMonth(db: DB, month: string, agentId?: string): Promise<number> {
+  const row = await get<{ c: number }>(
+    db,
+    `SELECT COALESCE(SUM(cost_jpy), 0) AS c FROM agent_runs WHERE substr(started_at, 1, 7) = ? ${agentId ? "AND agent_id = ?" : ""}`,
+    agentId ? [month, agentId] : [month],
+  );
+  return Number(row?.c ?? 0);
 }
 
-export function salesByProduct(db: DB, month: string, v: View): { name: string; net: number; count: number; kind: string }[] {
+export function agentCostsByAgent(db: DB, month: string): Promise<{ agent_id: string; c: number }[]> {
+  return all(db, "SELECT agent_id, COALESCE(SUM(cost_jpy), 0) AS c FROM agent_runs WHERE substr(started_at, 1, 7) = ? GROUP BY agent_id", [month]);
+}
+
+export type ProductSales = { name: string; net: number; count: number; kind: string };
+export function salesByProduct(db: DB, month: string, v: View): Promise<ProductSales[]> {
   const k = kindsSql(v, "s.data_kind");
-  return db
-    .prepare(
-      `SELECT COALESCE(p.name, '（商品未指定）') AS name, SUM(s.gross_jpy - s.refund_jpy) AS net, SUM(s.quantity) AS count,
-              GROUP_CONCAT(DISTINCT s.data_kind) AS kind
-       FROM sales s LEFT JOIN products p ON p.id = s.product_id
-       WHERE substr(s.sold_at, 1, 7) = ? AND ${k.sql} GROUP BY p.id ORDER BY net DESC`,
-    )
-    .all(month, ...k.params) as { name: string; net: number; count: number; kind: string }[];
+  return all<ProductSales>(
+    db,
+    `SELECT COALESCE(p.name, '（商品未指定）') AS name, SUM(s.gross_jpy - s.refund_jpy) AS net, SUM(s.quantity) AS count,
+            GROUP_CONCAT(DISTINCT s.data_kind) AS kind
+     FROM sales s LEFT JOIN products p ON p.id = s.product_id
+     WHERE substr(s.sold_at, 1, 7) = ? AND ${k.sql} GROUP BY p.id ORDER BY net DESC`,
+    [month, ...k.params],
+  );
 }
 
 // ---------- agents ----------
@@ -121,12 +158,12 @@ export type AgentRow = {
   sort: number;
 };
 
-export function listAgents(db: DB): AgentRow[] {
-  return db.prepare("SELECT * FROM agents ORDER BY sort").all() as AgentRow[];
+export function listAgents(db: DB): Promise<AgentRow[]> {
+  return all<AgentRow>(db, "SELECT * FROM agents ORDER BY sort");
 }
 
-export function getAgent(db: DB, id: string): AgentRow | undefined {
-  return db.prepare("SELECT * FROM agents WHERE id = ?").get(id) as AgentRow | undefined;
+export function getAgent(db: DB, id: string): Promise<AgentRow | undefined> {
+  return get<AgentRow>(db, "SELECT * FROM agents WHERE id = ?", [id]);
 }
 
 export type AgentRunRow = {
@@ -146,8 +183,12 @@ export type AgentRunRow = {
   error: string | null;
 };
 
-export function agentRuns(db: DB, agentId: string, limit = 50): AgentRunRow[] {
-  return db.prepare("SELECT * FROM agent_runs WHERE agent_id = ? ORDER BY id DESC LIMIT ?").all(agentId, limit) as AgentRunRow[];
+export function agentRuns(db: DB, agentId: string, limit = 50): Promise<AgentRunRow[]> {
+  return all<AgentRunRow>(db, "SELECT * FROM agent_runs WHERE agent_id = ? ORDER BY id DESC LIMIT ?", [agentId, limit]);
+}
+
+export function agentRunCounts(db: DB): Promise<{ agent_id: string; runs: number; errors: number }[]> {
+  return all(db, "SELECT agent_id, COUNT(*) AS runs, SUM(status IN ('error','blocked_budget')) AS errors FROM agent_runs GROUP BY agent_id");
 }
 
 // ---------- business ideas ----------
@@ -180,11 +221,9 @@ export type IdeaRow = {
   created_at: string;
 };
 
-export function listIdeas(db: DB, v: View): IdeaRow[] {
+export function listIdeas(db: DB, v: View): Promise<IdeaRow[]> {
   const k = kindsSql(v);
-  return db
-    .prepare(`SELECT * FROM business_ideas WHERE ${k.sql} ORDER BY (total_score IS NULL), total_score DESC, id DESC`)
-    .all(...k.params) as IdeaRow[];
+  return all<IdeaRow>(db, `SELECT * FROM business_ideas WHERE ${k.sql} ORDER BY (total_score IS NULL), total_score DESC, id DESC`, k.params);
 }
 
 // ---------- products ----------
@@ -208,18 +247,22 @@ export type ProductRow = {
   buyers: number;
 };
 
-export function listProducts(db: DB, v: View): ProductRow[] {
+export function listProducts(db: DB, v: View): Promise<ProductRow[]> {
   const k = kindsSql(v, "p.data_kind");
   const ks = kindsSql(v, "s.data_kind");
-  return db
-    .prepare(
-      `SELECT p.*,
-         COALESCE((SELECT SUM(s.gross_jpy - s.refund_jpy) FROM sales s WHERE s.product_id = p.id AND ${ks.sql}), 0) AS net_sales,
-         COALESCE((SELECT SUM(s.payment_fee_jpy) FROM sales s WHERE s.product_id = p.id AND ${ks.sql}), 0) AS payment_fees,
-         COALESCE((SELECT SUM(s.quantity) FROM sales s WHERE s.product_id = p.id AND s.refund_jpy < s.gross_jpy AND ${ks.sql}), 0) AS buyers
-       FROM products p WHERE ${k.sql} ORDER BY p.id`,
-    )
-    .all(...ks.params, ...ks.params, ...ks.params, ...k.params) as ProductRow[];
+  return all<ProductRow>(
+    db,
+    `SELECT p.*,
+       COALESCE((SELECT SUM(s.gross_jpy - s.refund_jpy) FROM sales s WHERE s.product_id = p.id AND ${ks.sql}), 0) AS net_sales,
+       COALESCE((SELECT SUM(s.payment_fee_jpy) FROM sales s WHERE s.product_id = p.id AND ${ks.sql}), 0) AS payment_fees,
+       COALESCE((SELECT SUM(s.quantity) FROM sales s WHERE s.product_id = p.id AND s.refund_jpy < s.gross_jpy AND ${ks.sql}), 0) AS buyers
+     FROM products p WHERE ${k.sql} ORDER BY p.id`,
+    [...ks.params, ...ks.params, ...ks.params, ...k.params],
+  );
+}
+
+export function getProduct(db: DB, id: number): Promise<ProductRow | undefined> {
+  return get<ProductRow>(db, "SELECT * FROM products WHERE id = ?", [id]);
 }
 
 export function parseChecklist(json: string): QaItem[] {
@@ -251,7 +294,11 @@ export type ContentRow = {
   data_kind: DataKind;
 };
 
-export function listContent(db: DB, v: View, filter: { status?: string; platform?: string; limit?: number } = {}): ContentRow[] {
+export function listContent(
+  db: DB,
+  v: View,
+  filter: { status?: string; statuses?: string[]; platform?: string; business?: string; limit?: number; oldestFirst?: boolean } = {},
+): Promise<ContentRow[]> {
   const k = kindsSql(v);
   const where = [k.sql];
   const params: (string | number)[] = [...k.params];
@@ -259,75 +306,115 @@ export function listContent(db: DB, v: View, filter: { status?: string; platform
     where.push("status = ?");
     params.push(filter.status);
   }
+  if (filter.statuses?.length) {
+    where.push(`status IN (${filter.statuses.map(() => "?").join(",")})`);
+    params.push(...filter.statuses);
+  }
   if (filter.platform) {
     where.push("platform = ?");
     params.push(filter.platform);
   }
+  if (filter.business) {
+    where.push("business_id = ?");
+    params.push(filter.business);
+  }
   params.push(filter.limit ?? 200);
-  return db
-    .prepare(
-      `SELECT * FROM content_posts WHERE ${where.join(" AND ")}
-       ORDER BY COALESCE(posted_at, scheduled_at, created_at) DESC, id DESC LIMIT ?`,
-    )
-    .all(...params) as ContentRow[];
+  return all<ContentRow>(
+    db,
+    `SELECT * FROM content_posts WHERE ${where.join(" AND ")}
+     ORDER BY COALESCE(posted_at, scheduled_at, created_at) ${filter.oldestFirst ? "ASC" : "DESC"}, id ${filter.oldestFirst ? "ASC" : "DESC"} LIMIT ?`,
+    params,
+  );
 }
 
-export function contentStats(db: DB, month: string, v: View): { platform: string; status: string; n: number }[] {
+export function countContentByStatus(db: DB, v: View): Promise<{ status: string; n: number }[]> {
   const k = kindsSql(v);
-  return db
-    .prepare(
-      `SELECT platform, status, COUNT(*) AS n FROM content_posts
-       WHERE substr(COALESCE(posted_at, scheduled_at, created_at), 1, 7) = ? AND ${k.sql}
-       GROUP BY platform, status`,
-    )
-    .all(month, ...k.params) as { platform: string; status: string; n: number }[];
+  return all(db, `SELECT status, COUNT(*) AS n FROM content_posts WHERE ${k.sql} GROUP BY status`, k.params);
+}
+
+export function contentStats(db: DB, month: string, v: View): Promise<{ platform: string; status: string; n: number }[]> {
+  const k = kindsSql(v);
+  return all(
+    db,
+    `SELECT platform, status, COUNT(*) AS n FROM content_posts
+     WHERE status IN ('posted','failed') AND substr(posted_at, 1, 7) = ? AND ${k.sql}
+     GROUP BY platform, status`,
+    [month, ...k.params],
+  );
+}
+
+/** 自動投稿の取り込み済みの最新日（取り込みを差分にするため） */
+export async function lastImportedDate(db: DB, source: string): Promise<string | null> {
+  const r = await get<{ d: string | null }>(db, "SELECT MAX(posted_at) AS d FROM content_posts WHERE source = ?", [source]);
+  return r?.d ?? null;
 }
 
 // ---------- metrics ----------
-export type MetricRow = { id: number; metric: string; platform: string; date: string; value: number; source: string; data_kind: DataKind };
+export type MetricRow = {
+  id: number;
+  metric: string;
+  account: string;
+  platform: string;
+  date: string;
+  value: number;
+  source: string;
+  data_kind: DataKind;
+};
 
-/** 指標ごと・SNSごとの最新値 */
-export function latestMetrics(db: DB, metric: string, v: View): MetricRow[] {
+/** 指標ごと・アカウント×SNSごとの最新値 */
+export function latestMetrics(db: DB, metric: string, v: View): Promise<MetricRow[]> {
   const k = kindsSql(v, "m.data_kind");
-  return db
-    .prepare(
-      `SELECT m.* FROM metrics m
-       WHERE m.metric = ? AND ${k.sql} AND m.date = (
-         SELECT MAX(m2.date) FROM metrics m2 WHERE m2.metric = m.metric AND m2.platform = m.platform AND m2.data_kind = m.data_kind)
-       ORDER BY m.platform`,
-    )
-    .all(metric, ...k.params) as MetricRow[];
+  return all<MetricRow>(
+    db,
+    `SELECT m.* FROM metrics m
+     WHERE m.metric = ? AND ${k.sql} AND m.date = (
+       SELECT MAX(m2.date) FROM metrics m2
+       WHERE m2.metric = m.metric AND m2.account = m.account AND m2.platform = m.platform AND m2.data_kind = m.data_kind)
+     ORDER BY m.account, m.platform`,
+    [metric, ...k.params],
+  );
 }
 
-export function metricSumInMonth(db: DB, metric: string, month: string, v: View): { value: number; rows: number } {
+export async function metricSumInMonth(db: DB, metric: string, month: string, v: View): Promise<{ value: number; rows: number }> {
   const k = kindsSql(v);
-  return db
-    .prepare(`SELECT COALESCE(SUM(value), 0) AS value, COUNT(*) AS rows FROM metrics WHERE metric = ? AND substr(date, 1, 7) = ? AND ${k.sql}`)
-    .get(metric, month, ...k.params) as { value: number; rows: number };
+  const r = await get<{ value: number; rows: number }>(
+    db,
+    `SELECT COALESCE(SUM(value), 0) AS value, COUNT(*) AS rows FROM metrics WHERE metric = ? AND substr(date, 1, 7) = ? AND ${k.sql}`,
+    [metric, month, ...k.params],
+  );
+  return { value: Number(r?.value ?? 0), rows: Number(r?.rows ?? 0) };
 }
 
-export function recentMetrics(db: DB, v: View, limit = 30): MetricRow[] {
+export function recentMetrics(db: DB, v: View, limit = 30): Promise<MetricRow[]> {
   const k = kindsSql(v);
-  return db.prepare(`SELECT * FROM metrics WHERE ${k.sql} ORDER BY date DESC, id DESC LIMIT ?`).all(...k.params, limit) as MetricRow[];
+  return all<MetricRow>(db, `SELECT * FROM metrics WHERE ${k.sql} ORDER BY date DESC, id DESC LIMIT ?`, [...k.params, limit]);
 }
 
 // ---------- inquiries ----------
-export function inquiriesInMonth(db: DB, month: string, v: View): { total: number; open: number; needsOwner: number } {
+export type InquiryRow = { id: number; received_at: string; channel: string; category: string; status: string; summary: string; data_kind: string };
+
+export function listInquiries(db: DB, v: View, limit = 30): Promise<InquiryRow[]> {
   const k = kindsSql(v);
-  return db
-    .prepare(
-      `SELECT COUNT(*) AS total,
-              COALESCE(SUM(status IN ('new','in_progress','needs_owner')), 0) AS open,
-              COALESCE(SUM(status = 'needs_owner'), 0) AS needsOwner
-       FROM inquiries WHERE substr(received_at, 1, 7) = ? AND ${k.sql}`,
-    )
-    .get(month, ...k.params) as { total: number; open: number; needsOwner: number };
+  return all<InquiryRow>(db, `SELECT * FROM inquiries WHERE ${k.sql} ORDER BY received_at DESC, id DESC LIMIT ?`, [...k.params, limit]);
+}
+
+export async function inquiriesInMonth(db: DB, month: string, v: View): Promise<{ total: number; open: number; needsOwner: number }> {
+  const k = kindsSql(v);
+  const r = await get<{ total: number; open: number; needsOwner: number }>(
+    db,
+    `SELECT COUNT(*) AS total,
+            COALESCE(SUM(status IN ('new','in_progress','needs_owner')), 0) AS open,
+            COALESCE(SUM(status = 'needs_owner'), 0) AS needsOwner
+     FROM inquiries WHERE substr(received_at, 1, 7) = ? AND ${k.sql}`,
+    [month, ...k.params],
+  );
+  return { total: Number(r?.total ?? 0), open: Number(r?.open ?? 0), needsOwner: Number(r?.needsOwner ?? 0) };
 }
 
 // ---------- goals / tasks / reports ----------
 export type GoalRow = { id: number; horizon: "30d" | "90d"; title: string; metric: string; target_value: number | null; deadline: string; status: string };
-export function listGoals(db: DB): GoalRow[] {
-  return db.prepare("SELECT * FROM goals ORDER BY sort").all() as GoalRow[];
+export function listGoals(db: DB): Promise<GoalRow[]> {
+  return all<GoalRow>(db, "SELECT * FROM goals ORDER BY sort");
 }
 
 export type TaskRow = {
@@ -341,24 +428,14 @@ export type TaskRow = {
   source: string;
   created_at: string;
 };
-export function openTasks(db: DB, limit = 50): TaskRow[] {
-  return db
-    .prepare("SELECT * FROM tasks WHERE status IN ('todo','doing') ORDER BY (due_date IS NULL), due_date, id LIMIT ?")
-    .all(limit) as TaskRow[];
+export function openTasks(db: DB, limit = 50): Promise<TaskRow[]> {
+  return all<TaskRow>(db, "SELECT * FROM tasks WHERE status IN ('todo','doing') ORDER BY (due_date IS NULL), due_date, id LIMIT ?", [limit]);
 }
 
 export type ReportRow = { id: number; kind: string; period: string; generated_by: string; content: string; created_at: string };
-export function listReports(db: DB, limit = 20): ReportRow[] {
-  return db.prepare("SELECT * FROM reports ORDER BY id DESC LIMIT ?").all(limit) as ReportRow[];
+export function listReports(db: DB, limit = 20): Promise<ReportRow[]> {
+  return all<ReportRow>(db, "SELECT * FROM reports ORDER BY id DESC LIMIT ?", [limit]);
 }
-export function getReport(db: DB, id: number): ReportRow | undefined {
-  return db.prepare("SELECT * FROM reports WHERE id = ?").get(id) as ReportRow | undefined;
-}
-
-export function countSample(db: DB): number {
-  const tables = ["business_ideas", "products", "sales", "expenses", "content_posts", "metrics", "inquiries"];
-  return tables.reduce(
-    (a, t) => a + (db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE data_kind = 'sample'`).get() as { n: number }).n,
-    0,
-  );
+export function getReport(db: DB, id: number): Promise<ReportRow | undefined> {
+  return get<ReportRow>(db, "SELECT * FROM reports WHERE id = ?", [id]);
 }

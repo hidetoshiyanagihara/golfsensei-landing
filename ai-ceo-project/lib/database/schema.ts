@@ -238,4 +238,36 @@ CREATE TABLE settings (
 );
 `,
   },
+  {
+    version: 2,
+    name: "accounts_login_attempts_note",
+    sql: `
+-- 指標に「どのアカウントか」を追加（AI CEO PROJECT・AXION SALES・コピペAI仕事術 を区別する）
+CREATE TABLE metrics_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  metric TEXT NOT NULL,
+  account TEXT NOT NULL DEFAULT '',
+  platform TEXT NOT NULL DEFAULT '',
+  date TEXT NOT NULL,
+  value REAL NOT NULL,
+  source TEXT NOT NULL DEFAULT 'manual',
+  ${DK},
+  UNIQUE (metric, account, platform, date, data_kind)
+);
+INSERT INTO metrics_new (id, metric, account, platform, date, value, source, data_kind)
+  SELECT id, metric, '', platform, date, value, source, data_kind FROM metrics;
+DROP TABLE metrics;
+ALTER TABLE metrics_new RENAME TO metrics;
+
+-- ログイン失敗の記録（サーバーが複数台でも共有できるようDBに置く）
+CREATE TABLE login_attempts (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL,
+  first_at INTEGER NOT NULL
+);
+
+-- 販売先は note に決定（2026-11-22 代表者）
+UPDATE products SET sales_channel = 'note（有料記事）' WHERE sales_channel = 'note（予定）';
+`,
+  },
 ];

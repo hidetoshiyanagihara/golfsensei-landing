@@ -23,9 +23,9 @@ type Source = { title: string; url: string; accessed_at: string; kind: "fact" | 
 
 export default async function BusinessPage({ searchParams }: { searchParams: FlashParams }) {
   const sp = await searchParams;
-  const db = getDb();
+  const db = await getDb();
   const view = await getView();
-  const ideas = repo.listIdeas(db, view);
+  const ideas = await repo.listIdeas(db, view);
 
   return (
     <>

@@ -3,22 +3,17 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getDb } from "@/lib/database/db";
+import type { InStatement } from "@libsql/client";
+import { batch, get, getDb, type DB } from "@/lib/database/db";
 import * as repo from "@/lib/database/repo";
 import { requireAuth, isConfigured } from "@/lib/security/auth";
-import {
-  SESSION_COOKIE,
-  SESSION_TTL_SECONDS,
-  clearFailures,
-  isLockedOut,
-  passwordMatches,
-  recordFailure,
-  signSession,
-} from "@/lib/security/session";
+import { SESSION_COOKIE, SESSION_TTL_SECONDS, passwordMatches, resolveSessionSecret, signSession } from "@/lib/security/session";
 import { SAMPLE_COOKIE } from "@/lib/view";
 import { canPassQa, canStartSelling, canTransitionContent, totalIdeaScore, type ContentStatus } from "@/lib/rules";
 import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/finance/calc";
 import { buildMeetingReport, saveMeeting } from "@/lib/analytics/meeting";
+import { importAutopostFromGitHub, AUTOPOST_SOURCE } from "@/lib/importers/autopost";
+import { ACCOUNTS } from "@/lib/marketing/launch-kit";
 import { isYmd, jstDate } from "@/lib/time";
 
 // ---------- 入力チェック ----------
@@ -54,13 +49,13 @@ function oneOf<T extends string>(v: string, list: readonly T[], label: string): 
 }
 
 /** 操作後は元の画面に戻り、結果をメッセージで表示する */
-async function run(path: string, fn: () => string | void): Promise<never> {
+async function act(path: string, fn: (db: DB) => Promise<string | void>): Promise<never> {
   await requireAuth();
   // 同じURLに戻ると画面が更新されないことがあるため、毎回ちがうURLにする（t は表示には使わない）
   const back = (key: "ok" | "err", m: string) => `${path}?${key}=${encodeURIComponent(m)}&t=${Date.now().toString(36)}`;
   let msg: string;
   try {
-    msg = fn() || "保存しました";
+    msg = (await fn(await getDb())) || "保存しました";
   } catch (e) {
     if (e instanceof InputError) redirect(back("err", e.message));
     console.error(e);
@@ -71,20 +66,25 @@ async function run(path: string, fn: () => string | void): Promise<never> {
 }
 
 // ---------- ログイン ----------
+async function clientKey(): Promise<string> {
+  const h = await headers();
+  // Netlify は接続元IPを x-nf-client-connection-ip に入れる。なければ x-forwarded-for の先頭
+  return (h.get("x-nf-client-connection-ip") ?? h.get("x-forwarded-for")?.split(",")[0] ?? "local").trim().slice(0, 64);
+}
+
 export async function login(fd: FormData): Promise<void> {
   if (!isConfigured()) redirect("/login?e=setup");
-  const h = await headers();
-  const key = (h.get("x-forwarded-for") ?? "local").split(",")[0].trim();
-  if (isLockedOut(key)) redirect("/login?e=locked");
+  const db = await getDb();
+  const key = await clientKey();
+  if (await repo.loginLocked(db, key)) redirect("/login?e=locked");
   const ok = await passwordMatches(String(fd.get("password") ?? ""), process.env.ADMIN_PASSWORD);
-  const db = getDb();
   if (!ok) {
-    recordFailure(key);
-    repo.audit(db, "anonymous", "auth.login_failed", key);
+    await repo.recordLoginFailure(db, key);
+    await repo.audit(db, "anonymous", "auth.login_failed", key);
     redirect("/login?e=invalid");
   }
-  clearFailures(key);
-  const token = await signSession(process.env.SESSION_SECRET!);
+  await repo.clearLoginFailures(db, key);
+  const token = await signSession(resolveSessionSecret()!);
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -92,7 +92,7 @@ export async function login(fd: FormData): Promise<void> {
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
   });
-  repo.audit(db, "owner", "auth.login", key);
+  await repo.audit(db, "owner", "auth.login", key);
   redirect("/dashboard");
 }
 
@@ -105,7 +105,13 @@ export async function toggleSample(fd: FormData): Promise<void> {
   await requireAuth();
   const c = await cookies();
   const on = c.get(SAMPLE_COOKIE)?.value === "1";
-  c.set(SAMPLE_COOKIE, on ? "0" : "1", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  c.set(SAMPLE_COOKIE, on ? "0" : "1", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
   const back = String(fd.get("back") ?? "/dashboard");
   redirect(back.startsWith("/") && !back.startsWith("//") ? back : "/dashboard");
 }
@@ -114,75 +120,85 @@ export async function toggleSample(fd: FormData): Promise<void> {
 const SCORE_KEYS = ["demand", "competition", "price", "profit", "difficulty", "acquisition", "recurrence"] as const;
 
 export async function createIdea(fd: FormData): Promise<void> {
-  return run("/business", () => {
-    const db = getDb();
+  return act("/business", async (db) => {
     const name = str(fd, "name", { max: 120, required: true });
-    db.prepare(
-      `INSERT INTO business_ideas (business_id, name, target, problem, competitors, price_hypothesis, revenue_model, dev_cost_note,
-         expected_profit_note, risks, origin, approval_status, data_kind)
-       VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'owner', 'pending', 'actual')`,
-    ).run(
-      name,
-      str(fd, "target", { max: 300 }),
-      str(fd, "problem", { max: 1000 }),
-      str(fd, "competitors", { max: 1000 }),
-      str(fd, "price_hypothesis", { max: 200 }),
-      str(fd, "revenue_model", { max: 300 }),
-      str(fd, "dev_cost_note", { max: 300 }),
-      str(fd, "expected_profit_note", { max: 300 }),
-      str(fd, "risks", { max: 1000 }),
-    );
-    repo.audit(db, "owner", "idea.created", name);
+    await batch(db, [
+      {
+        sql: `INSERT INTO business_ideas (business_id, name, target, problem, competitors, price_hypothesis, revenue_model, dev_cost_note,
+                expected_profit_note, risks, origin, approval_status, data_kind)
+              VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'owner', 'pending', 'actual')`,
+        args: [
+          name,
+          str(fd, "target", { max: 300 }),
+          str(fd, "problem", { max: 1000 }),
+          str(fd, "competitors", { max: 1000 }),
+          str(fd, "price_hypothesis", { max: 200 }),
+          str(fd, "revenue_model", { max: 300 }),
+          str(fd, "dev_cost_note", { max: 300 }),
+          str(fd, "expected_profit_note", { max: 300 }),
+          str(fd, "risks", { max: 1000 }),
+        ],
+      },
+      repo.auditStmt("owner", "idea.created", name),
+    ]);
     return "事業アイデアを登録しました";
   });
 }
 
 export async function scoreIdea(fd: FormData): Promise<void> {
-  return run("/business", () => {
-    const db = getDb();
+  return act("/business", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const scores = SCORE_KEYS.map((k) => int(fd, `score_${k}`, { min: 0, max: 100, optional: true }));
     const sourceUrl = str(fd, "source_url", { max: 500 });
     if (sourceUrl && !/^https?:\/\//.test(sourceUrl)) throw new InputError("情報源のURLは http(s):// で始めてください");
     const note = str(fd, "evaluation_note", { max: 2000 });
     const total = totalIdeaScore(scores);
-    const row = db.prepare("SELECT sources FROM business_ideas WHERE id = ?").get(id) as { sources: string } | undefined;
+    const row = await get<{ sources: string }>(db, "SELECT sources FROM business_ideas WHERE id = ? AND data_kind = 'actual'", [id]);
     if (!row) throw new InputError("アイデアが見つかりません");
     const sources = JSON.parse(row.sources) as unknown[];
     if (sourceUrl)
-      sources.push({ title: str(fd, "source_title", { max: 200 }) || sourceUrl, url: sourceUrl, accessed_at: jstDate(), kind: str(fd, "source_kind") === "estimate" ? "estimate" : "fact" });
-    db.prepare(
-      `UPDATE business_ideas SET score_demand=?, score_competition=?, score_price=?, score_profit=?, score_difficulty=?,
-         score_acquisition=?, score_recurrence=?, total_score=?, evaluation_note=?, sources=? WHERE id=?`,
-    ).run(...scores, total, note, JSON.stringify(sources), id);
-    repo.audit(db, "owner", "idea.scored", `idea:${id}`, { total });
+      sources.push({
+        title: str(fd, "source_title", { max: 200 }) || sourceUrl,
+        url: sourceUrl,
+        accessed_at: jstDate(),
+        kind: str(fd, "source_kind") === "estimate" ? "estimate" : "fact",
+      });
+    await batch(db, [
+      {
+        sql: `UPDATE business_ideas SET score_demand=?, score_competition=?, score_price=?, score_profit=?, score_difficulty=?,
+                score_acquisition=?, score_recurrence=?, total_score=?, evaluation_note=?, sources=? WHERE id=?`,
+        args: [...scores, total, note, JSON.stringify(sources), id],
+      },
+      repo.auditStmt("owner", "idea.scored", `idea:${id}`, { total }),
+    ]);
     return total === null ? "評価を保存しました（未入力の項目があるため合計点は未算出）" : `評価を保存しました（${total}点）`;
   });
 }
 
 export async function decideIdea(fd: FormData): Promise<void> {
-  return run("/business", () => {
-    const db = getDb();
+  return act("/business", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const decision = oneOf(str(fd, "decision"), ["approved", "rejected", "on_hold", "pending"] as const, "判断");
-    db.prepare("UPDATE business_ideas SET approval_status = ?, decided_at = datetime('now') WHERE id = ?").run(decision, id);
-    repo.audit(db, "owner", "idea.decided", `idea:${id}`, decision);
+    await batch(db, [
+      { sql: "UPDATE business_ideas SET approval_status = ?, decided_at = datetime('now') WHERE id = ? AND data_kind = 'actual'", args: [decision, id] },
+      repo.auditStmt("owner", "idea.decided", `idea:${id}`, decision),
+    ]);
     return "判断を記録しました";
   });
 }
 
 // ---------- 商品 ----------
 export async function updateProduct(fd: FormData): Promise<void> {
-  return run("/products", () => {
-    const db = getDb();
+  return act("/products", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const op = str(fd, "op", { required: true });
-    const p = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as repo.ProductRow | undefined;
-    if (!p) throw new InputError("商品が見つかりません");
+    const p = await repo.getProduct(db, id);
+    if (!p || p.data_kind !== "actual") throw new InputError("商品が見つかりません");
     const checklist = repo.parseChecklist(p.qa_checklist);
     const state = { ...p, qa_checklist: checklist };
-    const set = (sql: string, ...args: unknown[]) =>
-      db.prepare(`UPDATE products SET ${sql}, updated_at = datetime('now') WHERE id = ?`).run(...args, id);
+    const stmts: InStatement[] = [];
+    const set = (sql: string, ...args: (string | number | null)[]) =>
+      stmts.push({ sql: `UPDATE products SET ${sql}, updated_at = datetime('now') WHERE id = ?`, args: [...args, id] });
 
     switch (op) {
       case "production": {
@@ -194,9 +210,11 @@ export async function updateProduct(fd: FormData): Promise<void> {
       case "qa_item": {
         const key = str(fd, "key", { required: true });
         const next = checklist.map((i) => (i.key === key ? { ...i, done: !i.done } : i));
-        // 検査項目を変えたら、合格・承認はやり直し
-        set("qa_checklist = ?, qa_status = CASE WHEN qa_status = 'passed' THEN 'in_progress' ELSE qa_status END, owner_approved_at = NULL", JSON.stringify(next));
-        if (p.sales_status === "on_sale") set("sales_status = 'stopped'");
+        // 検査項目を変えたら、合格・承認はやり直し。販売中なら止める
+        set(
+          "qa_checklist = ?, qa_status = CASE WHEN qa_status = 'passed' THEN 'in_progress' ELSE qa_status END, owner_approved_at = NULL, sales_status = CASE WHEN sales_status = 'on_sale' THEN 'stopped' ELSE sales_status END",
+          JSON.stringify(next),
+        );
         break;
       }
       case "qa_pass": {
@@ -206,13 +224,12 @@ export async function updateProduct(fd: FormData): Promise<void> {
         break;
       }
       case "qa_fail":
-        set("qa_status = 'failed', owner_approved_at = NULL");
+        set("qa_status = 'failed', owner_approved_at = NULL, sales_status = CASE WHEN sales_status = 'on_sale' THEN 'stopped' ELSE sales_status END");
         break;
-      case "approve": {
+      case "approve":
         if (p.qa_status !== "passed") throw new InputError("品質検査に合格してから承認してください");
         set("owner_approved_at = datetime('now'), sales_status = CASE WHEN sales_status = 'not_for_sale' THEN 'ready' ELSE sales_status END");
         break;
-      }
       case "start_selling": {
         const r = canStartSelling(state);
         if (!r.ok) throw new InputError(r.reason!);
@@ -224,55 +241,57 @@ export async function updateProduct(fd: FormData): Promise<void> {
         break;
       case "price": {
         const price = int(fd, "price_jpy", { min: 0, max: 10_000_000 })!;
-        set("price_jpy = ?, price_is_tentative = ?", price, fd.get("tentative") ? 1 : 0);
+        set("price_is_tentative = ?, price_jpy = ?", fd.get("tentative") ? 1 : 0, price);
         break;
       }
       default:
         throw new InputError("不明な操作です");
     }
-    repo.audit(db, "owner", `product.${op}`, `product:${id}`, Object.fromEntries([...fd.entries()].filter(([k]) => !k.startsWith("$"))));
+    const detail = Object.fromEntries([...fd.entries()].filter(([k]) => !k.startsWith("$")).map(([k, v]) => [k, String(v)]));
+    stmts.push(repo.auditStmt("owner", `product.${op}`, `product:${id}`, detail));
+    await batch(db, stmts);
     return "商品を更新しました";
   });
 }
 
 // ---------- 財務 ----------
 export async function addSale(fd: FormData): Promise<void> {
-  return run("/finance", () => {
-    const db = getDb();
+  return act("/finance", async (db) => {
     const productId = int(fd, "product_id", { min: 1, optional: true });
     const gross = int(fd, "gross_jpy")!;
     const refund = int(fd, "refund_jpy", { optional: true }) ?? 0;
     if (refund > gross) throw new InputError("返金額が売上額を超えています");
-    db.prepare(
-      "INSERT INTO sales (product_id, sold_at, quantity, gross_jpy, payment_fee_jpy, refund_jpy, channel, note, data_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'actual')",
-    ).run(
-      productId,
-      date(fd, "sold_at"),
-      int(fd, "quantity", { min: 1, max: 10000, optional: true }) ?? 1,
-      gross,
-      int(fd, "payment_fee_jpy", { optional: true }) ?? 0,
-      refund,
-      str(fd, "channel", { max: 50 }),
-      str(fd, "note", { max: 300 }),
-    );
-    repo.audit(db, "owner", "sale.added", `product:${productId ?? "-"}`, { gross, refund });
+    await batch(db, [
+      {
+        sql: "INSERT INTO sales (product_id, sold_at, quantity, gross_jpy, payment_fee_jpy, refund_jpy, channel, note, data_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'actual')",
+        args: [
+          productId,
+          date(fd, "sold_at"),
+          int(fd, "quantity", { min: 1, max: 10000, optional: true }) ?? 1,
+          gross,
+          int(fd, "payment_fee_jpy", { optional: true }) ?? 0,
+          refund,
+          str(fd, "channel", { max: 50 }),
+          str(fd, "note", { max: 300 }),
+        ],
+      },
+      repo.auditStmt("owner", "sale.added", `product:${productId ?? "-"}`, { gross, refund }),
+    ]);
     return "売上を記録しました";
   });
 }
 
 export async function addExpense(fd: FormData): Promise<void> {
-  return run("/finance", () => {
-    const db = getDb();
+  return act("/finance", async (db) => {
     const category = oneOf(str(fd, "category"), Object.keys(EXPENSE_CATEGORY_LABELS) as ExpenseCategory[], "費目");
     const amount = int(fd, "amount_jpy")!;
-    db.prepare("INSERT INTO expenses (spent_at, category, vendor, amount_jpy, note, data_kind) VALUES (?, ?, ?, ?, ?, 'actual')").run(
-      date(fd, "spent_at"),
-      category,
-      str(fd, "vendor", { max: 100 }),
-      amount,
-      str(fd, "note", { max: 300 }),
-    );
-    repo.audit(db, "owner", "expense.added", category, { amount });
+    await batch(db, [
+      {
+        sql: "INSERT INTO expenses (spent_at, category, vendor, amount_jpy, note, data_kind) VALUES (?, ?, ?, ?, ?, 'actual')",
+        args: [date(fd, "spent_at"), category, str(fd, "vendor", { max: 100 }), amount, str(fd, "note", { max: 300 })],
+      },
+      repo.auditStmt("owner", "expense.added", category, { amount }),
+    ]);
     return "費用を記録しました";
   });
 }
@@ -280,141 +299,165 @@ export async function addExpense(fd: FormData): Promise<void> {
 const DELETABLE = { sales: "/finance", expenses: "/finance", metrics: "/marketing", inquiries: "/marketing" } as const;
 
 export async function deleteRecord(fd: FormData): Promise<void> {
-  const table = oneOfSafe(String(fd.get("table") ?? ""));
-  return run(DELETABLE[table], () => {
-    const db = getDb();
+  const t = String(fd.get("table") ?? "");
+  if (!(t in DELETABLE)) redirect("/dashboard");
+  const table = t as keyof typeof DELETABLE;
+  return act(DELETABLE[table], async (db) => {
     const id = int(fd, "id", { min: 1 })!;
-    const row = db.prepare(`SELECT * FROM ${table} WHERE id = ? AND data_kind = 'actual'`).get(id);
+    const row = await get(db, `SELECT * FROM ${table} WHERE id = ? AND data_kind = 'actual'`, [id]);
     if (!row) throw new InputError("記録が見つかりません");
-    db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
-    repo.audit(db, "owner", `${table}.deleted`, `${table}:${id}`, row);
+    await batch(db, [{ sql: `DELETE FROM ${table} WHERE id = ?`, args: [id] }, repo.auditStmt("owner", `${table}.deleted`, `${table}:${id}`, row)]);
     return "記録を削除しました（削除内容は操作ログに残っています）";
   });
-}
-
-function oneOfSafe(t: string): keyof typeof DELETABLE {
-  if (t in DELETABLE) return t as keyof typeof DELETABLE;
-  redirect("/dashboard");
 }
 
 // ---------- コンテンツ・指標・問い合わせ ----------
 const PLATFORMS = ["x", "instagram", "youtube", "note", "linkedin", "other"] as const;
 
 export async function createDraft(fd: FormData): Promise<void> {
-  return run("/marketing", () => {
-    const db = getDb();
+  return act("/marketing", async (db) => {
     const platform = oneOf(str(fd, "platform"), PLATFORMS, "投稿先");
+    const business = oneOf(str(fd, "business") || "ai-ceo-project", ["ai-ceo-project", "ai-business-lab", "axion-sales", "copipe-ai"] as const, "アカウント");
     const scheduled = str(fd, "scheduled_at");
     if (scheduled && !isYmd(scheduled)) throw new InputError("予定日の形式が正しくありません");
-    db.prepare(
-      "INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, source, data_kind) VALUES ('ai-business-lab', ?, 'draft', ?, ?, ?, 'manual', 'actual')",
-    ).run(platform, str(fd, "title", { max: 200, required: true }), str(fd, "body", { max: 20000 }), scheduled || null);
-    repo.audit(db, "owner", "content.draft_created", platform);
+    await batch(db, [
+      {
+        sql: "INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, source, data_kind) VALUES (?, ?, 'draft', ?, ?, ?, 'manual', 'actual')",
+        args: [business, platform, str(fd, "title", { max: 200, required: true }), str(fd, "body", { max: 20000 }), scheduled || null],
+      },
+      repo.auditStmt("owner", "content.draft_created", platform),
+    ]);
     return "下書きを保存しました";
   });
 }
 
 export async function transitionContent(fd: FormData): Promise<void> {
-  return run("/marketing", () => {
-    const db = getDb();
+  return act("/marketing", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const to = str(fd, "to") as ContentStatus;
-    const row = db.prepare("SELECT status, scheduled_at FROM content_posts WHERE id = ?").get(id) as { status: ContentStatus; scheduled_at: string | null } | undefined;
+    const row = await get<{ status: ContentStatus; scheduled_at: string | null }>(
+      db,
+      "SELECT status, scheduled_at FROM content_posts WHERE id = ? AND data_kind = 'actual'",
+      [id],
+    );
     if (!row) throw new InputError("投稿が見つかりません");
     if (!canTransitionContent(row.status, to)) throw new InputError("この状態には変更できません（承認を飛ばすことはできません）");
     if (to === "scheduled" && !row.scheduled_at) throw new InputError("予定日が入っていない投稿は予約にできません");
-    db.prepare("UPDATE content_posts SET status = ? WHERE id = ?").run(to, id);
-    repo.audit(db, "owner", "content.status", `content:${id}`, { from: row.status, to });
-    return to === "scheduled"
-      ? "予約済みにしました（自動投稿の接続はPHASE 4。それまでは予定日に手動で投稿してください）"
-      : "状態を更新しました";
+    await batch(db, [
+      { sql: "UPDATE content_posts SET status = ? WHERE id = ?", args: [to, id] },
+      repo.auditStmt("owner", "content.status", `content:${id}`, { from: row.status, to }),
+    ]);
+    return to === "scheduled" ? "予約済みにしました（自動投稿は未接続のため、予定日に手動で投稿してください）" : "状態を更新しました";
+  });
+}
+
+export async function markPostedManually(fd: FormData): Promise<void> {
+  return act("/marketing", async (db) => {
+    const id = int(fd, "id", { min: 1 })!;
+    const url = str(fd, "url", { max: 500 });
+    if (url && !/^https:\/\//.test(url)) throw new InputError("投稿のURLは https:// で始めてください");
+    const row = await get<{ status: string }>(db, "SELECT status FROM content_posts WHERE id = ? AND data_kind = 'actual'", [id]);
+    if (!row) throw new InputError("投稿が見つかりません");
+    // 承認済み・予約済みのものだけ「投稿した」と記録できる（承認なしの投稿を記録させない）
+    if (row.status !== "approved" && row.status !== "scheduled") throw new InputError("承認済みの投稿だけ「投稿した」と記録できます");
+    await batch(db, [
+      { sql: "UPDATE content_posts SET status = 'posted', posted_at = ?, url = ? WHERE id = ?", args: [jstDate(), url || null, id] },
+      repo.auditStmt("owner", "content.posted_manually", `content:${id}`, url),
+    ]);
+    return "投稿済みとして記録しました";
   });
 }
 
 export async function addMetric(fd: FormData): Promise<void> {
-  return run("/marketing", () => {
-    const db = getDb();
+  return act("/marketing", async (db) => {
     const metric = oneOf(str(fd, "metric"), ["followers", "article_views", "profile_visits", "link_clicks"] as const, "指標");
+    const account = oneOf(str(fd, "account"), ACCOUNTS.map((a) => a.id), "アカウント");
     const platform = oneOf(str(fd, "platform"), PLATFORMS, "SNS");
     const value = int(fd, "value", { min: 0, max: 1_000_000_000 })!;
-    db.prepare(
-      `INSERT INTO metrics (metric, platform, date, value, source, data_kind) VALUES (?, ?, ?, ?, 'manual', 'actual')
-       ON CONFLICT(metric, platform, date, data_kind) DO UPDATE SET value = excluded.value`,
-    ).run(metric, platform, date(fd, "date"), value);
-    repo.audit(db, "owner", "metric.recorded", `${metric}:${platform}`, { value });
+    await batch(db, [
+      {
+        sql: `INSERT INTO metrics (metric, account, platform, date, value, source, data_kind) VALUES (?, ?, ?, ?, ?, 'manual', 'actual')
+              ON CONFLICT(metric, account, platform, date, data_kind) DO UPDATE SET value = excluded.value`,
+        args: [metric, account, platform, date(fd, "date"), value],
+      },
+      repo.auditStmt("owner", "metric.recorded", `${metric}:${account}:${platform}`, { value }),
+    ]);
     return "数値を記録しました";
   });
 }
 
 export async function addInquiry(fd: FormData): Promise<void> {
-  return run("/marketing", () => {
-    const db = getDb();
+  return act("/marketing", async (db) => {
     const category = oneOf(str(fd, "category"), ["purchase", "usage", "bug", "refund", "partnership", "other"] as const, "分類");
     // 返金の問い合わせは必ず代表者判断にする（PART 3：重要な判断は代表者に確認）
     const status = category === "refund" ? "needs_owner" : "new";
-    db.prepare("INSERT INTO inquiries (received_at, channel, category, status, summary, data_kind) VALUES (?, ?, ?, ?, ?, 'actual')").run(
-      date(fd, "received_at"),
-      str(fd, "channel", { max: 50 }),
-      category,
-      status,
-      str(fd, "summary", { max: 500 }),
-    );
-    repo.audit(db, "owner", "inquiry.added", category);
+    await batch(db, [
+      {
+        sql: "INSERT INTO inquiries (received_at, channel, category, status, summary, data_kind) VALUES (?, ?, ?, ?, ?, 'actual')",
+        args: [date(fd, "received_at"), str(fd, "channel", { max: 50 }), category, status, str(fd, "summary", { max: 500 })],
+      },
+      repo.auditStmt("owner", "inquiry.added", category),
+    ]);
     return status === "needs_owner" ? "記録しました（返金の問い合わせのため「代表者判断」にしました）" : "問い合わせを記録しました";
   });
 }
 
 export async function updateInquiry(fd: FormData): Promise<void> {
-  return run("/marketing", () => {
-    const db = getDb();
+  return act("/marketing", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const status = oneOf(str(fd, "status"), ["new", "in_progress", "needs_owner", "closed"] as const, "状態");
-    db.prepare("UPDATE inquiries SET status = ? WHERE id = ? AND data_kind = 'actual'").run(status, id);
-    repo.audit(db, "owner", "inquiry.status", `inquiry:${id}`, status);
+    await batch(db, [
+      { sql: "UPDATE inquiries SET status = ? WHERE id = ? AND data_kind = 'actual'", args: [status, id] },
+      repo.auditStmt("owner", "inquiry.status", `inquiry:${id}`, status),
+    ]);
+  });
+}
+
+export async function importAutopostNow(): Promise<void> {
+  return act("/marketing", async (db) => {
+    const since = await repo.lastImportedDate(db, AUTOPOST_SOURCE);
+    const r = await importAutopostFromGitHub(db, { since });
+    return `自動投稿の結果を取り込みました（${r.checkedDays}日分を確認：新規 ${r.inserted}件／更新 ${r.updated}件）`;
   });
 }
 
 // ---------- 経営会議・タスク ----------
 export async function runMeeting(): Promise<void> {
   await requireAuth();
-  const db = getDb();
-  const id = saveMeeting(db, buildMeetingReport(db));
+  const db = await getDb();
+  const id = await saveMeeting(db, await buildMeetingReport(db));
   revalidatePath("/", "layout");
   redirect(`/reports/${id}`);
 }
 
 export async function updateTask(fd: FormData): Promise<void> {
-  const back = str(fd, "back") === "/dashboard" ? "/dashboard" : "/reports";
-  return run(back, () => {
-    const db = getDb();
+  return act("/reports", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const status = oneOf(str(fd, "status"), ["todo", "doing", "done", "cancelled"] as const, "状態");
-    db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(status, id);
-    repo.audit(db, "owner", "task.status", `task:${id}`, status);
+    await batch(db, [{ sql: "UPDATE tasks SET status = ? WHERE id = ?", args: [status, id] }, repo.auditStmt("owner", "task.status", `task:${id}`, status)]);
     return "タスクを更新しました";
   });
 }
 
 export async function addTask(fd: FormData): Promise<void> {
-  return run("/reports", () => {
-    const db = getDb();
+  return act("/reports", async (db) => {
     const due = str(fd, "due_date");
     if (due && !isYmd(due)) throw new InputError("期限の形式が正しくありません");
-    db.prepare("INSERT INTO tasks (title, detail, owner, due_date, source) VALUES (?, ?, 'owner', ?, 'manual')").run(
-      str(fd, "title", { max: 200, required: true }),
-      str(fd, "detail", { max: 1000 }),
-      due || null,
-    );
-    repo.audit(db, "owner", "task.created");
+    await batch(db, [
+      {
+        sql: "INSERT INTO tasks (title, detail, owner, due_date, source) VALUES (?, ?, 'owner', ?, 'manual')",
+        args: [str(fd, "title", { max: 200, required: true }), str(fd, "detail", { max: 1000 }), due || null],
+      },
+      repo.auditStmt("owner", "task.created"),
+    ]);
     return "タスクを追加しました";
   });
 }
 
 // ---------- 設定 ----------
 export async function updateSettings(fd: FormData): Promise<void> {
-  return run("/settings", () => {
-    const db = getDb();
-    const before = repo.getSettings(db);
+  return act("/settings", async (db) => {
+    const before = await repo.getSettings(db);
     const next: Record<string, string> = {
       monthly_budget_jpy: String(int(fd, "monthly_budget_jpy", { min: 0, max: 1_000_000 })),
       ai_api_monthly_cap_jpy: String(int(fd, "ai_api_monthly_cap_jpy", { min: 0, max: 1_000_000 })),
@@ -423,25 +466,22 @@ export async function updateSettings(fd: FormData): Promise<void> {
     const warn = Number(str(fd, "budget_warn_ratio"));
     if (!(warn >= 0.5 && warn <= 0.95)) throw new InputError("警告ラインは0.5〜0.95で入力してください");
     next.budget_warn_ratio = String(warn);
-    if (Number(next.ai_api_monthly_cap_jpy) > Number(next.monthly_budget_jpy))
-      throw new InputError("AI API の上限は月間運営予算以下にしてください");
-    db.transaction(() => {
-      for (const [k, v] of Object.entries(next)) repo.setSetting(db, k, v);
-    })();
-    repo.audit(db, "owner", "settings.updated", "", {
-      before: Object.fromEntries(Object.keys(next).map((k) => [k, before[k]])),
-      after: next,
-    });
+    if (Number(next.ai_api_monthly_cap_jpy) > Number(next.monthly_budget_jpy)) throw new InputError("AI API の上限は月間運営予算以下にしてください");
+    await batch(db, [
+      ...Object.entries(next).map(([k, v]) => repo.setSettingStmt(k, v)),
+      repo.auditStmt("owner", "settings.updated", "", {
+        before: Object.fromEntries(Object.keys(next).map((k) => [k, before[k]])),
+        after: next,
+      }),
+    ]);
     return "設定を保存しました";
   });
 }
 
 export async function setAutomation(fd: FormData): Promise<void> {
-  return run("/settings", () => {
-    const db = getDb();
+  return act("/settings", async (db) => {
     const on = str(fd, "on") === "true";
-    repo.setSetting(db, "automation_enabled", on ? "true" : "false");
-    repo.audit(db, "owner", "automation.toggled", "", on ? "ON" : "OFF");
+    await batch(db, [repo.setSettingStmt("automation_enabled", on ? "true" : "false"), repo.auditStmt("owner", "automation.toggled", "", on ? "ON" : "OFF")]);
     return on ? "自動実行をONにしました（AI社員が未接続のため、現在は何も実行されません）" : "自動実行をOFFにしました";
   });
 }

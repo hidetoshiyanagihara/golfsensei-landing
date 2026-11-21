@@ -1,5 +1,8 @@
-import type Database from "better-sqlite3";
+import type { InStatement } from "@libsql/client";
 import { AGENTS, AGENT_DEFAULT_MODEL } from "../ai/agents";
+import { LAUNCH_DRAFTS } from "../marketing/launch-kit";
+import { addDays } from "../time";
+import { batch, get, type DB } from "./db";
 
 /**
  * 最初から入れておく「実際の計画・設定」。何度実行しても重複しない（INSERT OR IGNORE）。
@@ -13,6 +16,10 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   ai_api_monthly_cap_jpy: "10000", // AI API の月間上限（この金額に達したらAIは自動停止）
   usd_jpy: "155", // 円換算レート（設定値。実際のレートと請求額で定期的に見直す）
   automation_enabled: "false", // AIの自動実行。代表者がONにするまで動かない
+  // note の手数料（公式ヘルプ「コンテンツを販売する際に引かれる手数料」記載の料率。変わることがあるので販売前に再確認）
+  note_card_fee_rate: "0.05", // 事務手数料（クレジットカード決済）
+  note_platform_fee_rate: "0.10", // プラットフォーム利用料（有料記事。事務手数料を引いた額にかかる）
+  note_payout_fee_jpy: "270", // 振込手数料（1回ごと）
 };
 
 export const STARTER_KIT_COMPONENTS = [
@@ -33,69 +40,85 @@ export const DEFAULT_QA_CHECKLIST = [
   { key: "claims", label: "販売ページに誇大表現・架空の実績・口コミがない", done: false },
 ];
 
-export function seedBase(db: Database.Database): void {
-  const tx = db.transaction(() => {
-    const setting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
-    for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) setting.run(k, v);
+const STARTER_KIT = "中小企業向け AI営業自動化スターターキット";
 
-    const biz = db.prepare(
-      "INSERT OR IGNORE INTO businesses (id, name, kind, description, status) VALUES (?, ?, ?, ?, ?)",
-    );
-    biz.run("ai-business-lab", "AI BUSINESS LAB", "デジタル商品", "中小企業・個人事業主向けのAI営業・業務自動化商品の販売", "preparing");
-    biz.run("axion-sales", "AXION SALES", "営業代行", "既存事業。SNS自動投稿・フォーム営業が稼働中（axion-autopost / form_sender）", "active");
-    biz.run("copipe-ai", "コピペAI仕事術", "Instagramメディア", "既存の Instagram 育成プロジェクト（ig-growth）", "active");
+export async function seedBase(db: DB): Promise<void> {
+  const s: InStatement[] = [];
+  for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) s.push({ sql: "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", args: [k, v] });
 
-    const agent = db.prepare(
-      `INSERT OR IGNORE INTO agents (id, name, title, role, responsibilities, model, status, monthly_cap_jpy, sort)
-       VALUES (?, ?, ?, ?, ?, ?, 'not_connected', ?, ?)`,
-    );
-    AGENTS.forEach((a, i) =>
-      agent.run(a.id, a.name, a.title, a.role, JSON.stringify(a.responsibilities), AGENT_DEFAULT_MODEL, a.monthlyCapJpy, i),
-    );
+  const biz = "INSERT OR IGNORE INTO businesses (id, name, kind, description, status) VALUES (?, ?, ?, ?, ?)";
+  s.push({ sql: biz, args: ["ai-business-lab", "AI BUSINESS LAB", "デジタル商品", "中小企業・個人事業主向けのAI営業・業務自動化商品の販売（販売先：note）", "preparing"] });
+  s.push({ sql: biz, args: ["ai-ceo-project", "AI CEO PROJECT（発信）", "SNS・note", "代表・柳原の新しい発信アカウント（X・note・Instagram・YouTube）", "preparing"] });
+  s.push({ sql: biz, args: ["axion-sales", "AXION SALES", "営業代行", "既存事業。SNS自動投稿・フォーム営業が稼働中（axion-autopost / form_sender）", "active"] });
+  s.push({ sql: biz, args: ["copipe-ai", "コピペAI仕事術", "Instagramメディア", "既存の Instagram 育成プロジェクト（ig-growth）", "active"] });
 
-    const hasIdea = db.prepare("SELECT 1 FROM business_ideas WHERE name = ?").get("中小企業向け AI営業自動化スターターキット");
-    if (!hasIdea) {
-      const idea = db
-        .prepare(
-          `INSERT INTO business_ideas (business_id, name, target, problem, price_hypothesis, revenue_model,
-             evaluation_note, origin, approval_status, decided_at, data_kind)
-           VALUES ('ai-business-lab', ?, ?, ?, ?, ?, ?, 'owner', 'approved', datetime('now'), 'actual')`,
-        )
-        .run(
-          "中小企業向け AI営業自動化スターターキット",
+  AGENTS.forEach((a, i) =>
+    s.push({
+      sql: `INSERT OR IGNORE INTO agents (id, name, title, role, responsibilities, model, status, monthly_cap_jpy, sort)
+            VALUES (?, ?, ?, ?, ?, ?, 'not_connected', ?, ?)`,
+      args: [a.id, a.name, a.title, a.role, JSON.stringify(a.responsibilities), AGENT_DEFAULT_MODEL, a.monthlyCapJpy, i],
+    }),
+  );
+
+  // 新アカウントの最初の下書き（承認制。投稿は代表者が行う）
+  const start = DEFAULT_SETTINGS.project_start_date;
+  for (const d of LAUNCH_DRAFTS) {
+    s.push({
+      sql: `INSERT OR IGNORE INTO content_posts (business_id, platform, status, title, body, scheduled_at, source, source_ref, data_kind)
+            VALUES ('ai-ceo-project', ?, 'draft', ?, ?, ?, 'launch-kit', ?, 'actual')`,
+      args: [d.platform, d.title, d.body, addDays(start, d.dayOffset + 1), d.ref],
+    });
+  }
+  await batch(db, s);
+
+  if (!(await get(db, "SELECT 1 FROM business_ideas WHERE name = ?", [STARTER_KIT]))) {
+    await batch(db, [
+      {
+        sql: `INSERT INTO business_ideas (business_id, name, target, problem, price_hypothesis, revenue_model,
+                evaluation_note, origin, approval_status, decided_at, data_kind)
+              VALUES ('ai-business-lab', ?, ?, ?, ?, ?, ?, 'owner', 'approved', datetime('now'), 'actual')`,
+        args: [
+          STARTER_KIT,
           "中小企業・個人事業主（営業を少人数で回している会社）",
           "営業リサーチ・トーク作成・メール・議事録・提案書づくりに時間がかかる",
           "4,980円（仮）",
-          "デジタル商品の買い切り販売（note など）",
+          "note の有料記事（買い切り）",
           "代表者の方針で最初の商品に決定。市場調査（競合・価格・需要）は未実施のため、評価点は未入力。",
-        );
-      db.prepare(
-        `INSERT INTO products (business_id, idea_id, name, description, price_jpy, price_is_tentative,
-           components, qa_checklist, sales_channel, data_kind)
-         VALUES ('ai-business-lab', ?, ?, ?, 4980, 1, ?, ?, 'note（予定）', 'actual')`,
-      ).run(
-        idea.lastInsertRowid,
-        "中小企業向け AI営業自動化スターターキット",
-        "営業の調査・トーク・メール・議事録・提案書をAIで効率化する、実際に使えるテンプレートと手順書のセット",
-        JSON.stringify(STARTER_KIT_COMPONENTS.map((name) => ({ name, status: "planning" }))),
-        JSON.stringify(DEFAULT_QA_CHECKLIST),
-      );
-    }
+        ],
+      },
+      {
+        sql: `INSERT INTO products (business_id, idea_id, name, description, price_jpy, price_is_tentative,
+                components, qa_checklist, sales_channel, data_kind)
+              VALUES ('ai-business-lab', last_insert_rowid(), ?, ?, 4980, 1, ?, ?, 'note（有料記事）', 'actual')`,
+        args: [
+          STARTER_KIT,
+          "営業の調査・トーク・メール・議事録・提案書をAIで効率化する、実際に使えるテンプレートと手順書のセット",
+          JSON.stringify(STARTER_KIT_COMPONENTS.map((name) => ({ name, status: "planning" }))),
+          JSON.stringify(DEFAULT_QA_CHECKLIST),
+        ],
+      },
+    ]);
+  }
 
-    const hasGoals = db.prepare("SELECT 1 FROM goals LIMIT 1").get();
-    if (!hasGoals) {
-      const goal = db.prepare("INSERT INTO goals (horizon, title, metric, target_value, deadline, sort) VALUES (?, ?, ?, ?, ?, ?)");
-      const d30 = "2026-12-21";
-      const d90 = "2027-02-19";
-      goal.run("30d", "商品1つ完成（品質検査に合格）", "products_qa_passed", 1, d30, 1);
-      goal.run("30d", "販売ページ1つ完成", "sales_pages", 1, d30, 2);
-      goal.run("30d", "AI CEO PROJECT のSNSアカウント運営開始", "", null, d30, 3);
-      goal.run("30d", "最初の購入者を獲得", "sales_count", 1, d30, 4);
-      goal.run("90d", "売れる商品を特定する", "", null, d90, 5);
-      goal.run("90d", "商品を2〜3種類に拡張", "products_on_sale", 2, d90, 6);
-      goal.run("90d", "月商10〜30万円を検証（目標値・実績ではない）", "monthly_net_sales", 100000, d90, 7);
-      goal.run("90d", "次の収益事業の候補を発見", "ideas", 1, d90, 8);
-    }
-  });
-  tx();
+  if (!(await get(db, "SELECT 1 FROM goals LIMIT 1"))) {
+    const d30 = "2026-12-21";
+    const d90 = "2027-02-19";
+    const goals: [string, string, string, number | null, string][] = [
+      ["30d", "商品1つ完成（品質検査に合格）", "products_qa_passed", 1, d30],
+      ["30d", "販売ページ1つ完成", "sales_pages", 1, d30],
+      ["30d", "AI CEO PROJECT のSNSアカウント運営開始", "", null, d30],
+      ["30d", "最初の購入者を獲得", "sales_count", 1, d30],
+      ["90d", "売れる商品を特定する", "", null, d90],
+      ["90d", "商品を2〜3種類に拡張", "products_on_sale", 2, d90],
+      ["90d", "月商10〜30万円を検証（目標値・実績ではない）", "monthly_net_sales", 100000, d90],
+      ["90d", "次の収益事業の候補を発見", "ideas", 1, d90],
+    ];
+    await batch(
+      db,
+      goals.map((g, i) => ({
+        sql: "INSERT INTO goals (horizon, title, metric, target_value, deadline, sort) VALUES (?, ?, ?, ?, ?, ?)",
+        args: [...g, i + 1],
+      })),
+    );
+  }
 }

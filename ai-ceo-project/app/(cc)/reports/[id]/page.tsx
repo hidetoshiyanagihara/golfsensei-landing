@@ -11,7 +11,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const n = Number(id);
   if (!Number.isInteger(n) || n < 1) notFound();
-  const r = repo.getReport(getDb(), n);
+  const r = await repo.getReport(await getDb(), n);
   if (!r) notFound();
   const report = JSON.parse(r.content) as MeetingReport;
   return (

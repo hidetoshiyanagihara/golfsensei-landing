@@ -73,27 +73,15 @@ export async function passwordMatches(input: string, expected: string | undefine
   return diff === 0;
 }
 
-/** ログイン試行の制限：15分で5回失敗したら、その15分はログインできない（プロセス内で管理） */
-const attempts = new Map<string, { count: number; first: number }>();
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_FAILS = 5;
-
-export function isLockedOut(key: string, now = Date.now()): boolean {
-  const a = attempts.get(key);
-  if (!a) return false;
-  if (now - a.first > WINDOW_MS) {
-    attempts.delete(key);
-    return false;
-  }
-  return a.count >= MAX_FAILS;
-}
-
-export function recordFailure(key: string, now = Date.now()): void {
-  const a = attempts.get(key);
-  if (!a || now - a.first > WINDOW_MS) attempts.set(key, { count: 1, first: now });
-  else a.count++;
-}
-
-export function clearFailures(key: string): void {
-  attempts.delete(key);
+/**
+ * 署名に使う鍵。SESSION_SECRET があればそれを使う。
+ * なければ（Netlify で設定を減らすため）パスワードと Turso のトークン（長いランダム文字列）から作る。
+ * トークンが無い・短い場合は作らない（推測されやすい鍵でログインさせない）。
+ */
+export function resolveSessionSecret(env: Record<string, string | undefined> = process.env): string | undefined {
+  if (env.SESSION_SECRET && env.SESSION_SECRET.length >= 32) return env.SESSION_SECRET;
+  const pw = env.ADMIN_PASSWORD;
+  const token = env.TURSO_AUTH_TOKEN;
+  if (pw && pw.length >= 12 && token && token.length >= 32) return `derived:v1:${pw}:${token}`;
+  return undefined;
 }

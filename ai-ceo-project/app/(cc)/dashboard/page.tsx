@@ -8,6 +8,9 @@ import { daysBetween } from "@/lib/time";
 import { Card, Empty, Notice, PageHeader, StatTile, StatusPill, type Kind } from "@/components/common/ui";
 import { BarList } from "@/components/dashboard/BarList";
 import { ownerLabel } from "@/lib/ai/agents";
+import { ACCOUNTS } from "@/lib/marketing/launch-kit";
+
+const ACC: Record<string, string> = Object.fromEntries(ACCOUNTS.map((a) => [a.id, a.label]));
 import { Flash, type FlashParams } from "@/components/common/Flash";
 
 export const metadata = { title: "ダッシュボード" };
@@ -16,14 +19,14 @@ const PLATFORM: Record<string, string> = { x: "X", instagram: "Instagram", youtu
 
 export default async function DashboardPage({ searchParams }: { searchParams: FlashParams }) {
   const sp = await searchParams;
-  const db = getDb();
+  const db = await getDb();
   const view = await getView();
-  const o = buildOverview(db, view);
+  const o = await buildOverview(db, view);
   // サンプル表示中は、実データだけの値と比べて「サンプルを含む数字」を見分ける
-  const a: Overview = view.showSample ? buildOverview(db, repo.ACTUAL_ONLY) : o;
+  const a: Overview = view.showSample ? await buildOverview(db, repo.ACTUAL_ONLY) : o;
   const k = (x: number, y: number): Kind => (x === y ? "actual" : "sample");
-  const goals = repo.listGoals(db);
-  const tasks = repo.openTasks(db, 5);
+  const goals = await repo.listGoals(db);
+  const tasks = await repo.openTasks(db, 5);
   const connected = o.agents.total - (o.agents.byStatus.not_connected ?? 0);
   const pendingTotal = o.pending.ideas + o.pending.contentApproval + o.pending.productsAwaitingApproval + o.pending.inquiriesNeedOwner;
 
@@ -101,9 +104,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Fl
           ) : (
             <ul className="divide-y divide-line/60">
               {o.followers.map((f) => (
-                <li key={f.platform + f.data_kind} className="flex items-center justify-between gap-2 py-2 text-sm">
-                  <span className="text-fg-muted">
-                    {PLATFORM[f.platform] ?? f.platform} {f.data_kind === "sample" && <span className="text-warn">（サンプル）</span>}
+                <li key={f.account + f.platform + f.data_kind} className="flex items-center justify-between gap-2 py-2 text-sm">
+                  <span className="min-w-0 truncate text-fg-muted">
+                    {ACC[f.account] ?? "未指定"}・{PLATFORM[f.platform] ?? f.platform} {f.data_kind === "sample" && <span className="text-warn">（サンプル）</span>}
                   </span>
                   <span className="num">
                     {f.value.toLocaleString("ja-JP")}人 <span className="text-xs text-fg-subtle">{f.date}</span>

@@ -15,7 +15,8 @@ ai-ceo-project/
 │   ├── automation/         予算ガード
 │   ├── ai/                 AI社員の定義・モデル料金
 │   ├── analytics/          ダッシュボード集計・経営会議（ルールベース）
-│   ├── importers/          既存データの取り込み（axion-autopost）
+│   ├── importers/          既存データの取り込み（axion-autopost。ファイル／GitHub の公開ファイル）
+│   ├── marketing/          新アカウント開設キット（プロフィール文・最初の下書き）
 │   └── rules.ts            承認フロー（品質検査・販売開始・投稿の状態遷移・事業評価）
 ├── knowledge/              ブランド・運営ルール（AI社員が参照する）
 ├── scripts/                セットアップ・DB初期化・取り込み・サンプル
@@ -39,7 +40,8 @@ ai-ceo-project/
 
 | 選択 | 理由 |
 |---|---|
-| Next.js 16（App Router） | 画面とサーバー処理を1つで書ける。将来 Vercel 無料枠に置ける |
-| SQLite（better-sqlite3） | 無料・設定不要・ファイル1つ。将来 Supabase/Turso に移すときは `lib/database` だけを差し替える |
+| Next.js 16（App Router） | 画面とサーバー処理を1つで書ける。Netlify の無料枠（商用可）で動かせる |
+| libSQL（@libsql/client） | パソコンでは SQLite ファイル、本番では Turso（同じ SQL）。本番は HTTP だけで通信する版を使う |
+| Netlify | 無料プランで商用利用可。`netlify.toml` でこのフォルダの変更時だけビルド |
 | node:test | 追加の依存なしでテストできる |
 | 自前の署名Cookie | 利用者は代表者1人。外部認証サービス（有料・外部連携）を使わずに済む |
