@@ -99,7 +99,7 @@ Instagram の規約上、アカウント作成とログインが必要な操作�
    - 名前：`コピペAI仕事術｜営業社長のAI活用`
    - 自己紹介：docs/04 の **A案** をコピー
    - リンク：`https://copipe-ai.vercel.app`（タイトル「仕事で使うプロンプト集（無料）」）
-   - アイコン：`output/brand/icon_A.jpg`（GitHub アプリでこのファイルを開いて長押し →「写真に保存」）
+   - アイコン：`output/brand/icon_D_character.jpg`（似顔絵キャラ。ほかの案は docs/04 の 5 章。GitHub アプリでファイルを開いて長押し →「写真に保存」）
 4. **投稿用のトークンを発行する（10分）** — AXION SALES のときと同じ画面です
    [Meta for Developers](https://developers.facebook.com/apps/) → AXION SALES で作ったアプリ → Instagram →「Instagram ログインによる API 設定」→「アカウントを追加」で**新しいアカウント**でログイン → そのアカウントの「トークンを生成」
    （権限は `instagram_business_basic` `instagram_business_content_publish` `instagram_business_manage_insights`。アプリが開発モードの場合は、新しいアカウントを「Instagram テスター」に追加して承認が必要なことがあります）

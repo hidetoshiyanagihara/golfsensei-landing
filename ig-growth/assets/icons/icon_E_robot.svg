@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">
+  <rect width="1080" height="1080" fill="#1B2333"/>
+  <circle cx="540" cy="560" r="400" fill="#243049"/>
+  <!-- アンテナ -->
+  <line x1="540" y1="300" x2="540" y2="220" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="540" cy="205" r="38" fill="#FF6B2C"/>
+  <!-- ヘッドセット（営業担当） -->
+  <path d="M250 560 C 250 330, 830 330, 830 560" fill="none" stroke="#FF6B2C" stroke-width="34" stroke-linecap="round"/>
+  <!-- 頭 -->
+  <rect x="285" y="300" width="510" height="440" rx="120" fill="#FFFFFF"/>
+  <rect x="222" y="480" width="80" height="170" rx="36" fill="#FF6B2C"/>
+  <rect x="778" y="480" width="80" height="170" rx="36" fill="#FF6B2C"/>
+  <!-- 画面の顔 -->
+  <rect x="345" y="375" width="390" height="285" rx="80" fill="#1B2333"/>
+  <g fill="none" stroke="#FFE066" stroke-width="24" stroke-linecap="round">
+    <path d="M410 500 Q450 450 490 500"/><path d="M590 500 Q630 450 670 500"/>
+  </g>
+  <path d="M480 570 Q540 625 600 570" fill="none" stroke="#FF6B2C" stroke-width="22" stroke-linecap="round"/>
+  <!-- マイク -->
+  <path d="M262 650 C 270 760, 360 790, 450 760" fill="none" stroke="#FF6B2C" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="462" cy="756" r="30" fill="#FF6B2C"/>
+  <!-- 体 -->
+  <path d="M330 1080 C 340 860, 420 790, 540 790 C 660 790, 740 860, 750 1080 Z" fill="#FFFFFF"/>
+  <rect x="440" y="860" width="200" height="88" rx="44" fill="#FF6B2C"/>
+  <text x="540" y="922" font-family="Noto Sans CJK JP" font-weight="900" font-size="54" fill="#FFFFFF" text-anchor="middle">コピペ</text>
+</svg>

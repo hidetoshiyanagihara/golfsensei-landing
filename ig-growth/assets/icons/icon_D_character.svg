@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">
+  <defs><radialGradient id="bg" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#FF8A4F"/><stop offset="1" stop-color="#FF6B2C"/></radialGradient></defs>
+  <rect width="1080" height="1080" fill="url(#bg)"/>
+  <g transform="translate(470 760) scale(1.16) translate(-500 -700)">
+  <!-- 体（スーツ） -->
+  <path d="M150 1080 C 160 870, 300 790, 500 790 C 700 790, 840 870, 850 1080 Z" fill="#1B2333"/>
+  <path d="M430 792 L570 792 L500 920 Z" fill="#FFFFFF"/>
+  <path d="M484 820 L516 820 L530 900 L500 960 L470 900 Z" fill="#FFE066"/>
+  <rect x="455" y="700" width="90" height="110" rx="30" fill="#F2C7A2"/>
+  <!-- 耳・顔 -->
+  <circle cx="288" cy="575" r="44" fill="#F2C7A2"/><circle cx="712" cy="575" r="44" fill="#F2C7A2"/>
+  <circle cx="500" cy="560" r="215" fill="#F7D6B8"/>
+  <!-- 髪 -->
+  <path d="M282 540 C 270 340, 420 280, 520 286 C 680 296, 742 400, 720 540 C 700 450, 620 410, 540 418 C 460 426, 380 446, 330 500 C 312 520, 296 540, 282 540 Z" fill="#1B2333"/>
+  <!-- メガネ -->
+  <g fill="none" stroke="#1B2333" stroke-width="16" stroke-linejoin="round">
+    <rect x="352" y="520" width="128" height="96" rx="30"/><rect x="520" y="520" width="128" height="96" rx="30"/>
+    <path d="M480 556 Q500 544 520 556"/>
+  </g>
+  <!-- にっこり目 -->
+  <g fill="none" stroke="#1B2333" stroke-width="14" stroke-linecap="round">
+    <path d="M388 574 Q416 548 444 574"/><path d="M556 574 Q584 548 612 574"/>
+  </g>
+  <!-- ほっぺ・口 -->
+  <circle cx="380" cy="650" r="26" fill="#FF8A80" opacity=".55"/><circle cx="620" cy="650" r="26" fill="#FF8A80" opacity=".55"/>
+  <path d="M440 668 Q500 724 560 668 Z" fill="#1B2333"/>
+  <path d="M458 676 Q500 704 542 676 Z" fill="#FFFFFF"/>
+  </g>
+  <!-- 吹き出し -->
+  <path d="M650 160 h230 a60 60 0 0 1 60 60 v90 a60 60 0 0 1 -60 60 h-130 l-70 60 l10 -60 h-40 a60 60 0 0 1 -60 -60 v-90 a60 60 0 0 1 60 -60 z" fill="#FFFFFF"/>
+  <text x="732" y="328" font-family="Noto Sans CJK JP" font-weight="900" font-size="132" fill="#1B2333" text-anchor="middle">AI</text>
+  <rect x="832" y="222" width="18" height="112" rx="6" fill="#FF6B2C"/>
+</svg>
