@@ -1,0 +1,12 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+# 秘密情報（リポジトリは公開。絶対にコミットしない）
+.env
+.env.local
+.env.*.local
+# 売上・顧客などの実データ（SQLite）
+data/*
+!data/.gitkeep
+tests/e2e/screenshots/

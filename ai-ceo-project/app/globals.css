@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/*
+ * AI CEO PROJECT ブランドトークン：ダークネイビー × ブラック × ゴールド × ホワイト
+ * 管理画面は装飾より視認性を優先。グラデーションは使わない。
+ */
+@theme {
+  --color-ink: #05070d;          /* ほぼ黒（背景の最も暗い面） */
+  --color-navy-950: #080d1a;     /* ページ背景 */
+  --color-navy-900: #0e1628;     /* カード */
+  --color-navy-800: #15203a;     /* カード内の強調面・入力欄 */
+  --color-navy-700: #1f2c4b;     /* 境界線（強） */
+  --color-line: #1a2541;         /* 境界線（弱） */
+  --color-gold: #d4b062;         /* アクセント（文字・枠） */
+  --color-gold-strong: #b08a35;  /* グラフの棒・ボタン */
+  --color-gold-dim: #6e5a2c;
+  --color-fg: #f4f6fa;           /* 本文 */
+  --color-fg-muted: #a7b1c6;     /* 補足 */
+  --color-fg-subtle: #7d889f;    /* 注記 */
+  --color-good: #4fb987;
+  --color-warn: #e0a43a;
+  --color-bad: #e5675a;
+  --color-info: #6ea8fe;
+
+  --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Yu Gothic", Meiryo,
+    system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-navy-950);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "palt" 1;
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  background: var(--color-navy-800);
+  border: 1px solid var(--color-navy-700);
+  border-radius: 6px;
+  color: var(--color-fg);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.875rem;
+  width: 100%;
+  min-width: 0;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-gold-dim);
+  outline: none;
+}
+label {
+  font-size: 0.75rem;
+  color: var(--color-fg-muted);
+  display: block;
+}
