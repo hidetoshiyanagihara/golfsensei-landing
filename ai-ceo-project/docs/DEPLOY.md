@@ -11,6 +11,7 @@
 | Netlify のサイト保護 | 本番は管理画面のログインで保護。プレビュー版（本番以外）は Netlify のログイン保護を残している |
 | 公開のしかた | GitHub とは連携していない（ボットの毎日のコミットで無料枠を使わないため）。管理画面を変えたときに `bash scripts/deploy-netlify.sh` で公開する（Claude が実行） |
 | 公開前の確認 | Turso のテスト用データベースで、ブラウザの通しテスト43項目に合格してから公開した |
+| AI社員（PHASE 2） | Netlify の環境変数 `ANTHROPIC_API_KEY` が必要（代表者が Netlify の画面で入力）。入れたら再公開する。時間のかかる仕事は `netlify/functions/agent-run-background.mts`（最大15分）で動く |
 
 以下は、最初に検討・作成したときの記録です。
 
