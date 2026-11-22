@@ -139,8 +139,7 @@ try {
   check((await page.textContent("body")).includes("予約できません") && (await x1().textContent()).includes("承認済み"), "【 】が残っている X 投稿は予約できない");
   await x1().locator("summary").click();
   await x1().locator("textarea[name=body]").fill("はじめまして、HIDEです。人間1人とAI社員で事業を回せるか、本気で試します。売上は0円から、数字も失敗もそのまま書いていきます。");
-  await act(page, () => x1().locator("form:has(textarea[name=body]) button[type=submit]").click());
-  await act(page, () => x1().locator("button[value=scheduled]").click());
+  await act(page, () => x1().locator("form:has(textarea[name=body]) button[value=schedule]").click());
   check((await page.textContent("body")).includes("自動で投稿します") && (await x1().textContent()).includes("予約済み"), "書き換えると予約でき、自動投稿の予定になる");
   check((await x1().textContent()).includes("X に自動投稿"), "X の投稿には「X に自動投稿」と表示される");
   check((await page.locator("li:has-text('note①') summary").count()) === 1, "note の下書きがある");

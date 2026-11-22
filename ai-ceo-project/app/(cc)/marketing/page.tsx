@@ -170,6 +170,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                       {c.body && (
                         <details className="mt-2">
                           <summary className="cursor-pointer text-xs text-gold">本文を見る・直す（{[...c.body].length}文字）</summary>
+                          {editable && <p className="mt-2 text-[11px] text-fg-subtle">直したら、下の「保存して予約」か「保存だけ」を押してください（押さずに上の「予約」を押すと、直した内容は保存されません）。</p>}
                           {editable ? (
                             <form action={updateContent} className="mt-2 space-y-2">
                               <input type="hidden" name="id" value={c.id} />
@@ -180,7 +181,10 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                                 <div><label htmlFor={`h-${c.id}`}>時刻</label><input id={`h-${c.id}`} name="post_time" type="time" defaultValue={c.post_time ?? DEFAULT_POST_TIME} /></div>
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                <Button variant="ghost">保存</Button>
+                                {(c.status === "approved" || c.status === "scheduled") && (
+                                  <Button name="then" value="schedule">{autoX ? "保存して予約（自動投稿）" : "保存して予約"}</Button>
+                                )}
+                                <Button variant="ghost">保存だけ</Button>
                                 {!autoX && <CopyButton text={c.body} />}
                                 {c.platform === "note" && (
                                   <a href="https://note.com/notes/new" target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-md border border-navy-700 px-3 py-1.5 text-sm text-gold hover:border-gold-dim">

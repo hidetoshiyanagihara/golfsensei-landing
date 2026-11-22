@@ -370,6 +370,10 @@ function postTime(fd: FormData): string | null {
   return t;
 }
 
+function autoXRow(r: { platform: string; business_id: string | null }): boolean {
+  return r.platform === "x" && r.business_id === "ai-ceo-project";
+}
+
 export async function updateContent(fd: FormData): Promise<void> {
   return act("/marketing", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
@@ -384,19 +388,32 @@ export async function updateContent(fd: FormData): Promise<void> {
     const scheduled = str(fd, "scheduled_at");
     if (scheduled && !isYmd(scheduled)) throw new InputError("予定日の形式が正しくありません");
     // 予約中のXを書き換えたら、投稿前の確認をもう一度通す
-    if (row.status === "scheduled" && row.platform === "x" && row.business_id === "ai-ceo-project") {
+    if (row.status === "scheduled" && autoXRow(row)) {
       const problem = checkXText(body);
       if (problem) throw new InputError(`保存できません：${problem}`);
     }
     // 失敗したものを直したら、承認済みに戻す（もう一度「予約」を押すと投稿される）
-    const nextStatus = row.status === "failed" ? "approved" : row.status;
+    let nextStatus = row.status === "failed" ? "approved" : row.status;
+    // 「保存して予約」：承認済み（または予約済み）のものだけ。承認は飛ばさない
+    const thenSchedule = str(fd, "then") === "schedule";
+    const autoX = row.platform === "x" && row.business_id === "ai-ceo-project";
+    if (thenSchedule) {
+      if (nextStatus !== "approved" && nextStatus !== "scheduled") throw new InputError("承認してから予約してください");
+      if (!scheduled) throw new InputError("予定日を入れてください");
+      if (autoX) {
+        const problem = checkXText(body);
+        if (problem) throw new InputError(`予約できません（本文は保存していません）：${problem}`);
+      }
+      nextStatus = "scheduled";
+    }
     await batch(db, [
       {
         sql: "UPDATE content_posts SET title = ?, body = ?, scheduled_at = ?, post_time = ?, status = ?, error = NULL WHERE id = ?",
         args: [str(fd, "title", { max: 200, required: true }), body, scheduled || null, postTime(fd), nextStatus, id],
       },
-      repo.auditStmt("owner", "content.edited", `content:${id}`),
+      repo.auditStmt("owner", thenSchedule ? "content.edited_scheduled" : "content.edited", `content:${id}`),
     ]);
+    if (thenSchedule) return autoX ? "保存して予約しました。予定の時刻に X へ自動で投稿します" : "保存して予約しました（この投稿先は手で投稿してください）";
     return "保存しました";
   });
 }
