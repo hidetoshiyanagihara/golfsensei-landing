@@ -1,5 +1,19 @@
 # スマホから使えるようにする（Netlify ＋ Turso）
 
+## いまの本番環境（2026-11-22 公開）
+
+| | 内容 |
+|---|---|
+| URL | **https://ai-ceo-command.netlify.app** |
+| 画面を置く場所 | Netlify（無料）サイト名 `ai-ceo-command` |
+| データの保存先 | Turso（無料）データベース `ai-ceo`（米国東部・オハイオ。Netlify の処理と同じ地域） |
+| ログイン | パスワードは Netlify の **Project configuration → Environment variables → `ADMIN_PASSWORD`** で確認・変更できる（変更したら再公開が必要） |
+| Netlify のサイト保護 | 本番は管理画面のログインで保護。プレビュー版（本番以外）は Netlify のログイン保護を残している |
+| 公開のしかた | GitHub とは連携していない（ボットの毎日のコミットで無料枠を使わないため）。管理画面を変えたときに `bash scripts/deploy-netlify.sh` で公開する（Claude が実行） |
+| 公開前の確認 | Turso のテスト用データベースで、ブラウザの通しテスト43項目に合格してから公開した |
+
+以下は、最初に検討・作成したときの記録です。
+
 2026-11-22 代表者決定：「スマホでも見れるようにする」。
 
 ## なぜこの組み合わせか
