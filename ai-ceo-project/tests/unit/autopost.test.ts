@@ -38,6 +38,7 @@ test("X の文字数（日本語は2、英数は1）と投稿前の確認", () =
   assert.equal(xWeightedLength("あいう"), 6);
   assert.equal(checkXText("あ".repeat(140)), null);
   assert.match(checkXText("あ".repeat(141))!, /長すぎ/);
+  assert.equal(checkXText("あ".repeat(68) + "\r\n\r\n" + "い".repeat(70)), null); // 改行 CR+LF は1文字として数える
   assert.match(checkXText("【ここにひとこと】今日の記録")!, /【 】/);
   assert.match(checkXText("詳しくは https://note.com/x")!, /URL/);
   assert.match(checkXText("note.com で読めます")!, /URL/);

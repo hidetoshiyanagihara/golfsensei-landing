@@ -21,6 +21,7 @@ export function jstStamp(d = new Date()): string {
 
 /** 投稿してよい文章か（投稿前の最終確認） */
 export function checkXText(text: string): string | null {
+  text = text.replace(/\r\n?/g, "\n");
   if (!text.trim()) return "本文が空です";
   if (/[【】]/.test(text)) return "【 】の部分が残っています（ご自身の言葉に書き換えてから予約してください）";
   if (hasUrl(text)) return "URLが入っています（XはURL入りの投稿が約13倍の料金のため、自動投稿しません。リンクはプロフィールに置いてください）";
@@ -79,7 +80,7 @@ export async function publishDueX(db: DB, poster: XPoster | null, now = new Date
     return finish({ status: "failed", detail: problem });
   }
 
-  const r = await poster(due.body);
+  const r = await poster(due.body.replace(/\r\n?/g, "\n"));
   if (r.ok) {
     await batch(db, [
       {

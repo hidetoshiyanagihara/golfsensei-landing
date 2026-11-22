@@ -25,7 +25,8 @@ import "@/lib/ai/tasks/index";
 class InputError extends Error {}
 
 function str(fd: FormData, key: string, { max = 2000, required = false } = {}): string {
-  const v = String(fd.get(key) ?? "").trim();
+  // ブラウザのフォームは改行を CR+LF（2文字）で送るため、1文字（LF）にそろえる（X の文字数がずれないように）
+  const v = String(fd.get(key) ?? "").replace(/\r\n?/g, "\n").trim();
   if (required && !v) throw new InputError(`「${key}」を入力してください`);
   if (v.length > max) throw new InputError(`「${key}」は${max}文字以内で入力してください`);
   return v;
