@@ -507,8 +507,10 @@ async function dispatchRun(db: DB, runId: number): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(await signDispatch(runId)),
       signal: AbortSignal.timeout(10_000),
+      redirect: "manual", // 転送（ログイン画面など）を成功と勘違いしない
     });
-    if (r.status !== 202 && !r.ok) throw new Error(`HTTP ${r.status}`);
+    // バックグラウンド関数は受け付けると 202 を返す。それ以外は失敗
+    if (r.status !== 202) throw new Error(`HTTP ${r.status}`);
   } catch (e) {
     await batch(db, [
       {

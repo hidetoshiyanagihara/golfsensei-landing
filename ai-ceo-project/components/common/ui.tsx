@@ -110,6 +110,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   skipped: { label: "見送り", cls: "text-fg-subtle border-fg-subtle/40" },
   // 実行履歴
   success: { label: "成功", cls: "text-good border-good/40" },
+  queued: { label: "受付", cls: "text-info border-info/50" },
   blocked_budget: { label: "予算で停止", cls: "text-bad border-bad/50" },
   // タスク
   todo: { label: "未着手", cls: "text-fg-muted border-fg-subtle/40" },

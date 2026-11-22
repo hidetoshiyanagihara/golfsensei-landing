@@ -17,5 +17,6 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  // .netlify/functions は裏側の実行用（依頼は署名で確認するので、ここでは止めない）
+  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon.svg|\\.netlify/).*)"],
 };
