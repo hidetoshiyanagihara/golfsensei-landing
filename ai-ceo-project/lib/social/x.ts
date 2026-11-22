@@ -94,3 +94,17 @@ export function makeXPoster(c: XCredentials, doFetch: typeof fetch = fetch): XPo
     }
   };
 }
+
+export const ME_URL = "https://api.x.com/2/users/me";
+
+/** 合鍵がどのアカウントのものかを確認する（投稿はしない）。 */
+export async function whoAmI(c: XCredentials, doFetch: typeof fetch = fetch): Promise<{ ok: true; username: string; name: string } | { ok: false; error: string }> {
+  try {
+    const r = await doFetch(ME_URL, { headers: { Authorization: oauthHeader("GET", ME_URL, c) }, signal: AbortSignal.timeout(15_000) });
+    const body = (await r.json().catch(() => ({}))) as { data?: { username?: string; name?: string }; detail?: string; title?: string };
+    if (r.ok && body.data?.username) return { ok: true, username: body.data.username, name: body.data.name ?? "" };
+    return { ok: false, error: `X API（${r.status}）${body.detail ?? body.title ?? ""}`.slice(0, 200) };
+  } catch (e) {
+    return { ok: false, error: `X に接続できませんでした（${e instanceof Error ? e.message : "不明"}）` };
+  }
+}

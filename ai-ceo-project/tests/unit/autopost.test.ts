@@ -155,3 +155,17 @@ test("マーケティングAI：X と note の下書きを承認待ちで登録�
   assert.equal(ai.find((x) => x.title === "note①")!.post_time, "20:00");
   assert.equal(jstStamp(new Date("2026-11-25T23:30:00Z")), "2026-11-26 08:30");
 });
+
+test("合鍵のアカウント確認（投稿はしない）", async () => {
+  const { whoAmI } = await import("../../lib/social/x");
+  const cred = { apiKey: "k", apiSecret: "s", accessToken: "t", accessTokenSecret: "u" };
+  let method = "";
+  const r = await whoAmI(cred, (async (_u: string, init: RequestInit) => {
+    method = init.method ?? "GET";
+    return new Response(JSON.stringify({ data: { id: "1", name: "HIDE", username: "ai_ceo_project" } }));
+  }) as unknown as typeof fetch);
+  assert.deepEqual(r, { ok: true, username: "ai_ceo_project", name: "HIDE" });
+  assert.equal(method, "GET");
+  const bad = await whoAmI(cred, (async () => new Response(JSON.stringify({ title: "Unauthorized" }), { status: 401 })) as unknown as typeof fetch);
+  assert.equal(bad.ok, false);
+});

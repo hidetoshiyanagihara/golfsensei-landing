@@ -15,6 +15,7 @@ import { buildMeetingReport, saveMeeting } from "@/lib/analytics/meeting";
 import { importAutopostFromGitHub, AUTOPOST_SOURCE } from "@/lib/importers/autopost";
 import { ACCOUNTS } from "@/lib/marketing/launch-kit";
 import { checkXText } from "@/lib/automation/publisher";
+import { whoAmI, xCredentialsFromEnv } from "@/lib/social/x";
 import { isYmd, jstDate } from "@/lib/time";
 import { executeRun, queueRun } from "@/lib/ai/runner";
 import { BACKGROUND_PATH, onNetlify, signDispatch } from "@/lib/ai/dispatch";
@@ -595,5 +596,20 @@ export async function runAgentTask(fd: FormData): Promise<void> {
     return onNetlify()
       ? `受付けました（#${q.runId}）。終わるまで数十秒〜数分かかります。この画面は自動で更新されます`
       : `実行しました（#${q.runId}）`;
+  });
+}
+
+/** X の合鍵がどのアカウントのものかを確認する（投稿はしない。X API の読み取り1回分の費用） */
+export async function checkXAccount(): Promise<void> {
+  return act("/settings", async (db) => {
+    const cred = xCredentialsFromEnv();
+    if (!cred) throw new InputError("X の合鍵が設定されていません");
+    const r = await whoAmI(cred);
+    if (!r.ok) {
+      await batch(db, [repo.auditStmt("owner", "x.verify_failed", "", r.error)]);
+      throw new InputError(`確認できませんでした：${r.error}`);
+    }
+    await batch(db, [repo.setSettingStmt("x_account", `@${r.username}（${r.name}）`), repo.auditStmt("owner", "x.verified", r.username)]);
+    return `X の合鍵は @${r.username}（${r.name}）のものです`;
   });
 }

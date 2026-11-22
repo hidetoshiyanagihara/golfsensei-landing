@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/database/db";
 import * as repo from "@/lib/database/repo";
-import { runAgentTask, setAutomation, setXAutopost, updateSettings } from "@/app/actions";
+import { checkXAccount, runAgentTask, setAutomation, setXAutopost, updateSettings } from "@/app/actions";
 import { xCredentialsFromEnv } from "@/lib/social/x";
 import { X_DAILY_LIMIT_DEFAULT } from "@/lib/automation/publisher";
 import { formatDateTimeJst } from "@/lib/time";
@@ -77,6 +77,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Fla
             ／ 状態：{s.x_autopost_enabled === "true" ? <span className="text-good">ON</span> : <span className="text-fg-muted">OFF</span>}
           </p>
           <p className="text-xs text-fg-subtle">予約の確認：15分ごと。最後の確認：{s.scheduler_last_run ?? "まだ動いていません"}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs">投稿先のアカウント：{s.x_account ?? <span className="text-fg-subtle">未確認</span>}</span>
+            {xCredentialsFromEnv() && (
+              <form action={checkXAccount}>
+                <Button variant="ghost">合鍵のアカウントを確認（投稿はしない・約1〜2円）</Button>
+              </form>
+            )}
+          </div>
           <form action={setXAutopost} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="on" value={s.x_autopost_enabled === "true" ? "false" : "true"} />
             <div className="w-32"><label htmlFor="x_daily_limit">1日の上限（件）</label><input id="x_daily_limit" name="x_daily_limit" inputMode="numeric" defaultValue={s.x_daily_limit ?? String(X_DAILY_LIMIT_DEFAULT)} /></div>
