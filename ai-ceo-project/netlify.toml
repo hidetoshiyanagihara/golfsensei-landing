@@ -9,3 +9,9 @@
 [build.environment]
   NODE_VERSION = "22"
   NEXT_TELEMETRY_DISABLED = "1"
+
+# AI社員の仕事を裏側で動かす関数（netlify/functions/*-background.mts ＝ 最大15分）
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["@libsql/client", "libsql"]

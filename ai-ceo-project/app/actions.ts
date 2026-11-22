@@ -15,6 +15,9 @@ import { buildMeetingReport, saveMeeting } from "@/lib/analytics/meeting";
 import { importAutopostFromGitHub, AUTOPOST_SOURCE } from "@/lib/importers/autopost";
 import { ACCOUNTS } from "@/lib/marketing/launch-kit";
 import { isYmd, jstDate } from "@/lib/time";
+import { executeRun, queueRun } from "@/lib/ai/runner";
+import { BACKGROUND_PATH, onNetlify, signDispatch } from "@/lib/ai/dispatch";
+import "@/lib/ai/tasks/index";
 
 // ---------- 入力チェック ----------
 class InputError extends Error {}
@@ -483,5 +486,53 @@ export async function setAutomation(fd: FormData): Promise<void> {
     const on = str(fd, "on") === "true";
     await batch(db, [repo.setSettingStmt("automation_enabled", on ? "true" : "false"), repo.auditStmt("owner", "automation.toggled", "", on ? "ON" : "OFF")]);
     return on ? "自動実行をONにしました（AI社員が未接続のため、現在は何も実行されません）" : "自動実行をOFFにしました";
+  });
+}
+
+// ---------- AI社員の実行 ----------
+const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "system.ping": "ceo" };
+
+/** 受付けた仕事を裏側（Netlify のバックグラウンド関数）に渡す。パソコンではその場で実行する */
+async function dispatchRun(db: DB, runId: number): Promise<void> {
+  if (!onNetlify()) {
+    await executeRun(db, runId);
+    return;
+  }
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  try {
+    const r = await fetch(`${proto}://${host}${BACKGROUND_PATH}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(await signDispatch(runId)),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (r.status !== 202 && !r.ok) throw new Error(`HTTP ${r.status}`);
+  } catch (e) {
+    await batch(db, [
+      {
+        sql: "UPDATE agent_runs SET status = 'error', finished_at = ?, error = ? WHERE id = ? AND status = 'queued'",
+        args: [new Date().toISOString(), `裏側の実行を開始できませんでした（${e instanceof Error ? e.message : "不明"}）`, runId],
+      },
+    ]);
+    throw new InputError("裏側の実行を開始できませんでした。時間をおいてもう一度押してください");
+  }
+}
+
+export async function runAgentTask(fd: FormData): Promise<void> {
+  const task = String(fd.get("task") ?? "");
+  const agentId = RUNNABLE[task];
+  if (!agentId) redirect("/agents");
+  return act(`/agents/${agentId}`, async (db) => {
+    const params: Record<string, unknown> = {};
+    if (task === "research.ideas") params.theme = str(fd, "theme", { max: 300 });
+    if (task === "system.ping") params.seconds = int(fd, "seconds", { min: 0, max: 120, optional: true }) ?? 0;
+    const q = await queueRun(db, task, params, "manual");
+    if (!q.ok) throw new InputError(q.reason);
+    await dispatchRun(db, q.runId);
+    return onNetlify()
+      ? `受付けました（#${q.runId}）。終わるまで数十秒〜数分かかります。この画面は自動で更新されます`
+      : `実行しました（#${q.runId}）`;
   });
 }

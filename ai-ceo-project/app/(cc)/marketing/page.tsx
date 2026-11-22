@@ -99,7 +99,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
             );
           })}
         </div>
-        <p className="mt-3 text-xs text-fg-subtle">最初の投稿の下書き（X 3本・note 1本・Instagram 1本・YouTube 1本）は、下の待ち行列に入っています。【 】の部分は柳原さん自身の言葉で書いてください。</p>
+        <p className="mt-3 text-xs text-fg-subtle">最初の投稿の下書き（X 3本・note 1本・Instagram 1本・YouTube 1本）は、下の待ち行列に入っています。【 】の部分はご自身の言葉で書いてください。発信名は「HIDE」です。</p>
       </Card>
 
       <Card title={`承認・予約の待ち行列（${queue.length}件）`} className="mt-4">

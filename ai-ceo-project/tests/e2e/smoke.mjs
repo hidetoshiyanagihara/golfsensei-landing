@@ -132,13 +132,22 @@ try {
 
   console.log("経営会議");
   await page.goto(`${BASE}/reports`);
-  await page.click("text=経営会議を実行");
+  await page.click("text=ルールで集計");
   await page.waitForURL(/\/reports\/\d+/);
   const rep = await page.textContent("body");
   check(rep.includes("1. 現状分析") && rep.includes("7. 翌日の行動計画"), "7項目の経営会議レポートが作られる");
   check(rep.includes("市場調査AIが未接続"), "未調査の項目は未調査と正直に書かれる");
   check(rep.includes("新アカウント（note・Instagram・YouTube）が未開設"), "未開設の新アカウントが問題点に挙がる（開設済みのXは除く）");
   await page.screenshot({ path: path.join(shots, "meeting-desktop.png"), fullPage: true });
+
+  console.log("AI社員（APIキーなしの状態）");
+  await page.goto(`${BASE}/reports`);
+  check(await page.locator("button:has-text('AI CEO に会議を頼む')").isDisabled(), "APIキーがないときは「AI CEO に会議を頼む」を押せない");
+  await page.goto(`${BASE}/agents/research`);
+  const ra = await page.textContent("body");
+  check(ra.includes("仕事を頼む") && ra.includes("費用の上限") && ra.includes("Web検索は最大5回"), "市場調査AIの画面に、頼める仕事と費用の上限が出る");
+  check(await page.locator("form:has(input[value='research.ideas']) button").isDisabled(), "APIキーがないときは市場調査を実行できない");
+  check(ra.includes("未接続") || ra.includes("APIのキーが未設定"), "APIキーがないことが表示される");
 
   console.log("サンプル表示");
   await page.goto(`${BASE}/dashboard`);

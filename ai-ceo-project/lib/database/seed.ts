@@ -46,9 +46,11 @@ export async function seedBase(db: DB): Promise<void> {
   const s: InStatement[] = [];
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) s.push({ sql: "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", args: [k, v] });
 
-  const biz = "INSERT OR IGNORE INTO businesses (id, name, kind, description, status) VALUES (?, ?, ?, ?, ?)";
+  // 名前・説明は最新の定義で更新する（状態 status は変えない）
+  const biz = `INSERT INTO businesses (id, name, kind, description, status) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, description = excluded.description`;
   s.push({ sql: biz, args: ["ai-business-lab", "AI BUSINESS LAB", "デジタル商品", "中小企業・個人事業主向けのAI営業・業務自動化商品の販売（販売先：note）", "preparing"] });
-  s.push({ sql: biz, args: ["ai-ceo-project", "AI CEO PROJECT（発信）", "SNS・note", "代表・柳原の新しい発信アカウント（X・note・Instagram・YouTube）", "preparing"] });
+  s.push({ sql: biz, args: ["ai-ceo-project", "AI CEO PROJECT（発信）", "SNS・note", "代表の新しい発信アカウント（発信名：HIDE／X・note・Instagram・YouTube）", "preparing"] });
   s.push({ sql: biz, args: ["axion-sales", "AXION SALES", "営業代行", "既存事業。SNS自動投稿・フォーム営業が稼働中（axion-autopost / form_sender）", "active"] });
   s.push({ sql: biz, args: ["copipe-ai", "コピペAI仕事術", "Instagramメディア", "既存の Instagram 育成プロジェクト（ig-growth）", "active"] });
 
@@ -60,12 +62,15 @@ export async function seedBase(db: DB): Promise<void> {
     }),
   );
 
-  // 新アカウントの最初の下書き（承認制。投稿は代表者が行う）
+  // 新アカウントの最初の下書き（承認制。投稿は代表者が行う）。
+  // 開設キットを直したときは、まだ「下書き」のものだけ新しい文章に差し替える（承認・投稿済みのものは変えない）
   const start = DEFAULT_SETTINGS.project_start_date;
   for (const d of LAUNCH_DRAFTS) {
     s.push({
-      sql: `INSERT OR IGNORE INTO content_posts (business_id, platform, status, title, body, scheduled_at, source, source_ref, data_kind)
-            VALUES ('ai-ceo-project', ?, 'draft', ?, ?, ?, 'launch-kit', ?, 'actual')`,
+      sql: `INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, source, source_ref, data_kind)
+            VALUES ('ai-ceo-project', ?, 'draft', ?, ?, ?, 'launch-kit', ?, 'actual')
+            ON CONFLICT(source_ref) DO UPDATE SET title = excluded.title, body = excluded.body
+            WHERE content_posts.status = 'draft' AND (content_posts.body <> excluded.body OR content_posts.title <> excluded.title)`,
       args: [d.platform, d.title, d.body, addDays(start, d.dayOffset + 1), d.ref],
     });
   }

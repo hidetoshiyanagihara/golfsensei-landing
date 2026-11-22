@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/database/db";
 import * as repo from "@/lib/database/repo";
-import { setAutomation, updateSettings } from "@/app/actions";
+import { runAgentTask, setAutomation, updateSettings } from "@/app/actions";
 import { formatDateTimeJst } from "@/lib/time";
 import { Button, Card, Notice, PageHeader } from "@/components/common/ui";
 import { Flash, type FlashParams } from "@/components/common/Flash";
@@ -9,7 +9,7 @@ export const metadata = { title: "設定" };
 
 const INTEGRATIONS: [string, string, boolean, string][] = [
   ["データベース（Turso）", "TURSO_DATABASE_URL", !!process.env.TURSO_DATABASE_URL, "スマホから使う本番環境のデータ保存先。未設定のときはパソコン内のファイル（data/）を使います。"],
-  ["Anthropic API（AI社員）", "ANTHROPIC_API_KEY", !!process.env.ANTHROPIC_API_KEY, "PHASE 2 で接続。キーはサーバー側だけで使い、ブラウザには出しません。"],
+  ["Claude API（AI社員）", "ANTHROPIC_API_KEY", !!process.env.ANTHROPIC_API_KEY, "AI CEO・市場調査AIが使います（モデル：Claude Opus 5.5）。キーはサーバー側だけで使い、ブラウザには出しません。AXION SALES の自動投稿と同じアカウントの料金になります。"],
   ["X / Instagram / YouTube への投稿", "—", false, "AI CEO PROJECT の新アカウントは、承認後に手で投稿します（自動投稿は各SNSの公式APIと規約を確認してから PHASE 4 で判断）。AXION SALES は既存の自動投稿が担当。"],
   ["note（販売）", "—", false, "note には公開された販売APIがないため、売上は note の売上管理画面を見て財務画面に記録します。"],
   ["決済・広告出稿", "—", false, "支払い・契約・広告は代表者の承認が必須。自動化しません。"],
@@ -49,7 +49,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Fla
               <Button variant={automation ? "danger" : "ghost"}>{automation ? "OFFにする" : "ONにする"}</Button>
             </form>
           </div>
-          <div className="mt-3"><Notice>AI社員はまだ未接続のため、ONにしても現在は何も実行されません。</Notice></div>
+          <div className="mt-3"><Notice>これは「定期的な自動実行」のスイッチです。代表者がボタンを押して頼む仕事は、OFFのままでも予算の範囲で実行されます。定期実行は PHASE 5 で追加予定のため、ONにしても今は何も起きません。</Notice></div>
         </Card>
       </div>
 
@@ -65,6 +65,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Fla
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card title="裏側の実行の動作確認" className="mt-4">
+        <form action={runAgentTask} className="flex flex-wrap items-center gap-3">
+          <input type="hidden" name="task" value="system.ping" />
+          <input type="hidden" name="seconds" value="70" />
+          <Button variant="ghost">動作確認（AIは使わない・0円）</Button>
+          <span className="text-xs text-fg-subtle">70秒かかる処理を裏側で動かし、時間のかかるAIの仕事が途中で止まらないかを確かめます。結果は AI CEO の画面に出ます。</span>
+        </form>
       </Card>
 
       <Card title="操作ログ（直近30件）" className="mt-4">

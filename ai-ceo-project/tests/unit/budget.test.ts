@@ -22,6 +22,8 @@ test("予算の段階判定", () => {
 
 test("自動実行OFF・未接続・停止中なら実行しない", () => {
   assert.equal(checkRun({ ...base, automationEnabled: false }).allowed, false);
+  assert.equal(checkRun({ ...base, automationEnabled: false, trigger: "schedule" }).allowed, false);
+  assert.equal(checkRun({ ...base, automationEnabled: false, trigger: "manual" }).allowed, true); // ボタンでの実行は予算内なら動く
   assert.equal(checkRun({ ...base, agentStatus: "not_connected" }).allowed, false);
   assert.equal(checkRun({ ...base, agentStatus: "paused" }).allowed, false);
   assert.equal(checkRun({ ...base, estimateJpy: NaN }).allowed, false);
