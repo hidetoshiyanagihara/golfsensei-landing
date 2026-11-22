@@ -14,6 +14,7 @@ import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/finance/cal
 import { buildMeetingReport, saveMeeting } from "@/lib/analytics/meeting";
 import { importAutopostFromGitHub, AUTOPOST_SOURCE } from "@/lib/importers/autopost";
 import { ACCOUNTS } from "@/lib/marketing/launch-kit";
+import { checkXText } from "@/lib/automation/publisher";
 import { isYmd, jstDate } from "@/lib/time";
 import { executeRun, queueRun } from "@/lib/ai/runner";
 import { BACKGROUND_PATH, onNetlify, signDispatch } from "@/lib/ai/dispatch";
@@ -323,10 +324,11 @@ export async function createDraft(fd: FormData): Promise<void> {
     const business = oneOf(str(fd, "business") || "ai-ceo-project", ["ai-ceo-project", "ai-business-lab", "axion-sales", "copipe-ai"] as const, "アカウント");
     const scheduled = str(fd, "scheduled_at");
     if (scheduled && !isYmd(scheduled)) throw new InputError("予定日の形式が正しくありません");
+    const time = postTime(fd);
     await batch(db, [
       {
-        sql: "INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, source, data_kind) VALUES (?, ?, 'draft', ?, ?, ?, 'manual', 'actual')",
-        args: [business, platform, str(fd, "title", { max: 200, required: true }), str(fd, "body", { max: 20000 }), scheduled || null],
+        sql: "INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, post_time, source, data_kind) VALUES (?, ?, 'draft', ?, ?, ?, ?, 'manual', 'actual')",
+        args: [business, platform, str(fd, "title", { max: 200, required: true }), str(fd, "body", { max: 20000 }), scheduled || null, time],
       },
       repo.auditStmt("owner", "content.draft_created", platform),
     ]);
@@ -338,19 +340,76 @@ export async function transitionContent(fd: FormData): Promise<void> {
   return act("/marketing", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const to = str(fd, "to") as ContentStatus;
-    const row = await get<{ status: ContentStatus; scheduled_at: string | null }>(
+    const row = await get<{ status: ContentStatus; scheduled_at: string | null; platform: string; business_id: string | null; body: string }>(
       db,
-      "SELECT status, scheduled_at FROM content_posts WHERE id = ? AND data_kind = 'actual'",
+      "SELECT status, scheduled_at, platform, business_id, body FROM content_posts WHERE id = ? AND data_kind = 'actual'",
       [id],
     );
     if (!row) throw new InputError("投稿が見つかりません");
     if (!canTransitionContent(row.status, to)) throw new InputError("この状態には変更できません（承認を飛ばすことはできません）");
     if (to === "scheduled" && !row.scheduled_at) throw new InputError("予定日が入っていない投稿は予約にできません");
+    const autoX = row.platform === "x" && row.business_id === "ai-ceo-project";
+    if (to === "scheduled" && autoX) {
+      const problem = checkXText(row.body);
+      if (problem) throw new InputError(`予約できません：${problem}`);
+    }
     await batch(db, [
       { sql: "UPDATE content_posts SET status = ? WHERE id = ?", args: [to, id] },
       repo.auditStmt("owner", "content.status", `content:${id}`, { from: row.status, to }),
     ]);
-    return to === "scheduled" ? "予約済みにしました（自動投稿は未接続のため、予定日に手動で投稿してください）" : "状態を更新しました";
+    if (to === "scheduled") return autoX ? "予約しました。予定の時刻になったら X に自動で投稿します" : "予約済みにしました（この投稿先は自動投稿しないため、予定日に手で投稿してください）";
+    return "状態を更新しました";
+  });
+}
+
+function postTime(fd: FormData): string | null {
+  const t = str(fd, "post_time");
+  if (!t) return null;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) throw new InputError("時刻の形式が正しくありません（例 08:00）");
+  return t;
+}
+
+export async function updateContent(fd: FormData): Promise<void> {
+  return act("/marketing", async (db) => {
+    const id = int(fd, "id", { min: 1 })!;
+    const row = await get<{ status: string; platform: string; business_id: string | null }>(
+      db,
+      "SELECT status, platform, business_id FROM content_posts WHERE id = ? AND data_kind = 'actual'",
+      [id],
+    );
+    if (!row) throw new InputError("投稿が見つかりません");
+    if (!["draft", "pending_approval", "approved", "scheduled", "failed"].includes(row.status)) throw new InputError("投稿済みのものは編集できません");
+    const body = str(fd, "body", { max: 20000 });
+    const scheduled = str(fd, "scheduled_at");
+    if (scheduled && !isYmd(scheduled)) throw new InputError("予定日の形式が正しくありません");
+    // 予約中のXを書き換えたら、投稿前の確認をもう一度通す
+    if (row.status === "scheduled" && row.platform === "x" && row.business_id === "ai-ceo-project") {
+      const problem = checkXText(body);
+      if (problem) throw new InputError(`保存できません：${problem}`);
+    }
+    // 失敗したものを直したら、承認済みに戻す（もう一度「予約」を押すと投稿される）
+    const nextStatus = row.status === "failed" ? "approved" : row.status;
+    await batch(db, [
+      {
+        sql: "UPDATE content_posts SET title = ?, body = ?, scheduled_at = ?, post_time = ?, status = ?, error = NULL WHERE id = ?",
+        args: [str(fd, "title", { max: 200, required: true }), body, scheduled || null, postTime(fd), nextStatus, id],
+      },
+      repo.auditStmt("owner", "content.edited", `content:${id}`),
+    ]);
+    return "保存しました";
+  });
+}
+
+export async function setXAutopost(fd: FormData): Promise<void> {
+  return act("/settings", async (db) => {
+    const on = str(fd, "on") === "true";
+    const limit = int(fd, "x_daily_limit", { min: 1, max: 10, optional: true });
+    await batch(db, [
+      repo.setSettingStmt("x_autopost_enabled", on ? "true" : "false"),
+      ...(limit ? [repo.setSettingStmt("x_daily_limit", String(limit))] : []),
+      repo.auditStmt("owner", "x.autopost_toggled", "", { on, limit }),
+    ]);
+    return on ? "X の自動投稿をONにしました（承認して予約した投稿だけが、予定の時刻に投稿されます）" : "X の自動投稿をOFFにしました";
   });
 }
 
@@ -490,7 +549,7 @@ export async function setAutomation(fd: FormData): Promise<void> {
 }
 
 // ---------- AI社員の実行 ----------
-const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "system.ping": "ceo" };
+const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "marketing.drafts": "marketing", "system.ping": "ceo" };
 
 /** 受付けた仕事を裏側（Netlify のバックグラウンド関数）に渡す。パソコンではその場で実行する */
 async function dispatchRun(db: DB, runId: number): Promise<void> {

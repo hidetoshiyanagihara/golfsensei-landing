@@ -1,6 +1,8 @@
 import { getDb } from "@/lib/database/db";
 import * as repo from "@/lib/database/repo";
-import { runAgentTask, setAutomation, updateSettings } from "@/app/actions";
+import { runAgentTask, setAutomation, setXAutopost, updateSettings } from "@/app/actions";
+import { xCredentialsFromEnv } from "@/lib/social/x";
+import { X_DAILY_LIMIT_DEFAULT } from "@/lib/automation/publisher";
 import { formatDateTimeJst } from "@/lib/time";
 import { Button, Card, Notice, PageHeader } from "@/components/common/ui";
 import { Flash, type FlashParams } from "@/components/common/Flash";
@@ -10,8 +12,9 @@ export const metadata = { title: "設定" };
 const INTEGRATIONS: [string, string, boolean, string][] = [
   ["データベース（Turso）", "TURSO_DATABASE_URL", !!process.env.TURSO_DATABASE_URL, "スマホから使う本番環境のデータ保存先。未設定のときはパソコン内のファイル（data/）を使います。"],
   ["Claude API（AI社員）", "ANTHROPIC_API_KEY", !!process.env.ANTHROPIC_API_KEY, "AI CEO・市場調査AIが使います（モデル：Claude Opus 5.5）。キーはサーバー側だけで使い、ブラウザには出しません。AXION SALES の自動投稿と同じアカウントの料金になります。"],
-  ["X / Instagram / YouTube への投稿", "—", false, "AI CEO PROJECT の新アカウントは、承認後に手で投稿します（自動投稿は各SNSの公式APIと規約を確認してから PHASE 4 で判断）。AXION SALES は既存の自動投稿が担当。"],
-  ["note（販売）", "—", false, "note には公開された販売APIがないため、売上は note の売上管理画面を見て財務画面に記録します。"],
+  ["X（HIDE の自動投稿）", "X_API_KEY ほか3つ", !!xCredentialsFromEnv(), "公式の X API（従量課金：1投稿 約0.015ドル、URL入りは約0.20ドル）。承認して予約した投稿だけを、予定の時刻に投稿します。"],
+  ["Instagram / YouTube（HIDE）", "—", false, "これから接続します。AXION SALES の分は既存の自動投稿が担当。"],
+  ["note（投稿・販売）", "—", false, "note には公式の投稿・販売APIがないため自動化しません（非公式の方法は規約違反やアカウント停止のおそれ）。投稿はコピーして note の予約投稿で、売上は note の売上管理画面を見て財務画面に記録します。"],
   ["決済・広告出稿", "—", false, "支払い・契約・広告は代表者の承認が必須。自動化しません。"],
 ];
 
@@ -65,6 +68,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Fla
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card title="X の自動投稿（AI CEO PROJECT／HIDE）" className="mt-4">
+        <div className="space-y-2 text-sm">
+          <p>
+            合鍵：{xCredentialsFromEnv() ? <span className="text-good">設定済み</span> : <span className="text-warn">未設定（Netlify の環境変数 X_API_KEY・X_API_SECRET・X_ACCESS_TOKEN・X_ACCESS_TOKEN_SECRET）</span>}
+            ／ 状態：{s.x_autopost_enabled === "true" ? <span className="text-good">ON</span> : <span className="text-fg-muted">OFF</span>}
+          </p>
+          <p className="text-xs text-fg-subtle">予約の確認：15分ごと。最後の確認：{s.scheduler_last_run ?? "まだ動いていません"}</p>
+          <form action={setXAutopost} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="on" value={s.x_autopost_enabled === "true" ? "false" : "true"} />
+            <div className="w-32"><label htmlFor="x_daily_limit">1日の上限（件）</label><input id="x_daily_limit" name="x_daily_limit" inputMode="numeric" defaultValue={s.x_daily_limit ?? String(X_DAILY_LIMIT_DEFAULT)} /></div>
+            <Button variant={s.x_autopost_enabled === "true" ? "danger" : "ghost"}>{s.x_autopost_enabled === "true" ? "OFFにする" : "ONにする"}</Button>
+          </form>
+          <p className="text-xs text-fg-subtle">
+            投稿されるのは、承認して「予約」したものだけです。前回から30分以上あけ、1日の上限を超えません。【 】が残っている・URLが入っている・長すぎる投稿は投稿せずに「失敗」にします。
+          </p>
+        </div>
       </Card>
 
       <Card title="裏側の実行の動作確認" className="mt-4">

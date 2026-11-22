@@ -130,6 +130,26 @@ try {
   await act(page, () => page.click("form:has(#m-value) button[type=submit]"));
   check((await page.textContent("details:has-text('X')")).includes("開設済み"), "フォロワー数（0でも可）を記録すると「開設済み」になる");
 
+  console.log("X の予約（自動投稿）");
+  await page.goto(`${BASE}/marketing`);
+  const x1 = () => page.locator("li:has-text('X①：はじめまして')");
+  await act(page, () => x1().locator("button[value=pending_approval]").click());
+  await act(page, () => x1().locator("button[value=approved]").click());
+  await act(page, () => x1().locator("button[value=scheduled]").click());
+  check((await page.textContent("body")).includes("予約できません") && (await x1().textContent()).includes("承認済み"), "【 】が残っている X 投稿は予約できない");
+  await x1().locator("summary").click();
+  await x1().locator("textarea[name=body]").fill("はじめまして、HIDEです。人間1人とAI社員で事業を回せるか、本気で試します。売上は0円から、数字も失敗もそのまま書いていきます。");
+  await act(page, () => x1().locator("form:has(textarea[name=body]) button[type=submit]").click());
+  await act(page, () => x1().locator("button[value=scheduled]").click());
+  check((await page.textContent("body")).includes("自動で投稿します") && (await x1().textContent()).includes("予約済み"), "書き換えると予約でき、自動投稿の予定になる");
+  check((await x1().textContent()).includes("X に自動投稿"), "X の投稿には「X に自動投稿」と表示される");
+  check((await page.locator("li:has-text('note①') summary").count()) === 1, "note の下書きがある");
+  await page.locator("li:has-text('note①') summary").click();
+  check((await page.locator("li:has-text('note①') button:has-text('本文をコピー')").count()) === 1 && (await page.locator("li:has-text('note①') a:has-text('note で書く')").count()) === 1, "note は「本文をコピー」「note で書く」で手で投稿する");
+  await page.goto(`${BASE}/settings`);
+  const st = await page.textContent("body");
+  check(st.includes("X の自動投稿") && st.includes("未設定（Netlify の環境変数 X_API_KEY"), "設定画面に X の自動投稿と合鍵の状態が出る");
+
   console.log("経営会議");
   await page.goto(`${BASE}/reports`);
   await page.click("text=ルールで集計");

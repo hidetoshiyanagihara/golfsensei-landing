@@ -107,6 +107,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   pending_approval: { label: "承認待ち", cls: "text-warn border-warn/50" },
   scheduled: { label: "予約済み", cls: "text-info border-info/50" },
   posted: { label: "投稿済み", cls: "text-good border-good/40" },
+  posting: { label: "投稿中", cls: "text-info border-info/50" },
   skipped: { label: "見送り", cls: "text-fg-subtle border-fg-subtle/40" },
   // 実行履歴
   success: { label: "成功", cls: "text-good border-good/40" },

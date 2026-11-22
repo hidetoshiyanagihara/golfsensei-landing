@@ -9,9 +9,17 @@ import {
   deleteRecord,
   importAutopostNow,
   markPostedManually,
+  runAgentTask,
   transitionContent,
+  updateContent,
   updateInquiry,
 } from "@/app/actions";
+import { CopyButton } from "@/components/common/CopyButton";
+import { DEFAULT_POST_TIME } from "@/lib/automation/publisher";
+import { xWeightedLength } from "@/lib/social/x";
+import { hasApiKey } from "@/lib/ai/llm";
+import { marketingDraftsTask } from "@/lib/ai/tasks/marketing-drafts";
+import { yen } from "@/lib/finance/calc";
 import { allowedContentTransitions, type ContentStatus } from "@/lib/rules";
 import { ACCOUNTS, PROFILES, SETUP_CHECKLIST } from "@/lib/marketing/launch-kit";
 import { jstDate } from "@/lib/time";
@@ -50,6 +58,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
     repo.listInquiries(db, view),
     repo.latestMetrics(db, "followers", repo.ACTUAL_ONLY),
   ]);
+  const settings = await repo.getSettings(db);
   const startedPlatforms = new Set(newAccountFollowers.filter((m) => m.account === "ai-ceo").map((m) => m.platform));
   const today = jstDate();
   const filterHref = (s?: string, p?: string) => {
@@ -102,52 +111,102 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
         <p className="mt-3 text-xs text-fg-subtle">最初の投稿の下書き（X 3本・note 1本・Instagram 1本・YouTube 1本）は、下の待ち行列に入っています。【 】の部分はご自身の言葉で書いてください。発信名は「HIDE」です。</p>
       </Card>
 
-      <Card title={`承認・予約の待ち行列（${queue.length}件）`} className="mt-4">
+      <Card
+        title={`承認・予約の待ち行列（${queue.length}件）`}
+        className="mt-4"
+        aside={
+          <form action={runAgentTask}>
+            <input type="hidden" name="task" value="marketing.drafts" />
+            <Button disabled={!hasApiKey()} variant="ghost" title="マーケティングAIが、X 5本と note 1本の下書きを作ります">
+              AIに下書きを頼む（上限 約{yen(marketingDraftsTask.estimateJpy(settings))}）
+            </Button>
+          </form>
+        }
+      >
+        <p className="mb-3 text-xs text-fg-subtle">
+          流れ：下書き → 承認 → 予約。AI CEO PROJECT の X は、予約すると予定の時刻に自動で投稿されます（設定画面で自動投稿をONにしたとき）。note は自動投稿できない（公式の投稿APIがない）ため、「本文をコピー」して note の予約投稿で公開してください。
+        </p>
         {queue.length === 0 ? (
           <Empty>下書き・承認待ち・予約済みの投稿はありません。</Empty>
         ) : (
           <ul className="divide-y divide-line/60">
             {queue.map((c) => (
               <li key={c.id} className="py-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <StatusPill status={c.status} />
-                      <span className="text-xs text-fg-subtle">
-                        {BIZ[c.business_id ?? ""] ?? "—"}・{PL[c.platform]}
-                      </span>
-                      {c.data_kind === "sample" && <DataBadge kind="sample" />}
-                    </div>
-                    <p className="mt-1 font-medium">{c.title}</p>
-                    <p className="mt-0.5 text-[11px] text-fg-subtle">予定日：{c.scheduled_at ?? "未定"}</p>
-                  </div>
-                  {c.data_kind === "actual" && (
-                    <form action={transitionContent} className="flex shrink-0 flex-wrap gap-1.5">
-                      <input type="hidden" name="id" value={c.id} />
-                      {allowedContentTransitions(c.status as ContentStatus).map((to) => (
-                        <Button key={to} name="to" value={to} variant={to === "approved" || to === "pending_approval" || to === "scheduled" ? "primary" : "ghost"}>
-                          {to === "pending_approval" ? "承認依頼" : to === "approved" ? "承認" : to === "draft" ? "下書きに戻す" : to === "scheduled" ? "予約" : statusLabel(to)}
-                        </Button>
-                      ))}
-                    </form>
-                  )}
-                </div>
-                {c.body && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-gold">本文を見る（{[...c.body].length}文字）</summary>
-                    <p className="mt-2 whitespace-pre-line rounded bg-navy-800 p-3 text-sm leading-7 select-all">{c.body}</p>
-                  </details>
-                )}
-                {c.data_kind === "actual" && (c.status === "approved" || c.status === "scheduled") && (
-                  <form action={markPostedManually} className="mt-2 flex flex-wrap items-end gap-2">
-                    <input type="hidden" name="id" value={c.id} />
-                    <div className="min-w-48 flex-1">
-                      <label htmlFor={`url-${c.id}`}>手で投稿したら、URLを貼って記録（任意）</label>
-                      <input id={`url-${c.id}`} name="url" placeholder="https://..." />
-                    </div>
-                    <Button variant="ghost">投稿した</Button>
-                  </form>
-                )}
+                {(() => {
+                  const autoX = c.platform === "x" && c.business_id === "ai-ceo-project";
+                  const when = c.scheduled_at ? `${c.scheduled_at} ${c.post_time ?? DEFAULT_POST_TIME}` : "未定";
+                  const xLen = c.platform === "x" ? Math.ceil(xWeightedLength(c.body) / 2) : null;
+                  const editable = c.data_kind === "actual" && ["draft", "pending_approval", "approved", "scheduled"].includes(c.status);
+                  return (
+                    <>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <StatusPill status={c.status} />
+                            <span className="text-xs text-fg-subtle">
+                              {BIZ[c.business_id ?? ""] ?? "—"}・{PL[c.platform]}
+                            </span>
+                            {c.source === "ai-marketing" && <span className="text-[11px] text-gold">AI下書き</span>}
+                            {c.data_kind === "sample" && <DataBadge kind="sample" />}
+                          </div>
+                          <p className="mt-1 font-medium">{c.title}</p>
+                          <p className="mt-0.5 text-[11px] text-fg-subtle">
+                            予定：{when}／{autoX ? <span className="text-gold">X に自動投稿</span> : "手で投稿"}
+                            {xLen !== null && <span className={xLen > 140 ? "text-bad" : ""}>／{xLen}字</span>}
+                          </p>
+                          {c.review_note && <p className="mt-1 whitespace-pre-line text-[11px] text-warn">{c.review_note}</p>}
+                        </div>
+                        {c.data_kind === "actual" && (
+                          <form action={transitionContent} className="flex shrink-0 flex-wrap gap-1.5">
+                            <input type="hidden" name="id" value={c.id} />
+                            {allowedContentTransitions(c.status as ContentStatus).map((to) => (
+                              <Button key={to} name="to" value={to} variant={to === "approved" || to === "pending_approval" || to === "scheduled" ? "primary" : "ghost"}>
+                                {to === "pending_approval" ? "承認依頼" : to === "approved" ? "承認" : to === "draft" ? "下書きに戻す" : to === "scheduled" ? (autoX ? "予約（自動投稿）" : "予約") : statusLabel(to)}
+                              </Button>
+                            ))}
+                          </form>
+                        )}
+                      </div>
+                      {c.body && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs text-gold">本文を見る・直す（{[...c.body].length}文字）</summary>
+                          {editable ? (
+                            <form action={updateContent} className="mt-2 space-y-2">
+                              <input type="hidden" name="id" value={c.id} />
+                              <div><label htmlFor={`t-${c.id}`}>タイトル</label><input id={`t-${c.id}`} name="title" defaultValue={c.title} required maxLength={200} /></div>
+                              <div><label htmlFor={`b-${c.id}`}>本文</label><textarea id={`b-${c.id}`} name="body" defaultValue={c.body} rows={c.platform === "note" ? 14 : 5} /></div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div><label htmlFor={`d-${c.id}`}>予定日</label><input id={`d-${c.id}`} name="scheduled_at" type="date" defaultValue={c.scheduled_at ?? ""} /></div>
+                                <div><label htmlFor={`h-${c.id}`}>時刻</label><input id={`h-${c.id}`} name="post_time" type="time" defaultValue={c.post_time ?? DEFAULT_POST_TIME} /></div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button variant="ghost">保存</Button>
+                                {!autoX && <CopyButton text={c.body} />}
+                                {c.platform === "note" && (
+                                  <a href="https://note.com/notes/new" target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-md border border-navy-700 px-3 py-1.5 text-sm text-gold hover:border-gold-dim">
+                                    note で書く
+                                  </a>
+                                )}
+                              </div>
+                            </form>
+                          ) : (
+                            <p className="mt-2 whitespace-pre-line rounded bg-navy-800 p-3 text-sm leading-7 select-all">{c.body}</p>
+                          )}
+                        </details>
+                      )}
+                      {c.data_kind === "actual" && !autoX && (c.status === "approved" || c.status === "scheduled") && (
+                        <form action={markPostedManually} className="mt-2 flex flex-wrap items-end gap-2">
+                          <input type="hidden" name="id" value={c.id} />
+                          <div className="min-w-48 flex-1">
+                            <label htmlFor={`url-${c.id}`}>手で投稿したら、URLを貼って記録（任意）</label>
+                            <input id={`url-${c.id}`} name="url" placeholder="https://..." />
+                          </div>
+                          <Button variant="ghost">投稿した</Button>
+                        </form>
+                      )}
+                    </>
+                  );
+                })()}
               </li>
             ))}
           </ul>
@@ -164,7 +223,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
           </div>
           <div><label htmlFor="platform">投稿先</label><select id="platform" name="platform">{PLATFORMS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
           <div><label htmlFor="title">タイトル（必須）</label><input id="title" name="title" required maxLength={200} /></div>
-          <div><label htmlFor="scheduled_at">予定日</label><input id="scheduled_at" name="scheduled_at" type="date" /></div>
+          <div><label htmlFor="scheduled_at">予定日・時刻</label><input id="scheduled_at" name="scheduled_at" type="date" /><input aria-label="時刻" name="post_time" type="time" defaultValue={DEFAULT_POST_TIME} className="mt-1" /></div>
           <div className="sm:col-span-4"><label htmlFor="body">本文</label><textarea id="body" name="body" rows={4} /></div>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-4">
             <Button>下書きを保存</Button>

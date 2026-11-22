@@ -14,8 +14,8 @@ import { getTask, failStaleRuns } from "@/lib/ai/runner";
 import { DEFAULT_THEME } from "@/lib/ai/tasks/market-research";
 import "@/lib/ai/tasks/index";
 
-const TASKS_OF: Record<string, string[]> = { ceo: ["ceo.meeting"], research: ["research.ideas"] };
-const RESULT_LINK: Record<string, [string, string]> = { "ceo.meeting": ["/reports", "経営会議を見る"], "research.ideas": ["/business", "事業開発で見る"] };
+const TASKS_OF: Record<string, string[]> = { ceo: ["ceo.meeting"], research: ["research.ideas"], marketing: ["marketing.drafts"] };
+const RESULT_LINK: Record<string, [string, string]> = { "ceo.meeting": ["/reports", "経営会議を見る"], "research.ideas": ["/business", "事業開発で見る"], "marketing.drafts": ["/marketing", "下書きを見る"] };
 
 export default async function AgentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: FlashParams }) {
   const { id } = await params;
@@ -46,7 +46,7 @@ export default async function AgentDetailPage({ params, searchParams }: { params
 
       <Card title="仕事を頼む" className="mb-4">
         {tasks.length === 0 ? (
-          <p className="text-sm text-fg-subtle">このAI社員の仕事は、これから順番に追加します（現在動かせるのは AI CEO と 市場調査AI）。</p>
+          <p className="text-sm text-fg-subtle">このAI社員の仕事は、これから順番に追加します（現在動かせるのは AI CEO・市場調査AI・マーケティングAI）。</p>
         ) : (
           <div className="space-y-4">
             {!keyOk && <Notice tone="warn">Claude API のキーが未設定のため実行できません（Netlify の環境変数 ANTHROPIC_API_KEY）。</Notice>}

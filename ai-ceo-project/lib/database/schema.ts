@@ -306,4 +306,42 @@ CREATE INDEX idx_agent_runs_agent ON agent_runs(agent_id, started_at);
 CREATE INDEX idx_agent_runs_status ON agent_runs(status);
 `,
   },
+  {
+    version: 4,
+    name: "content_autopost",
+    sql: `
+-- 投稿の予約時刻・自動投稿中の状態・確認メモを追加する
+CREATE TABLE content_posts_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id TEXT REFERENCES businesses(id),
+  platform TEXT NOT NULL CHECK (platform IN ('x','instagram','youtube','note','linkedin','other')),
+  status TEXT NOT NULL CHECK (status IN
+    ('draft','pending_approval','approved','scheduled','posting','posted','failed','skipped')),
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  scheduled_at TEXT,
+  post_time TEXT,
+  posted_at TEXT,
+  external_id TEXT,
+  url TEXT,
+  views INTEGER,
+  engagements INTEGER,
+  follower_delta INTEGER,
+  error TEXT,
+  review_note TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  source_ref TEXT UNIQUE,
+  ${DK},
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO content_posts_new (id, business_id, platform, status, title, body, scheduled_at, posted_at, external_id, url, views,
+  engagements, follower_delta, error, source, source_ref, data_kind, created_at)
+  SELECT id, business_id, platform, status, title, body, scheduled_at, posted_at, external_id, url, views,
+  engagements, follower_delta, error, source, source_ref, data_kind, created_at FROM content_posts;
+DROP TABLE content_posts;
+ALTER TABLE content_posts_new RENAME TO content_posts;
+CREATE INDEX idx_content_date ON content_posts(posted_at, scheduled_at);
+CREATE INDEX idx_content_status ON content_posts(status, platform);
+`,
+  },
 ];
