@@ -1,0 +1,56 @@
+# AI CEO COMMAND CENTER：note の下書き保存ロボット（ai-ceo-project/scripts/note-draft-bot.ts）
+# 管理画面で「note に下書き保存を頼む」を押した記事だけを、note の「下書き」に保存する（公開はしない）。
+# リポジトリは公開のため、ログにメールアドレス・パスワード・記事の本文を出さない。スクリーンショットも保存しない。
+name: note drafts
+
+on:
+  schedule:
+    - cron: "37 * * * *"   # 1時間ごと
+  workflow_dispatch:
+    inputs:
+      explore:
+        description: "1 = ログインして編集画面の部品を調べるだけ（保存しない）"
+        default: "0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: note-drafts
+  cancel-in-progress: false
+
+jobs:
+  drafts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NOTE_EMAIL: ${{ secrets.NOTE_EMAIL }}
+      NOTE_PASSWORD: ${{ secrets.NOTE_PASSWORD }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      TURSO_DATABASE_URL: libsql://ai-ceo-hidetoshiyanagihara.aws-us-east-2.turso.io
+    defaults:
+      run:
+        working-directory: ai-ceo-project
+    steps:
+      - name: 設定の確認
+        working-directory: .
+        run: |
+          if [ -z "$NOTE_EMAIL" ] || [ -z "$NOTE_PASSWORD" ] || [ -z "$TURSO_AUTH_TOKEN" ]; then
+            echo "NOTE_EMAIL / NOTE_PASSWORD / TURSO_AUTH_TOKEN のどれかが未設定のため、何もしません"; exit 0
+          fi
+          echo "READY=1" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        if: env.READY == '1'
+      - uses: actions/setup-node@v4
+        if: env.READY == '1'
+        with:
+          node-version: "22"
+      - name: 準備
+        if: env.READY == '1'
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund playwright@1.64.1
+          npx playwright install --with-deps chromium
+      - name: 下書きを保存
+        if: env.READY == '1'
+        run: npx tsx scripts/note-draft-bot.ts ${{ github.event.inputs.explore == '1' && '--explore' || '' }}
