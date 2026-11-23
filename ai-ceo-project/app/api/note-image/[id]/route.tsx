@@ -47,16 +47,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const sl = slides[n - 1];
     if (!sl) return new Response("Not found", { status: 404 });
     const total = slides.length;
-    const fonts = await fontsFor(`${sl.heading}${sl.text}${n}/${total}HIDE｜AI CEO PROJECT保存して見返す`);
+    const fonts = await fontsFor(`${sl.heading}${sl.text}${n}/${total}HIDE｜AI CEO PROJECT0123456789`);
     const cover = n === 1;
     const hs = [...sl.heading].length <= 14 ? 76 : [...sl.heading].length <= 24 ? 64 : 52;
     const res = image(
-      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: NAVY, padding: "88px 84px 72px", justifyContent: cover ? "center" : "flex-start", gap: 40 }}>
-        {!cover && <div style={{ display: "flex", color: GOLD, fontSize: 34, fontWeight: 700 }}>{`${String(n - 1).padStart(2, "0")}`}</div>}
-        {cover && <div style={{ display: "flex", width: 64, height: 6, background: GOLD }} />}
-        <div style={{ display: "flex", color: WHITE, fontSize: cover ? hs + 8 : hs - 8, fontWeight: 700, lineHeight: 1.35 }}>{sl.heading}</div>
-        {sl.text && <div style={{ display: "flex", color: cover ? MUTED : WHITE, fontSize: cover ? 38 : 42, lineHeight: 1.65 }}>{sl.text}</div>}
-        <div style={{ display: "flex", flexGrow: 1 }} />
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: NAVY, padding: "80px 84px 72px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, color: GOLD, fontSize: 26, letterSpacing: 6 }}>
+          <div style={{ display: "flex", width: 48, height: 5, background: GOLD }} />
+          {cover ? "AI CEO PROJECT" : `${String(n - 1).padStart(2, "0")}`}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flexGrow: 1, gap: 44 }}>
+          <div style={{ display: "flex", color: WHITE, fontSize: cover ? hs + 18 : hs, fontWeight: 700, lineHeight: 1.32 }}>{sl.heading}</div>
+          {sl.text && (
+            <div style={{ display: "flex", color: cover ? GOLD : WHITE, fontSize: cover ? 42 : 46, lineHeight: 1.7, borderLeft: cover ? "none" : `6px solid ${GOLD}`, paddingLeft: cover ? 0 : 28 }}>
+              {sl.text}
+            </div>
+          )}
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `2px solid ${GOLD}`, paddingTop: 24 }}>
           <div style={{ color: WHITE, fontSize: 28, fontWeight: 700 }}>HIDE｜AI CEO PROJECT</div>
           <div style={{ color: GOLD, fontSize: 28 }}>{`${n}/${total}`}</div>
