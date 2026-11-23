@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/database/db";
 import * as repo from "@/lib/database/repo";
-import { checkXAccount, runAgentTask, setAutomation, setXAutopost, updateSettings } from "@/app/actions";
+import { checkIgAccount, checkXAccount, runAgentTask, setAutomation, setIgAutopost, setXAutopost, updateSettings } from "@/app/actions";
+import { IG_DAILY_LIMIT_DEFAULT } from "@/lib/automation/ig-publisher";
 import { xCredentialsFromEnv } from "@/lib/social/x";
 import { X_DAILY_LIMIT_DEFAULT } from "@/lib/automation/publisher";
 import { formatDateTimeJst } from "@/lib/time";
@@ -13,7 +14,8 @@ const INTEGRATIONS: [string, string, boolean, string][] = [
   ["データベース（Turso）", "TURSO_DATABASE_URL", !!process.env.TURSO_DATABASE_URL, "スマホから使う本番環境のデータ保存先。未設定のときはパソコン内のファイル（data/）を使います。"],
   ["Claude API（AI社員）", "ANTHROPIC_API_KEY", !!process.env.ANTHROPIC_API_KEY, "AI CEO・市場調査AIが使います（モデル：Claude Opus 5.5）。キーはサーバー側だけで使い、ブラウザには出しません。AXION SALES の自動投稿と同じアカウントの料金になります。"],
   ["X（HIDE の自動投稿）", "X_API_KEY ほか3つ", !!xCredentialsFromEnv(), "公式の X API（従量課金：1投稿 約0.015ドル、URL入りは約0.20ドル）。承認して予約した投稿だけを、予定の時刻に投稿します。"],
-  ["Instagram / YouTube（HIDE）", "—", false, "これから接続します。AXION SALES の分は既存の自動投稿が担当。"],
+  ["Instagram（HIDE の自動投稿）", "IG_ACCESS_TOKEN", !!process.env.IG_ACCESS_TOKEN, "公式の Instagram API（無料）。承認して予約したカルーセルだけを予定の時刻に投稿。合鍵は7日ごとに自動で延長します。"],
+  ["YouTube（HIDE）", "—", false, "動画の作り方を決めてから接続します。AXION SALES の分は既存の自動投稿が担当。"],
   ["note（投稿・販売）", "—", false, "note には公式の投稿・販売APIがないため自動化しません（非公式の方法は規約違反やアカウント停止のおそれ）。投稿はコピーして note の予約投稿で、売上は note の売上管理画面を見て財務画面に記録します。"],
   ["決済・広告出稿", "—", false, "支払い・契約・広告は代表者の承認が必須。自動化しません。"],
 ];
@@ -93,6 +95,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Fla
           <p className="text-xs text-fg-subtle">
             投稿されるのは、承認して「予約」したものだけです。前回から30分以上あけ、1日の上限を超えません。【 】が残っている・URLが入っている・長すぎる投稿は投稿せずに「失敗」にします。
           </p>
+        </div>
+      </Card>
+
+      <Card title="Instagram の自動投稿（AI CEO PROJECT／HIDE）" className="mt-4">
+        <div className="space-y-2 text-sm">
+          <p>
+            合鍵：{s.ig_access_token || process.env.IG_ACCESS_TOKEN ? <span className="text-good">設定済み</span> : <span className="text-warn">未設定（Netlify の環境変数 IG_ACCESS_TOKEN）</span>}
+            ／ 状態：{s.ig_autopost_enabled === "true" ? <span className="text-good">ON</span> : <span className="text-fg-muted">OFF</span>}
+            {s.ig_token_refreshed_at && <span className="text-xs text-fg-subtle">／合鍵の延長：{s.ig_token_refreshed_at.slice(0, 10)}</span>}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs">投稿先のアカウント：{s.ig_account ?? <span className="text-fg-subtle">未確認</span>}</span>
+            {(s.ig_access_token || process.env.IG_ACCESS_TOKEN) && (
+              <form action={checkIgAccount}><Button variant="ghost">合鍵のアカウントを確認（投稿はしない・無料）</Button></form>
+            )}
+          </div>
+          <form action={setIgAutopost} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="on" value={s.ig_autopost_enabled === "true" ? "false" : "true"} />
+            <div className="w-32"><label htmlFor="ig_daily_limit">1日の上限（件）</label><input id="ig_daily_limit" name="ig_daily_limit" inputMode="numeric" defaultValue={s.ig_daily_limit ?? String(IG_DAILY_LIMIT_DEFAULT)} /></div>
+            <Button variant={s.ig_autopost_enabled === "true" ? "danger" : "ghost"}>{s.ig_autopost_enabled === "true" ? "OFFにする" : "ONにする"}</Button>
+          </form>
+          <p className="text-xs text-fg-subtle">投稿されるのは、承認して「予約」したカルーセルだけです。前回から3時間以上あけ、1日の上限を超えません。【 】が残っているものは投稿しません。</p>
         </div>
       </Card>
 

@@ -1,0 +1,69 @@
+# HIDE（AI CEO PROJECT）の YouTube ショート自動投稿。
+# Instagram に投稿済みのカルーセル（代表者が承認・予約したもの）を縦長の動画にして、1時間ごとに1本まで出す（1日2本・3時間あける）。
+# 中身は ai-ceo-project/scripts/youtube-shorts.ts。止めたいとき：Actions → HIDE YouTube shorts → 右上「…」→ Disable workflow
+#
+# 必要な Secrets：TURSO_DATABASE_URL / TURSO_AUTH_TOKEN（管理画面のデータベース）、
+#                 YT_CLIENT_ID / YT_CLIENT_SECRET（AXION と共用の Google OAuth クライアント）、HIDE_YT_REFRESH_TOKEN（HIDE のチャンネル）
+# 最初は限定公開で試したいとき：Variables に HIDE_YT_PRIVACY = unlisted
+name: HIDE YouTube shorts
+
+on:
+  schedule:
+    - cron: "37 * * * *"   # 毎時37分。GitHubの混雑で遅れることがあります
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = 動画を作るだけで投稿しない（作った動画は Artifacts から確認できます）"
+        default: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hide-youtube-shorts
+  cancel-in-progress: false
+
+jobs:
+  short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAS_KEYS: ${{ secrets.HIDE_YT_REFRESH_TOKEN != '' && secrets.TURSO_AUTH_TOKEN != '' && secrets.TURSO_DATABASE_URL != '' }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || '0' }}
+    steps:
+      - name: 合鍵の確認
+        run: |
+          if [ "$HAS_KEYS" != "true" ]; then echo "HIDE_YT_REFRESH_TOKEN / TURSO_DATABASE_URL / TURSO_AUTH_TOKEN が未設定のためスキップします"; fi
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_KEYS == 'true' }}
+      - uses: actions/setup-node@v4
+        if: ${{ env.HAS_KEYS == 'true' }}
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        if: ${{ env.HAS_KEYS == 'true' }}
+        working-directory: ai-ceo-project
+        run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          npm ci --no-audit --no-fund
+      - name: ショートを作って投稿
+        if: ${{ env.HAS_KEYS == 'true' }}
+        working-directory: ai-ceo-project
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          HIDE_YT_REFRESH_TOKEN: ${{ secrets.HIDE_YT_REFRESH_TOKEN }}
+          YT_PRIVACY: ${{ vars.HIDE_YT_PRIVACY }}
+          OUT: ${{ runner.temp }}/short.mp4
+        run: npx tsx scripts/youtube-shorts.ts
+      - uses: actions/upload-artifact@v4
+        if: ${{ env.HAS_KEYS == 'true' && env.DRY_RUN == '1' }}
+        with:
+          name: short-preview
+          path: ${{ runner.temp }}/short.mp4
+          if-no-files-found: ignore
+          retention-days: 3

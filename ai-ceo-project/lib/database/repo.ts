@@ -445,3 +445,15 @@ export function listReports(db: DB, limit = 20): Promise<ReportRow[]> {
 export function getReport(db: DB, id: number): Promise<ReportRow | undefined> {
   return get<ReportRow>(db, "SELECT * FROM reports WHERE id = ?", [id]);
 }
+
+// ---------- product docs（商品の中身） ----------
+export type ProductDocRow = { id: number; product_id: number; component_index: number; title: string; body: string; status: string; version: number; review_note: string | null; updated_at: string };
+export function listProductDocs(db: DB, productId: number): Promise<ProductDocRow[]> {
+  return all<ProductDocRow>(db, "SELECT * FROM product_docs WHERE product_id = ? ORDER BY component_index", [productId]);
+}
+
+// ---------- playbooks（投稿の型の手本帳） ----------
+export type PlaybookRow = { id: number; kind: string; theme: string; content: string; created_at: string };
+export function latestPlaybook(db: DB, kind = "competitors"): Promise<PlaybookRow | undefined> {
+  return get<PlaybookRow>(db, "SELECT * FROM playbooks WHERE kind = ? ORDER BY id DESC LIMIT 1", [kind]);
+}

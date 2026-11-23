@@ -108,14 +108,24 @@ export function researchSystemPrompt(today: string): string {
   ].join("\n");
 }
 
-/** 応答の中で、検索結果として実際に出てきたURLの一覧（save_research の入力は除く） */
+/**
+ * 応答の中で、検索結果として実際に出てきたURLの一覧。
+ * 数えるのは「検索・ページ取得の結果」と「文章に付いた引用（citations）」だけ。
+ * AIが自分で書いた文章やツールへの入力（保存の依頼など）に出てくるURLは数えない（作られたURLを通さないため）。
+ */
 export function seenUrls(messages: BetaMessage[]): Set<string> {
   const urls = new Set<string>();
+  const add = (v: unknown) => {
+    for (const u of JSON.stringify(v ?? null).match(/https?:\/\/[^\s"'<>\\)]+/g) ?? []) urls.add(u.replace(/[.,。、]+$/, ""));
+  };
   for (const m of messages) {
     for (const b of m.content) {
-      if (b.type === "tool_use" && b.name === SAVE_TOOL.name) continue;
-      const text = JSON.stringify(b);
-      for (const u of text.match(/https?:\/\/[^\s"'<>\\)]+/g) ?? []) urls.add(u.replace(/[.,。、]+$/, ""));
+      if (b.type === "tool_use" || b.type === "server_tool_use") continue;
+      if (b.type === "text") {
+        add((b as { citations?: unknown }).citations);
+        continue;
+      }
+      add(b);
     }
   }
   return urls;

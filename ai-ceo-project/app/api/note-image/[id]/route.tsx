@@ -1,38 +1,45 @@
-import { ImageResponse } from "next/og";
 import { getDb } from "@/lib/database/db";
 import { get } from "@/lib/database/db";
 import { isAuthenticated } from "@/lib/security/auth";
 import { parseExtra } from "@/lib/marketing/note-format";
-import { loadJpFont } from "@/lib/marketing/font";
+import { fontsFor, image, renderSlide, NAVY, PANEL, GOLD, WHITE, MUTED } from "@/lib/marketing/slide-image";
+import { verifyImage } from "@/lib/social/image-sign";
+import { PNG } from "pngjs";
+import jpeg from "jpeg-js";
 
 /**
- * note 用の画像（見出し画像 1280×670、図解 1280×720）。ログインしている代表者だけが見られる。
- *   /api/note-image/12?kind=header
- *   /api/note-image/12?kind=fig&n=1
+ * 投稿用の画像。ログインしている代表者、または期限つきの署名付きリンク（Instagram 投稿時に Meta が取りに来る）だけが見られる。
+ *   note：     /api/note-image/12?kind=header（1280×670） /api/note-image/12?kind=fig&n=1（1280×720）
+ *   Instagram：/api/note-image/15?kind=slide&n=1（1080×1350）  &format=jpg で JPEG（Instagram は JPEG のみ）
  */
 export const dynamic = "force-dynamic";
-
-const NAVY = "#080d1a";
-const PANEL = "#0e1628";
-const GOLD = "#d4b062";
-const WHITE = "#f4f6fa";
-const MUTED = "#a7b1c6";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id < 1) return new Response("Not found", { status: 404 });
-  if (!(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
+  const url = new URL(req.url);
+  const q = url.searchParams;
+  const kind = q.get("kind") === "fig" ? "fig" : q.get("kind") === "slide" ? "slide" : "header";
+  const signed = q.has("sig") && verifyImage(id, kind, Number(q.get("n") ?? 0), Number(q.get("exp")), q.get("sig") ?? "");
+  if (!signed && !(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
   const db = await getDb();
   const post = await get<{ title: string; extra: string | null; platform: string }>(
     db,
     "SELECT title, extra, platform FROM content_posts WHERE id = ? AND data_kind = 'actual'",
     [id],
   );
-  if (!post || post.platform !== "note") return new Response("Not found", { status: 404 });
+  if (!post || (post.platform !== "note" && post.platform !== "instagram")) return new Response("Not found", { status: 404 });
+  if ((kind === "slide") !== (post.platform === "instagram")) return new Response("Not found", { status: 404 });
   const extra = parseExtra(post.extra);
-  const url = new URL(req.url);
-  const kind = url.searchParams.get("kind") === "fig" ? "fig" : "header";
-  const download = url.searchParams.get("download") === "1";
+  const download = q.get("download") === "1";
+  const asJpeg = q.get("format") === "jpg";
+
+  if (kind === "slide") {
+    const n = Math.max(1, Number(q.get("n") ?? 1));
+    const res = await renderSlide(extra.slides ?? [], n, "feed", download ? `instagram-${id}-${n}.${asJpeg ? "jpg" : "png"}` : null);
+    if (!res) return new Response("Not found", { status: 404 });
+    return asJpeg ? toJpeg(res, download ? `instagram-${id}-${n}.jpg` : null) : res;
+  }
   const title = post.title.replace(/^note[①-⑩\d]*[：:]\s*/, "");
 
   if (kind === "header") {
@@ -90,25 +97,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   );
 }
 
-async function fontsFor(text: string) {
-  const [bold, regular] = await Promise.all([loadJpFont(text, 700), loadJpFont(text, 400)]);
-  const fonts: { name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" }[] = [];
-  if (regular) fonts.push({ name: "NotoSansJP", data: regular, weight: 400, style: "normal" });
-  if (bold) fonts.push({ name: "NotoSansJP", data: bold, weight: 700, style: "normal" });
-  return fonts;
-}
-
-function image(el: React.ReactElement, width: number, height: number, fonts: Awaited<ReturnType<typeof fontsFor>>, filename: string | null) {
-  return new ImageResponse(
-    <div style={{ display: "flex", width: "100%", height: "100%", fontFamily: "NotoSansJP" }}>{el}</div>,
-    {
-      width,
-      height,
-      fonts: fonts.length ? fonts : undefined,
-      headers: {
-        "Cache-Control": "private, no-store",
-        ...(filename ? { "Content-Disposition": `attachment; filename="${filename}"` } : {}),
-      },
+/** PNG を JPEG に変換する（Instagram は JPEG しか受け付けない） */
+async function toJpeg(res: Response, filename: string | null): Promise<Response> {
+  const png = PNG.sync.read(Buffer.from(await res.arrayBuffer()));
+  const out = jpeg.encode({ data: png.data, width: png.width, height: png.height }, 90);
+  return new Response(new Uint8Array(out.data), {
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Cache-Control": "private, no-store",
+      ...(filename ? { "Content-Disposition": `attachment; filename="${filename}"` } : {}),
     },
-  );
+  });
 }

@@ -7,6 +7,7 @@ import { DEFAULT_MODEL, maxCostEstimateJpy } from "../models";
 import { usageOf } from "../llm";
 import { PROFILES } from "../../marketing/launch-kit";
 import { checkXText } from "../../automation/publisher";
+import { checkInstagram } from "../../social/instagram";
 import { findUnsupportedNumbers } from "./ceo-meeting";
 import { addDays, jstDate } from "../../time";
 import type { TaskDef } from "../runner";
@@ -16,11 +17,11 @@ import type { TaskDef } from "../runner";
  * すべて「承認待ち」で登録する。代表者が承認・予約したものだけが投稿される（X は自動、note は手で貼る）。
  */
 
-const MAX_TOKENS = 12000;
+const MAX_TOKENS = 16000;
 const EST_INPUT = 8000;
 
 const PostSchema = z.object({
-  platform: z.enum(["x", "note"]),
+  platform: z.enum(["x", "note", "instagram"]),
   title: z.string().min(1),
   body: z.string().min(1),
   day_offset: z.number().int().min(1).max(14),
@@ -28,8 +29,9 @@ const PostSchema = z.object({
   fact_basis: z.string(),
   header_subtitle: z.string(),
   figures: z.array(z.object({ title: z.string(), points: z.array(z.string()) })),
+  slides: z.array(z.object({ heading: z.string(), text: z.string() })),
 });
-export const DraftsSchema = z.object({ posts: z.array(PostSchema).min(1).max(8) });
+export const DraftsSchema = z.object({ posts: z.array(PostSchema).min(1).max(10) });
 
 const str = { type: "string" } as const;
 export const DRAFTS_JSON_SCHEMA = {
@@ -42,9 +44,9 @@ export const DRAFTS_JSON_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["platform", "title", "body", "day_offset", "time", "fact_basis", "header_subtitle", "figures"],
+        required: ["platform", "title", "body", "day_offset", "time", "fact_basis", "header_subtitle", "figures", "slides"],
         properties: {
-          platform: { type: "string", enum: ["x", "note"] },
+          platform: { type: "string", enum: ["x", "note", "instagram"] },
           title: str,
           body: str,
           day_offset: { type: "integer" },
@@ -59,6 +61,10 @@ export const DRAFTS_JSON_SCHEMA = {
               required: ["title", "points"],
               properties: { title: str, points: { type: "array", items: str } },
             },
+          },
+          slides: {
+            type: "array",
+            items: { type: "object", additionalProperties: false, required: ["heading", "text"], properties: { heading: str, text: str } },
           },
         },
       },
@@ -86,18 +92,21 @@ export function marketingSystemPrompt(): string {
     "  - 冒頭3行で「誰の・何の話か」と結論を書く。見出しは3〜5個。1段落は3行以内。",
     "  - 図解を2〜3枚入れる。figures に {title（15字以内）, points（3〜4個、各30字以内）} を書き、本文の入れたい場所に [図1] [図2] のように1行で書く。図の中身も実データだけ。",
     "  - header_subtitle：見出し画像に入れる一言（25字以内）。",
-    "- X の投稿では header_subtitle は空文字、figures は空配列にする。",
+    "- Instagram：カルーセル（スライド6〜8枚）。slides の1枚目は表紙（heading は書き出しの型で目を止める一言・20字以内、text は補足・40字以内）。2枚目以降は1枚1メッセージ（heading 20字以内、text 80字以内）。最後の1枚は保存・フォローのお願いと『プロフィールのリンクから note へ』。",
+    "  body はキャプション（300〜800字。1行目で要点、改行を多めに、最後にハッシュタグ3〜5個）。title は管理用の短い名前。",
+    "- X・note では slides は空配列。X・Instagram では header_subtitle は空文字、figures は空配列にする。",
+    "- 投稿の型の手本帳（playbook）があれば、その書き出しの型・構成・頻度を参考にする。ただし手本帳に出てくる他人の言い回しは使わず、中身は必ず HIDE の実データと言葉で作る。avoid に挙がっていることはしない。",
     "- 代表者の実感・体験が入ると良くなる箇所には【ここにひとこと：〜】と空欄を残してよい（Xは5本中2本まで）。空欄が残った投稿は代表者が書き換えるまで投稿されない。",
     "- 投稿の日時：day_offset は今日から何日後か（1〜7）、time は日本時間の HH:MM（Xは 7:00〜22:00 の間で、同じ日は2時間以上あける）。",
     "- fact_basis に、その投稿が根拠にした実データを短く書く。",
-    "- 出力は X 5本、note 1本。",
+    "- 出力は X 5本、note 1本、Instagram 2本。",
   ].join("\n");
 }
 
 export const marketingDraftsTask: TaskDef = {
   name: "marketing.drafts",
   agentId: "marketing",
-  label: "投稿の下書き（X 5本＋note 1本）",
+  label: "投稿の下書き（X 5本＋note 1本＋Instagram 2本）",
   usesAi: true,
   estimateJpy: (s) => maxCostEstimateJpy(DEFAULT_MODEL, EST_INPUT, MAX_TOKENS, 0, repo.num(s, "usd_jpy", 155)),
   async run({ db, call }) {
@@ -105,7 +114,15 @@ export const marketingDraftsTask: TaskDef = {
     const recent = await repo.listContent(db, repo.ACTUAL_ONLY, { business: "ai-ceo-project", limit: 30 });
     const products = await repo.listProducts(db, repo.ACTUAL_ONLY);
     const expensesRecorded = (await repo.expensesInMonth(db, jstDate().slice(0, 7), repo.ACTUAL_ONLY)).length > 0;
+    const pb = await repo.latestPlaybook(db);
+    const playbook = pb
+      ? (() => {
+          const c = JSON.parse(pb.content);
+          return { patterns: (c.patterns ?? []).slice(0, 12), hooks: (c.hooks ?? []).slice(0, 20), cadence: c.cadence, differentiation: c.differentiation, avoid: c.avoid };
+        })()
+      : null;
     const input = {
+      playbook,
       today: jstDate(),
       project_start_date: "2026-11-21",
       expenses_recorded: expensesRecorded,
@@ -134,8 +151,13 @@ export const marketingDraftsTask: TaskDef = {
     let flagged = 0;
     const rows = drafts.posts.map((p) => {
       const notes: string[] = [];
-      const nums = findUnsupportedNumbers([p.title, p.body, p.header_subtitle, ...p.figures.flatMap((f) => [f.title, ...f.points])], user);
+      const nums = findUnsupportedNumbers([p.title, p.body, p.header_subtitle, ...p.figures.flatMap((f) => [f.title, ...f.points]), ...p.slides.flatMap((x) => [x.heading, x.text])], user);
       if (nums.length) notes.push(`元データにない数字：${nums.join("、")}`);
+      if (p.platform === "instagram") {
+        const problem = checkInstagram(p.body, p.slides);
+        if (problem && !problem.startsWith("【")) notes.push(problem);
+        if ([p.body, ...p.slides.map((x) => x.heading + x.text)].some((t) => /[【】]/.test(t))) notes.push("【 】を書き換えると投稿できます");
+      }
       if (p.platform === "x") {
         const problem = checkXText(p.body);
         if (problem && !problem.startsWith("【")) notes.push(problem);
@@ -152,7 +174,9 @@ export const marketingDraftsTask: TaskDef = {
           addDays(today, p.day_offset),
           p.time,
           [`根拠：${p.fact_basis}`, ...notes].join("\n").slice(0, 1000),
-          p.platform === "note"
+          p.platform === "instagram"
+            ? JSON.stringify({ slides: p.slides.slice(0, 10).map((x) => ({ heading: x.heading.slice(0, 40), text: x.text.slice(0, 160) })) })
+            : p.platform === "note"
             ? JSON.stringify({
                 header_subtitle: p.header_subtitle.slice(0, 40),
                 figures: p.figures.slice(0, 3).map((f) => ({ title: f.title.slice(0, 30), points: f.points.slice(0, 5).map((x) => x.slice(0, 60)) })),

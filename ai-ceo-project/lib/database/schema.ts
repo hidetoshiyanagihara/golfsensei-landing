@@ -352,4 +352,38 @@ CREATE INDEX idx_content_status ON content_posts(status, platform);
 ALTER TABLE content_posts ADD COLUMN extra TEXT;
 `,
   },
+  {
+    version: 6,
+    name: "product_docs",
+    sql: `
+-- 商品の中身（売り物のため、公開リポジトリには置かずデータベースにだけ保存する）
+CREATE TABLE product_docs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  component_index INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','reviewed')),
+  version INTEGER NOT NULL DEFAULT 1,
+  review_note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (product_id, component_index)
+);
+`,
+  },
+  {
+    version: 7,
+    name: "playbooks",
+    sql: `
+-- 投稿の型の手本帳（競合研究の結果）。マーケティングAIが下書きを作るときに参考にする
+CREATE TABLE playbooks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL DEFAULT 'competitors',
+  theme TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`,
+  },
 ];

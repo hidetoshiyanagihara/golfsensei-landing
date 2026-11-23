@@ -132,10 +132,11 @@ test("マーケティングAI：X と note の下書きを承認待ちで登録�
   await syncAgentConnection(db, true);
   const out = {
     posts: [
-      { platform: "x", title: "X①", body: "AI社員を7人つくった。売上はまだ0円。", day_offset: 1, time: "08:00", fact_basis: "AI社員7名・売上0円", header_subtitle: "", figures: [] },
-      { platform: "x", title: "X②", body: "【ここにひとこと：始めた理由】", day_offset: 1, time: "12:00", fact_basis: "なし", header_subtitle: "", figures: [] },
-      { platform: "x", title: "X③", body: "月商77万円を達成！ https://note.com/x", day_offset: 2, time: "08:00", fact_basis: "なし", header_subtitle: "", figures: [] },
-      { platform: "note", title: "note①", body: "## はじめに\n本文\n[図1]", day_offset: 3, time: "20:00", fact_basis: "開始日", header_subtitle: "売上0円からの記録", figures: [{ title: "AI社員7人", points: ["CEO", "市場調査", "財務"] }] },
+      { platform: "x", title: "X①", body: "AI社員を7人つくった。売上はまだ0円。", day_offset: 1, time: "08:00", fact_basis: "AI社員7名・売上0円", header_subtitle: "", figures: [], slides: [] },
+      { platform: "x", title: "X②", body: "【ここにひとこと：始めた理由】", day_offset: 1, time: "12:00", fact_basis: "なし", header_subtitle: "", figures: [], slides: [] },
+      { platform: "x", title: "X③", body: "月商77万円を達成！ https://note.com/x", day_offset: 2, time: "08:00", fact_basis: "なし", header_subtitle: "", figures: [], slides: [] },
+      { platform: "note", title: "note①", body: "## はじめに\n本文\n[図1]", day_offset: 3, time: "20:00", fact_basis: "開始日", header_subtitle: "売上0円からの記録", figures: [{ title: "AI社員7人", points: ["CEO", "市場調査", "財務"] }], slides: [] },
+      { platform: "instagram", title: "IG①", body: "AI社員を7人つくりました。\n#AI活用", day_offset: 2, time: "19:00", fact_basis: "AI社員7名", header_subtitle: "", figures: [], slides: [{ heading: "社員7人、全員AI", text: "人間は1人" }, { heading: "最初のルール", text: "架空の数字を作らない" }] },
     ],
   };
   const call: LlmCall = async (p) => {
