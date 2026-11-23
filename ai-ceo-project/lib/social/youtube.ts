@@ -7,11 +7,55 @@ export type YtResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 type Fetch = typeof fetch;
 
-export function ytCredentialsFromEnv(env: Record<string, string | undefined> = process.env): YtCredentials | null {
+/**
+ * HIDE のチャンネルの合鍵。YT_REFRESH_TOKEN（AXION のチャンネル）は使わない（別のチャンネルに出してしまうため）。
+ * refreshToken は環境変数 HIDE_YT_REFRESH_TOKEN、なければ引数（データベースに暗号化して保存したもの）。
+ */
+export function ytCredentialsFromEnv(env: Record<string, string | undefined> = process.env, storedRefreshToken: string | null = null): YtCredentials | null {
   const clientId = env.YT_CLIENT_ID?.trim();
   const clientSecret = env.YT_CLIENT_SECRET?.trim();
-  const refreshToken = (env.HIDE_YT_REFRESH_TOKEN || env.YT_REFRESH_TOKEN)?.trim();
+  const refreshToken = env.HIDE_YT_REFRESH_TOKEN?.trim() || storedRefreshToken?.trim();
   return clientId && clientSecret && refreshToken ? { clientId, clientSecret, refreshToken } : null;
+}
+
+/** 許可を取るときの戻り先（AXION の OAuth クライアントに登録済みの OAuth Playground） */
+export const YT_REDIRECT_URI = "https://developers.google.com/oauthplayground";
+export const YT_SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"];
+
+/** チャンネルの持ち主に開いてもらう「許可」のリンク（client_id は公開されても問題のない値） */
+export function ytAuthUrl(clientId: string): string {
+  const q = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: YT_REDIRECT_URI,
+    response_type: "code",
+    scope: YT_SCOPES.join(" "),
+    access_type: "offline",
+    prompt: "consent select_account",
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+}
+
+/** 許可のあとに出る「コード」を、リフレッシュトークンに交換する（コードは1回きり・数分で切れる） */
+export async function ytExchangeCode(clientId: string, clientSecret: string, code: string, f: Fetch = fetch): Promise<YtResult<string>> {
+  const r = await f("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, code: code.trim(), redirect_uri: YT_REDIRECT_URI, grant_type: "authorization_code" }),
+  });
+  if (!r.ok) return { ok: false, error: await errorText(r, "コードの交換（期限切れ・使用済みの可能性）") };
+  const j = (await r.json()) as { refresh_token?: string };
+  return j.refresh_token ? { ok: true, value: j.refresh_token } : { ok: false, error: "リフレッシュトークンが返りませんでした（もう一度リンクから許可してください）" };
+}
+
+/** 「?code=…」が付いた URL を丸ごと貼られても、コードだけ取り出す */
+export function extractCode(input: string): string {
+  const t = input.trim();
+  try {
+    const u = new URL(t);
+    return u.searchParams.get("code") ?? t;
+  } catch {
+    return decodeURIComponent(t);
+  }
 }
 
 async function errorText(r: Response, what: string): Promise<string> {

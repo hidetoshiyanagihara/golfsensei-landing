@@ -5,24 +5,31 @@
  * 必要な環境変数（GitHub の Secrets）：
  *   TURSO_DATABASE_URL / TURSO_AUTH_TOKEN … 管理画面のデータベース
  *   YT_CLIENT_ID / YT_CLIENT_SECRET     … Google の OAuth クライアント（AXION と共用）
- *   HIDE_YT_REFRESH_TOKEN               … HIDE のチャンネルで許可したリフレッシュトークン
+ *   HIDE のチャンネルの合鍵 … scripts/youtube-connect.ts でデータベースに暗号化して保存したもの
+ *                             （または Secrets の HIDE_YT_REFRESH_TOKEN）
  * 任意：YT_PRIVACY（public／unlisted。既定 public）、DRY_RUN=1（動画を作るだけで投稿しない）、OUT=保存先（DRY_RUN のとき動画を保存）
  */
 import fs from "node:fs/promises";
 import { getDb } from "../lib/database/db";
+import * as repo from "../lib/database/repo";
+import { unseal } from "../lib/security/seal";
 import { publishNextShort } from "../lib/automation/yt-shorts";
 import { makeShortVideo } from "../lib/video/short-video";
 import { ytAccessToken, ytCredentialsFromEnv, ytUploadShort } from "../lib/social/youtube";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "1";
-  const creds = ytCredentialsFromEnv();
+  const db = await getDb();
+  const settings = await repo.getSettings(db);
+  const sealed = settings.hide_yt_refresh_token_sealed;
+  const stored = sealed && process.env.YT_CLIENT_SECRET ? unseal(sealed, process.env.YT_CLIENT_SECRET.trim(), "hide-yt-refresh-token") : null;
+  const creds = ytCredentialsFromEnv(process.env, stored);
   if (!creds && !dryRun) {
-    console.log("YouTube の合鍵（YT_CLIENT_ID / YT_CLIENT_SECRET / HIDE_YT_REFRESH_TOKEN）が未設定のため、何もしません");
+    console.log("HIDE の YouTube チャンネルがまだつながっていないため、何もしません（Actions →「HIDE YouTube connect」でつなげます）");
     return;
   }
+  if (settings.hide_yt_channel_title) console.log(`投稿先：${settings.hide_yt_channel_title}`);
   const privacy = process.env.YT_PRIVACY === "unlisted" ? "unlisted" : "public";
-  const db = await getDb();
   let saved: Uint8Array | null = null;
   const r = await publishNextShort(
     db,

@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { openDb, get, run } from "../../lib/database/db";
 import { publishNextShort, nextShortSource } from "../../lib/automation/yt-shorts";
-import { shortDescription, shortTitle, ytUploadShort, ytCredentialsFromEnv } from "../../lib/social/youtube";
+import { extractCode, shortDescription, shortTitle, ytAuthUrl, ytUploadShort, ytCredentialsFromEnv } from "../../lib/social/youtube";
+import { seal, unseal } from "../../lib/security/seal";
 import { concatList, slideSeconds } from "../../lib/video/short-video";
 
 const at = (s: string) => new Date(s + "+09:00");
@@ -88,4 +89,22 @@ test("YouTube：タイトル100字・説明に < > を入れない・秒数・�
   assert.match(concatList(["/t/a.png", "/t/b.png"], 2), /file '\/t\/b.png'\nduration 4.5\nfile '\/t\/b.png'\n$/);
   assert.equal(ytCredentialsFromEnv({}), null);
   assert.deepEqual(ytCredentialsFromEnv({ YT_CLIENT_ID: "i", YT_CLIENT_SECRET: "s", HIDE_YT_REFRESH_TOKEN: "r", YT_REFRESH_TOKEN: "axion" }), { clientId: "i", clientSecret: "s", refreshToken: "r" });
+  // AXION のチャンネルの合鍵（YT_REFRESH_TOKEN）は絶対に使わない
+  assert.equal(ytCredentialsFromEnv({ YT_CLIENT_ID: "i", YT_CLIENT_SECRET: "s", YT_REFRESH_TOKEN: "axion" }), null);
+  assert.deepEqual(ytCredentialsFromEnv({ YT_CLIENT_ID: "i", YT_CLIENT_SECRET: "s" }, "db"), { clientId: "i", clientSecret: "s", refreshToken: "db" });
+});
+
+test("YouTube：つなぐリンク・コードの取り出し・合鍵の暗号化", () => {
+  const u = new URL(ytAuthUrl("cid.apps.googleusercontent.com"));
+  assert.equal(u.searchParams.get("redirect_uri"), "https://developers.google.com/oauthplayground");
+  assert.equal(u.searchParams.get("access_type"), "offline");
+  assert.match(u.searchParams.get("scope")!, /youtube\.upload/);
+  assert.equal(extractCode("https://developers.google.com/oauthplayground/?code=4%2F0Abc&scope=x"), "4/0Abc");
+  assert.equal(extractCode(" 4/0Abc "), "4/0Abc");
+  assert.equal(extractCode(""), "");
+  const s = seal("refresh-123", "secret-a", "p");
+  assert.ok(!s.includes("refresh-123"));
+  assert.equal(unseal(s, "secret-a", "p"), "refresh-123");
+  assert.equal(unseal(s, "secret-b", "p"), null);
+  assert.equal(unseal(s, "secret-a", "other"), null);
 });
