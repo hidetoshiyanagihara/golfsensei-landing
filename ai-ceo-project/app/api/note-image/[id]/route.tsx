@@ -1,9 +1,8 @@
-import { ImageResponse } from "next/og";
 import { getDb } from "@/lib/database/db";
 import { get } from "@/lib/database/db";
 import { isAuthenticated } from "@/lib/security/auth";
 import { parseExtra } from "@/lib/marketing/note-format";
-import { loadJpFont } from "@/lib/marketing/font";
+import { fontsFor, image, renderSlide, NAVY, PANEL, GOLD, WHITE, MUTED } from "@/lib/marketing/slide-image";
 import { verifyImage } from "@/lib/social/image-sign";
 import { PNG } from "pngjs";
 import jpeg from "jpeg-js";
@@ -14,12 +13,6 @@ import jpeg from "jpeg-js";
  *   Instagram：/api/note-image/15?kind=slide&n=1（1080×1350）  &format=jpg で JPEG（Instagram は JPEG のみ）
  */
 export const dynamic = "force-dynamic";
-
-const NAVY = "#080d1a";
-const PANEL = "#0e1628";
-const GOLD = "#d4b062";
-const WHITE = "#f4f6fa";
-const MUTED = "#a7b1c6";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
@@ -42,38 +35,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const asJpeg = q.get("format") === "jpg";
 
   if (kind === "slide") {
-    const slides = extra.slides ?? [];
     const n = Math.max(1, Number(q.get("n") ?? 1));
-    const sl = slides[n - 1];
-    if (!sl) return new Response("Not found", { status: 404 });
-    const total = slides.length;
-    const fonts = await fontsFor(`${sl.heading}${sl.text}${n}/${total}HIDE｜AI CEO PROJECT0123456789`);
-    const cover = n === 1;
-    const hs = [...sl.heading].length <= 14 ? 76 : [...sl.heading].length <= 24 ? 64 : 52;
-    const res = image(
-      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: NAVY, padding: "80px 84px 72px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, color: GOLD, fontSize: 26, letterSpacing: 6 }}>
-          <div style={{ display: "flex", width: 48, height: 5, background: GOLD }} />
-          {cover ? "AI CEO PROJECT" : `${String(n - 1).padStart(2, "0")}`}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flexGrow: 1, gap: 44 }}>
-          <div style={{ display: "flex", color: WHITE, fontSize: cover ? hs + 18 : hs, fontWeight: 700, lineHeight: 1.32 }}>{sl.heading}</div>
-          {sl.text && (
-            <div style={{ display: "flex", color: cover ? GOLD : WHITE, fontSize: cover ? 42 : 46, lineHeight: 1.7, borderLeft: cover ? "none" : `6px solid ${GOLD}`, paddingLeft: cover ? 0 : 28 }}>
-              {sl.text}
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `2px solid ${GOLD}`, paddingTop: 24 }}>
-          <div style={{ color: WHITE, fontSize: 28, fontWeight: 700 }}>HIDE｜AI CEO PROJECT</div>
-          <div style={{ color: GOLD, fontSize: 28 }}>{`${n}/${total}`}</div>
-        </div>
-      </div>,
-      1080,
-      1350,
-      fonts,
-      download ? `instagram-${id}-${n}.${asJpeg ? "jpg" : "png"}` : null,
-    );
+    const res = await renderSlide(extra.slides ?? [], n, "feed", download ? `instagram-${id}-${n}.${asJpeg ? "jpg" : "png"}` : null);
+    if (!res) return new Response("Not found", { status: 404 });
     return asJpeg ? toJpeg(res, download ? `instagram-${id}-${n}.jpg` : null) : res;
   }
   const title = post.title.replace(/^note[①-⑩\d]*[：:]\s*/, "");
@@ -130,29 +94,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     720,
     fonts,
     download ? `note-${id}-fig${n}.png` : null,
-  );
-}
-
-async function fontsFor(text: string) {
-  const [bold, regular] = await Promise.all([loadJpFont(text, 700), loadJpFont(text, 400)]);
-  const fonts: { name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" }[] = [];
-  if (regular) fonts.push({ name: "NotoSansJP", data: regular, weight: 400, style: "normal" });
-  if (bold) fonts.push({ name: "NotoSansJP", data: bold, weight: 700, style: "normal" });
-  return fonts;
-}
-
-function image(el: React.ReactElement, width: number, height: number, fonts: Awaited<ReturnType<typeof fontsFor>>, filename: string | null) {
-  return new ImageResponse(
-    <div style={{ display: "flex", width: "100%", height: "100%", fontFamily: "NotoSansJP" }}>{el}</div>,
-    {
-      width,
-      height,
-      fonts: fonts.length ? fonts : undefined,
-      headers: {
-        "Cache-Control": "private, no-store",
-        ...(filename ? { "Content-Disposition": `attachment; filename="${filename}"` } : {}),
-      },
-    },
   );
 }
 
