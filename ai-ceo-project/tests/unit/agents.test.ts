@@ -216,3 +216,27 @@ test("裏側の実行の依頼は、署名が正しく新しいものだけ受�
   assert.equal(await verifyDispatch({ runId: 7 }, 1_000_000), null);
   assert.equal(await verifyDispatch(d, 1_000_000, "x".repeat(40)), null); // 別の鍵
 });
+
+test("商品開発AI：構成品の下書きを非公開のデータベースに保存し、作り直すと版が上がる", async () => {
+  const db = await setup();
+  const [p] = await repo.listProducts(db, repo.ACTUAL_ONLY);
+  const body = "## このテンプレートでできること\n" + "営業の準備を短くする。".repeat(80) + "\nこれで必ず成約します。";
+  const call: LlmCall = async (params) => {
+    assert.match(String(params.system), /架空の例/);
+    return msg({ content: [{ type: "text", text: body, citations: null }] });
+  };
+  for (let v = 1; v <= 2; v++) {
+    const q = await queueRun(db, "product.component", { productId: p.id, index: 0 });
+    assert.ok(q.ok);
+    const r = await executeRun(db, (q as { runId: number }).runId, call);
+    assert.ok(r.ok, r.message);
+  }
+  const docs = await repo.listProductDocs(db, p.id);
+  assert.equal(docs.length, 1);
+  assert.equal(docs[0].version, 2);
+  assert.equal(docs[0].status, "draft");
+  assert.match(docs[0].review_note!, /約束/); // 「必ず」に目印
+  const after = await repo.getProduct(db, p.id);
+  assert.equal(after?.production_status, "producing");
+  assert.equal(JSON.parse(after!.components)[0].status, "producing");
+});

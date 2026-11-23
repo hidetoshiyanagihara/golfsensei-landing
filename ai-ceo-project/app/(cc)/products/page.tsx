@@ -1,7 +1,11 @@
 import { getDb } from "@/lib/database/db";
 import * as repo from "@/lib/database/repo";
 import { getView } from "@/lib/view";
-import { updateProduct } from "@/app/actions";
+import { runAgentTask, updateProduct, updateProductDoc } from "@/app/actions";
+import { get } from "@/lib/database/db";
+import { hasApiKey } from "@/lib/ai/llm";
+import { productComponentTask } from "@/lib/ai/tasks/product-component";
+import { CopyButton } from "@/components/common/CopyButton";
 import { canPassQa, canStartSelling } from "@/lib/rules";
 import { yen } from "@/lib/finance/calc";
 import { formatDateTimeJst } from "@/lib/time";
@@ -22,6 +26,12 @@ export default async function ProductsPage({ searchParams }: { searchParams: Fla
   const db = await getDb();
   const view = await getView();
   const products = await repo.listProducts(db, view);
+  const settings = await repo.getSettings(db);
+  const docsBy = new Map<number, repo.ProductDocRow[]>();
+  for (const p of products) if (p.data_kind === "actual") docsBy.set(p.id, await repo.listProductDocs(db, p.id));
+  const productBusy = !!(await get(db, "SELECT 1 FROM agent_runs WHERE agent_id = 'product' AND status IN ('queued','running')"));
+  const keyOk = hasApiKey();
+  const est = productComponentTask.estimateJpy(settings);
 
   return (
     <>
@@ -61,14 +71,53 @@ export default async function ProductsPage({ searchParams }: { searchParams: Fla
 
               {components.length > 0 && (
                 <div className="mt-4">
-                  <p className="mb-1 text-[11px] text-fg-subtle">商品構成</p>
-                  <ul className="grid gap-1 text-sm sm:grid-cols-2">
-                    {components.map((c, n) => (
-                      <li key={c.name} className="flex items-center justify-between gap-2 rounded border border-line px-2 py-1">
-                        <span className="min-w-0 truncate"><span className="num mr-1.5 text-fg-subtle">{n + 1}</span>{c.name}</span>
-                        <StatusPill status={c.status} />
-                      </li>
-                    ))}
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">商品の中身（{components.length}つ）</p>
+                    <p className="text-[11px] text-fg-subtle">中身は売り物のため、公開されている場所には置かず、非公開のデータベースにだけ保存しています</p>
+                  </div>
+                  {productBusy && <div className="mb-2"><Notice>商品開発AIが下書きを作っています（1〜3分）。この画面は自動で更新されます。</Notice><meta httpEquiv="refresh" content="15" /></div>}
+                  <ul className="space-y-2">
+                    {components.map((c, n) => {
+                      const doc = docsBy.get(p.id)?.find((d) => d.component_index === n);
+                      return (
+                        <li key={c.name} className="rounded border border-line p-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="min-w-0 text-sm"><span className="num mr-1.5 text-fg-subtle">{n + 1}</span>{c.name}</span>
+                            <span className="flex items-center gap-2">
+                              {doc && <span className="text-[11px] text-fg-subtle">{doc.body.length.toLocaleString("ja-JP")}字・第{doc.version}版</span>}
+                              <StatusPill status={doc ? (doc.status === "reviewed" ? "done" : "producing") : c.status} />
+                            </span>
+                          </div>
+                          {!sample && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <form action={runAgentTask}>
+                                <input type="hidden" name="task" value="product.component" />
+                                <input type="hidden" name="productId" value={p.id} />
+                                <input type="hidden" name="index" value={n} />
+                                <Button variant="ghost" disabled={!keyOk || productBusy}>
+                                  {doc ? "AIに作り直させる" : "AIに下書きを作らせる"}（上限 約{yen(est)}）
+                                </Button>
+                              </form>
+                            </div>
+                          )}
+                          {doc && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-xs text-gold">中身を見る・直す</summary>
+                              {doc.review_note && <p className="mt-2 whitespace-pre-line text-[11px] text-warn">{doc.review_note}</p>}
+                              <form action={updateProductDoc} className="mt-2 space-y-2">
+                                <input type="hidden" name="id" value={doc.id} />
+                                <textarea name="body" defaultValue={doc.body} rows={16} className="font-mono text-xs leading-6" />
+                                <div className="flex flex-wrap gap-2">
+                                  <Button name="op" value="save" variant="ghost">保存</Button>
+                                  <Button name="op" value="review" disabled={doc.status === "reviewed"}>実際に使って確かめた → 確認済みにする</Button>
+                                  <CopyButton text={doc.body} />
+                                </div>
+                              </form>
+                            </details>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

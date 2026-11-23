@@ -2,6 +2,7 @@ import { registerTask, type TaskDef } from "../runner";
 import { ceoMeetingTask } from "./ceo-meeting";
 import { marketResearchTask } from "./market-research";
 import { marketingDraftsTask } from "./marketing-drafts";
+import { productComponentTask } from "./product-component";
 
 /** 動作確認用（AIを使わない・0円）。裏側の実行の仕組みが動くかを確かめる */
 export const pingTask: TaskDef = {
@@ -24,8 +25,9 @@ export function registerAllTasks(): void {
   registerTask(ceoMeetingTask);
   registerTask(marketResearchTask);
   registerTask(marketingDraftsTask);
+  registerTask(productComponentTask);
   registerTask(pingTask);
 }
 registerAllTasks();
 
-export { ceoMeetingTask, marketResearchTask, marketingDraftsTask };
+export { ceoMeetingTask, marketResearchTask, marketingDraftsTask, productComponentTask };

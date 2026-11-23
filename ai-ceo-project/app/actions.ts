@@ -571,7 +571,7 @@ export async function setAutomation(fd: FormData): Promise<void> {
 }
 
 // ---------- AI社員の実行 ----------
-const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "marketing.drafts": "marketing", "system.ping": "ceo" };
+const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "marketing.drafts": "marketing", "product.component": "product", "system.ping": "ceo" };
 
 /** 受付けた仕事を裏側（Netlify のバックグラウンド関数）に渡す。パソコンではその場で実行する */
 async function dispatchRun(db: DB, runId: number): Promise<void> {
@@ -607,10 +607,14 @@ export async function runAgentTask(fd: FormData): Promise<void> {
   const task = String(fd.get("task") ?? "");
   const agentId = RUNNABLE[task];
   if (!agentId) redirect("/agents");
-  return act(`/agents/${agentId}`, async (db) => {
+  return act(task === "product.component" ? "/products" : `/agents/${agentId}`, async (db) => {
     const params: Record<string, unknown> = {};
     if (task === "research.ideas") params.theme = str(fd, "theme", { max: 300 });
     if (task === "system.ping") params.seconds = int(fd, "seconds", { min: 0, max: 120, optional: true }) ?? 0;
+    if (task === "product.component") {
+      params.productId = int(fd, "productId", { min: 1 });
+      params.index = int(fd, "index", { min: 0, max: 20 });
+    }
     const q = await queueRun(db, task, params, "manual");
     if (!q.ok) throw new InputError(q.reason);
     await dispatchRun(db, q.runId);
@@ -635,3 +639,24 @@ export async function checkXAccount(): Promise<void> {
   });
 }
 
+
+/** 商品の構成品の本文を直す・確認済みにする（中身はデータベースにだけ保存） */
+export async function updateProductDoc(fd: FormData): Promise<void> {
+  return act("/products", async (db) => {
+    const id = int(fd, "id", { min: 1 })!;
+    const doc = await get<{ product_id: number; component_index: number; status: string }>(db, "SELECT product_id, component_index, status FROM product_docs WHERE id = ?", [id]);
+    if (!doc) throw new InputError("構成品が見つかりません");
+    const op = str(fd, "op");
+    const body = str(fd, "body", { max: 60000 });
+    const reviewed = op === "review";
+    const product = await repo.getProduct(db, doc.product_id);
+    const comps = product ? (JSON.parse(product.components) as { name: string; status: string }[]) : [];
+    if (comps[doc.component_index]) comps[doc.component_index].status = reviewed ? "done" : "producing";
+    await batch(db, [
+      { sql: "UPDATE product_docs SET body = ?, status = ?, updated_at = datetime('now') WHERE id = ?", args: [body, reviewed ? "reviewed" : "draft", id] },
+      { sql: "UPDATE products SET components = ?, updated_at = datetime('now') WHERE id = ?", args: [JSON.stringify(comps), doc.product_id] },
+      repo.auditStmt("owner", reviewed ? "product.component_reviewed" : "product.component_edited", `product_doc:${id}`),
+    ]);
+    return reviewed ? "確認済みにしました" : "保存しました";
+  });
+}
