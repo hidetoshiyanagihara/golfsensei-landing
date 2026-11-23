@@ -198,8 +198,12 @@ test("市場調査AI：検索→一時停止→保存。検索結果にないURL
 });
 
 test("URLの確認と、入力にない数字の検出", () => {
-  const seen = seenUrls([msg({ content: [{ type: "text", text: "参考 https://a.example/x 。", citations: null }] })]);
+  // 文章に書かれただけのURLは数えず、引用（citations）に付いたURLだけを数える
+  const seen = seenUrls([
+    msg({ content: [{ type: "text", text: "参考 https://made-up.example/y 。", citations: [{ type: "web_search_result_location", url: "https://a.example/x", title: "t", cited_text: "c", encrypted_index: "e" }] }] }),
+  ]);
   assert.ok(seen.has("https://a.example/x"));
+  assert.ok(!seen.has("https://made-up.example/y"));
   const v = verifySources(
     { summary: "", ideas: [{ sources: [{ title: "a", url: "https://a.example/x", kind: "fact" }, { title: "b", url: "https://b.example", kind: "fact" }] } as never] },
     seen,

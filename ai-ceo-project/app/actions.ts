@@ -16,6 +16,9 @@ import { importAutopostFromGitHub, AUTOPOST_SOURCE } from "@/lib/importers/autop
 import { ACCOUNTS } from "@/lib/marketing/launch-kit";
 import { checkXText } from "@/lib/automation/publisher";
 import { whoAmI, xCredentialsFromEnv } from "@/lib/social/x";
+import { checkInstagram, igMe } from "@/lib/social/instagram";
+import { igToken } from "@/lib/automation/ig-publisher";
+import { parseExtra } from "@/lib/marketing/note-format";
 import { isYmd, jstDate } from "@/lib/time";
 import { executeRun, queueRun } from "@/lib/ai/runner";
 import { BACKGROUND_PATH, onNetlify, signDispatch } from "@/lib/ai/dispatch";
@@ -351,15 +354,24 @@ export async function transitionContent(fd: FormData): Promise<void> {
     if (!canTransitionContent(row.status, to)) throw new InputError("この状態には変更できません（承認を飛ばすことはできません）");
     if (to === "scheduled" && !row.scheduled_at) throw new InputError("予定日が入っていない投稿は予約にできません");
     const autoX = row.platform === "x" && row.business_id === "ai-ceo-project";
+    const autoIg = row.platform === "instagram" && row.business_id === "ai-ceo-project";
     if (to === "scheduled" && autoX) {
       const problem = checkXText(row.body);
+      if (problem) throw new InputError(`予約できません：${problem}`);
+    }
+    if (to === "scheduled" && autoIg) {
+      const ex = await get<{ extra: string | null }>(db, "SELECT extra FROM content_posts WHERE id = ?", [id]);
+      const problem = checkInstagram(row.body, parseExtra(ex?.extra).slides ?? []);
       if (problem) throw new InputError(`予約できません：${problem}`);
     }
     await batch(db, [
       { sql: "UPDATE content_posts SET status = ? WHERE id = ?", args: [to, id] },
       repo.auditStmt("owner", "content.status", `content:${id}`, { from: row.status, to }),
     ]);
-    if (to === "scheduled") return autoX ? "予約しました。予定の時刻になったら X に自動で投稿します" : "予約済みにしました（この投稿先は自動投稿しないため、予定日に手で投稿してください）";
+    if (to === "scheduled")
+      return autoX ? "予約しました。予定の時刻になったら X に自動で投稿します"
+        : autoIg ? "予約しました。予定の時刻になったら Instagram に自動で投稿します"
+        : "予約済みにしました（この投稿先は自動投稿しないため、予定日に手で投稿してください）";
     return "状態を更新しました";
   });
 }
@@ -393,6 +405,17 @@ export async function updateContent(fd: FormData): Promise<void> {
       const problem = checkXText(body);
       if (problem) throw new InputError(`保存できません：${problem}`);
     }
+    // Instagram：スライドの文字も直せる
+    let extraUpdate: string | null = null;
+    if (row.platform === "instagram") {
+      const cur = await get<{ extra: string | null }>(db, "SELECT extra FROM content_posts WHERE id = ?", [id]);
+      const ex = parseExtra(cur?.extra);
+      const slides = (ex.slides ?? []).map((sl, i) => ({
+        heading: fd.has(`slide_heading_${i}`) ? str(fd, `slide_heading_${i}`, { max: 40 }) : sl.heading,
+        text: fd.has(`slide_text_${i}`) ? str(fd, `slide_text_${i}`, { max: 160 }) : sl.text,
+      }));
+      extraUpdate = JSON.stringify({ ...ex, slides });
+    }
     // 失敗したものを直したら、承認済みに戻す（もう一度「予約」を押すと投稿される）
     let nextStatus = row.status === "failed" ? "approved" : row.status;
     // 「保存して予約」：承認済み（または予約済み）のものだけ。承認は飛ばさない
@@ -405,19 +428,27 @@ export async function updateContent(fd: FormData): Promise<void> {
         const problem = checkXText(body);
         if (problem) throw new InputError(`予約できません（本文は保存していません）：${problem}`);
       }
+      if (row.platform === "instagram" && row.business_id === "ai-ceo-project") {
+        const problem = checkInstagram(body, parseExtra(extraUpdate).slides ?? []);
+        if (problem) throw new InputError(`予約できません（本文は保存していません）：${problem}`);
+      }
       nextStatus = "scheduled";
     }
     await batch(db, [
+      ...(extraUpdate ? [{ sql: "UPDATE content_posts SET extra = ? WHERE id = ?", args: [extraUpdate, id] }] : []),
       {
         // 【 】を書き換えたら、その注意書きは消す
         sql: `UPDATE content_posts SET title = ?, body = ?, scheduled_at = ?, post_time = ?, status = ?, error = NULL,
                 review_note = CASE WHEN ? THEN replace(replace(review_note, char(10) || '【 】を書き換えると投稿できます', ''), '【 】を書き換えると投稿できます', '') ELSE review_note END
               WHERE id = ?`,
-        args: [str(fd, "title", { max: 200, required: true }), body, scheduled || null, postTime(fd), nextStatus, /[【】]/.test(body) ? 0 : 1, id],
+        args: [str(fd, "title", { max: 200, required: true }), body, scheduled || null, postTime(fd), nextStatus, /[【】]/.test(body + (extraUpdate ?? "")) ? 0 : 1, id],
       },
       repo.auditStmt("owner", thenSchedule ? "content.edited_scheduled" : "content.edited", `content:${id}`),
     ]);
-    if (thenSchedule) return autoX ? "保存して予約しました。予定の時刻に X へ自動で投稿します" : "保存して予約しました（この投稿先は手で投稿してください）";
+    if (thenSchedule)
+      return autoX ? "保存して予約しました。予定の時刻に X へ自動で投稿します"
+        : row.platform === "instagram" && row.business_id === "ai-ceo-project" ? "保存して予約しました。予定の時刻に Instagram へ自動で投稿します"
+        : "保存して予約しました（この投稿先は手で投稿してください）";
     return "保存しました";
   });
 }
@@ -571,7 +602,7 @@ export async function setAutomation(fd: FormData): Promise<void> {
 }
 
 // ---------- AI社員の実行 ----------
-const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "marketing.drafts": "marketing", "product.component": "product", "system.ping": "ceo" };
+const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "marketing.drafts": "marketing", "product.component": "product", "research.competitors": "research", "system.ping": "ceo" };
 
 /** 受付けた仕事を裏側（Netlify のバックグラウンド関数）に渡す。パソコンではその場で実行する */
 async function dispatchRun(db: DB, runId: number): Promise<void> {
@@ -609,7 +640,7 @@ export async function runAgentTask(fd: FormData): Promise<void> {
   if (!agentId) redirect("/agents");
   return act(task === "product.component" ? "/products" : `/agents/${agentId}`, async (db) => {
     const params: Record<string, unknown> = {};
-    if (task === "research.ideas") params.theme = str(fd, "theme", { max: 300 });
+    if (task === "research.ideas" || task === "research.competitors") params.theme = str(fd, "theme", { max: 300 });
     if (task === "system.ping") params.seconds = int(fd, "seconds", { min: 0, max: 120, optional: true }) ?? 0;
     if (task === "product.component") {
       params.productId = int(fd, "productId", { min: 1 });
@@ -658,5 +689,38 @@ export async function updateProductDoc(fd: FormData): Promise<void> {
       repo.auditStmt("owner", reviewed ? "product.component_reviewed" : "product.component_edited", `product_doc:${id}`),
     ]);
     return reviewed ? "確認済みにしました" : "保存しました";
+  });
+}
+
+export async function setIgAutopost(fd: FormData): Promise<void> {
+  return act("/settings", async (db) => {
+    const on = str(fd, "on") === "true";
+    const limit = int(fd, "ig_daily_limit", { min: 1, max: 5, optional: true });
+    await batch(db, [
+      repo.setSettingStmt("ig_autopost_enabled", on ? "true" : "false"),
+      ...(limit ? [repo.setSettingStmt("ig_daily_limit", String(limit))] : []),
+      repo.auditStmt("owner", "ig.autopost_toggled", "", { on, limit }),
+    ]);
+    return on ? "Instagram の自動投稿をONにしました（承認して予約したカルーセルだけが、予定の時刻に投稿されます）" : "Instagram の自動投稿をOFFにしました";
+  });
+}
+
+/** Instagram の合鍵がどのアカウントのものかを確認する（投稿はしない・無料） */
+export async function checkIgAccount(): Promise<void> {
+  return act("/settings", async (db) => {
+    const token = await igToken(db);
+    if (!token) throw new InputError("Instagram の合鍵が設定されていません");
+    const r = await igMe(token);
+    if (!r.ok) {
+      await batch(db, [repo.auditStmt("owner", "ig.verify_failed", "", r.error)]);
+      throw new InputError(`確認できませんでした：${r.error}`);
+    }
+    const userId = r.value.user_id ?? r.value.id ?? "";
+    await batch(db, [
+      repo.setSettingStmt("ig_account", `@${r.value.username ?? "?"}`),
+      repo.setSettingStmt("ig_user_id", userId),
+      repo.auditStmt("owner", "ig.verified", r.value.username ?? ""),
+    ]);
+    return `Instagram の合鍵は @${r.value.username} のものです`;
   });
 }

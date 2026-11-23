@@ -372,4 +372,18 @@ CREATE TABLE product_docs (
 );
 `,
   },
+  {
+    version: 7,
+    name: "playbooks",
+    sql: `
+-- 投稿の型の手本帳（競合研究の結果）。マーケティングAIが下書きを作るときに参考にする
+CREATE TABLE playbooks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL DEFAULT 'competitors',
+  theme TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`,
+  },
 ];

@@ -38,3 +38,21 @@ export const BACKGROUND_PATH = "/.netlify/functions/agent-run-background";
 export function onNetlify(): boolean {
   return !!(process.env.SITE_ID || process.env.NETLIFY || process.env.NETLIFY_LOCAL);
 }
+
+/** 用途つきの署名（例：Instagram の投稿を裏側で実行する依頼） */
+export async function signPurpose(purpose: string, ts = Date.now(), secret = resolveSessionSecret()): Promise<{ purpose: string; ts: number; sig: string }> {
+  if (!secret) throw new Error("署名の鍵がありません");
+  const sig = hex(await crypto.subtle.sign("HMAC", await key(secret), enc.encode(`purpose:${purpose}.${ts}`)));
+  return { purpose, ts, sig };
+}
+
+export async function verifyPurpose(body: unknown, purpose: string, now = Date.now(), secret = resolveSessionSecret()): Promise<boolean> {
+  if (!secret || !body || typeof body !== "object") return false;
+  const b = body as Record<string, unknown>;
+  if (b.purpose !== purpose || typeof b.ts !== "number" || typeof b.sig !== "string" || Math.abs(now - b.ts) > 5 * 60 * 1000) return false;
+  const expected = (await signPurpose(purpose, b.ts, secret)).sig;
+  if (expected.length !== b.sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ b.sig.charCodeAt(i);
+  return diff === 0;
+}

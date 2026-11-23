@@ -61,6 +61,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
     repo.latestMetrics(db, "followers", repo.ACTUAL_ONLY),
   ]);
   const settings = await repo.getSettings(db);
+  const playbook = await repo.latestPlaybook(db);
   const startedPlatforms = new Set(newAccountFollowers.filter((m) => m.account === "ai-ceo").map((m) => m.platform));
   const today = jstDate();
   const filterHref = (s?: string, p?: string) => {
@@ -113,6 +114,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
         <p className="mt-3 text-xs text-fg-subtle">最初の投稿の下書き（X 3本・note 1本・Instagram 1本・YouTube 1本）は、下の待ち行列に入っています。【 】の部分はご自身の言葉で書いてください。発信名は「HIDE」です。</p>
       </Card>
 
+      <PlaybookCard pb={playbook} />
+
       <Card
         title={`承認・予約の待ち行列（${queue.length}件）`}
         className="mt-4"
@@ -136,6 +139,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
               <li key={c.id} className="py-3">
                 {(() => {
                   const autoX = c.platform === "x" && c.business_id === "ai-ceo-project";
+                  const autoIg = c.platform === "instagram" && c.business_id === "ai-ceo-project";
+                  const auto = autoX || autoIg;
+                  const slides = c.platform === "instagram" ? parseExtra(c.extra).slides ?? [] : [];
                   const when = c.scheduled_at ? `${c.scheduled_at} ${c.post_time ?? DEFAULT_POST_TIME}` : "未定";
                   const xLen = c.platform === "x" ? Math.ceil(xWeightedLength(c.body) / 2) : null;
                   const editable = c.data_kind === "actual" && ["draft", "pending_approval", "approved", "scheduled"].includes(c.status);
@@ -153,7 +159,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                           </div>
                           <p className="mt-1 font-medium">{c.title}</p>
                           <p className="mt-0.5 text-[11px] text-fg-subtle">
-                            予定：{when}／{autoX ? <span className="text-gold">X に自動投稿</span> : "手で投稿"}
+                            予定：{when}／{auto ? <span className="text-gold">{autoX ? "X" : "Instagram"} に自動投稿</span> : "手で投稿"}
                             {xLen !== null && <span className={xLen > 140 ? "text-bad" : ""}>／{xLen}字</span>}
                           </p>
                           {c.review_note && <p className="mt-1 whitespace-pre-line text-[11px] text-warn">{c.review_note}</p>}
@@ -163,7 +169,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                             <input type="hidden" name="id" value={c.id} />
                             {allowedContentTransitions(c.status as ContentStatus).map((to) => (
                               <Button key={to} name="to" value={to} variant={to === "approved" || to === "pending_approval" || to === "scheduled" ? "primary" : "ghost"}>
-                                {to === "pending_approval" ? "承認依頼" : to === "approved" ? "承認" : to === "draft" ? "下書きに戻す" : to === "scheduled" ? (autoX ? "予約（自動投稿）" : "予約") : statusLabel(to)}
+                                {to === "pending_approval" ? "承認依頼" : to === "approved" ? "承認" : to === "draft" ? "下書きに戻す" : to === "scheduled" ? (auto ? "予約（自動投稿）" : "予約") : statusLabel(to)}
                               </Button>
                             ))}
                           </form>
@@ -177,29 +183,50 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                             <form action={updateContent} className="mt-2 space-y-2">
                               <input type="hidden" name="id" value={c.id} />
                               <div><label htmlFor={`t-${c.id}`}>タイトル</label><input id={`t-${c.id}`} name="title" defaultValue={c.title} required maxLength={200} /></div>
-                              <div><label htmlFor={`b-${c.id}`}>本文</label><textarea id={`b-${c.id}`} name="body" defaultValue={c.body} rows={c.platform === "note" ? 14 : 5} /></div>
+                              <div><label htmlFor={`b-${c.id}`}>{c.platform === "instagram" ? "キャプション" : "本文"}</label><textarea id={`b-${c.id}`} name="body" defaultValue={c.body} rows={c.platform === "note" ? 14 : 5} /></div>
+                              {slides.length > 0 && (
+                                <div className="space-y-2 rounded border border-line p-2">
+                                  <p className="text-[11px] text-fg-subtle">スライドの文字（1枚目は表紙）</p>
+                                  {slides.map((sl, i) => (
+                                    <div key={i} className="grid gap-1 sm:grid-cols-[1fr_2fr]">
+                                      <input name={`slide_heading_${i}`} defaultValue={sl.heading} aria-label={`${i + 1}枚目の見出し`} maxLength={40} />
+                                      <input name={`slide_text_${i}`} defaultValue={sl.text} aria-label={`${i + 1}枚目の文`} maxLength={160} />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                               <div className="grid grid-cols-2 gap-2">
                                 <div><label htmlFor={`d-${c.id}`}>予定日</label><input id={`d-${c.id}`} name="scheduled_at" type="date" defaultValue={c.scheduled_at ?? ""} /></div>
                                 <div><label htmlFor={`h-${c.id}`}>時刻</label><input id={`h-${c.id}`} name="post_time" type="time" defaultValue={c.post_time ?? DEFAULT_POST_TIME} /></div>
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 {(c.status === "approved" || c.status === "scheduled") && (
-                                  <Button name="then" value="schedule">{autoX ? "保存して予約（自動投稿）" : "保存して予約"}</Button>
+                                  <Button name="then" value="schedule">{auto ? "保存して予約（自動投稿）" : "保存して予約"}</Button>
                                 )}
                                 <Button variant="ghost">保存だけ</Button>
-                                {!autoX && c.platform !== "note" && <CopyButton text={c.body} />}
+                                {!auto && c.platform !== "note" && <CopyButton text={c.body} />}
                               </div>
                             </form>
                           ) : null}
                           {c.platform === "note" && c.body && (
                             <NoteKit id={c.id} title={c.title} body={c.body} extra={c.extra} />
                           )}
+                          {slides.length > 0 && (
+                            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              {slides.map((_, i) => (
+                                <a key={i} href={`/api/note-image/${c.id}?kind=slide&n=${i + 1}&download=1`} title="保存">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={`/api/note-image/${c.id}?kind=slide&n=${i + 1}`} alt={`${i + 1}枚目`} loading="lazy" className="w-full rounded border border-line" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
                           {editable ? null : (
                             <p className="mt-2 whitespace-pre-line rounded bg-navy-800 p-3 text-sm leading-7 select-all">{c.body}</p>
                           )}
                         </details>
                       )}
-                      {c.data_kind === "actual" && !autoX && (c.status === "approved" || c.status === "scheduled") && (
+                      {c.data_kind === "actual" && !auto && (c.status === "approved" || c.status === "scheduled") && (
                         <form action={markPostedManually} className="mt-2 flex flex-wrap items-end gap-2">
                           <input type="hidden" name="id" value={c.id} />
                           <div className="min-w-48 flex-1">
@@ -393,5 +420,52 @@ function NoteKit({ id, title, body, extra }: { id: number; title: string; body: 
       </div>
       <p className="text-[11px] text-fg-subtle">iPhone では、画像を長押しして「写真に保存」でも保存できます。{figures.length === 0 && "この記事には図解がありません（AIに下書きを頼むと、図解つきの記事を作ります）。"}</p>
     </div>
+  );
+}
+
+/** 投稿の型の手本帳（競合研究の結果） */
+function PlaybookCard({ pb }: { pb: repo.PlaybookRow | undefined }) {
+  if (!pb) {
+    return (
+      <Card title="投稿の型の手本帳" className="mt-4">
+        <div id="playbook" />
+        <p className="text-sm text-fg-subtle">
+          まだありません。<Link href="/agents/research" className="text-gold underline">市場調査AI</Link>の「競合研究・投稿の型の手本帳」を実行すると、伸びている発信者の型（書き出し・構成・頻度）をまとめ、マーケティングAIが下書きに使います。
+        </p>
+      </Card>
+    );
+  }
+  const c = JSON.parse(pb.content) as {
+    summary: string;
+    accounts: { name: string; platform: string; strengths: string; source_url: string }[];
+    patterns: { name: string; platform: string; structure: string; why: string }[];
+    hooks: string[];
+    cadence: string;
+    differentiation: string;
+    avoid: string[];
+    researched_at?: string;
+  };
+  return (
+    <Card title="投稿の型の手本帳" className="mt-4" aside={<span className="text-[11px] text-fg-subtle">{c.researched_at} 調査・マーケティングAIが参考にします</span>}>
+      <div id="playbook" />
+      <p className="text-sm text-fg-muted">{c.summary}</p>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-gold">型 {c.patterns.length}個・書き出し {c.hooks.length}個・参考にした発信者 {c.accounts.length}件を見る</summary>
+        <div className="mt-2 space-y-3 text-sm">
+          <ul className="space-y-1">
+            {c.patterns.map((p, i) => (
+              <li key={i}><span className="text-gold">{p.platform}</span>｜<b>{p.name}</b>：{p.structure}<span className="block text-xs text-fg-subtle">{p.why}</span></li>
+            ))}
+          </ul>
+          <div><p className="text-xs text-fg-subtle">書き出しの型</p><ul className="list-disc pl-5">{c.hooks.map((h, i) => <li key={i}>{h}</li>)}</ul></div>
+          <p><span className="text-xs text-fg-subtle">投稿の頻度：</span>{c.cadence}</p>
+          <p><span className="text-xs text-fg-subtle">HIDE が勝てる点：</span>{c.differentiation}</p>
+          <div><p className="text-xs text-fg-subtle">やらないこと</p><ul className="list-disc pl-5">{c.avoid.map((h, i) => <li key={i}>{h}</li>)}</ul></div>
+          <div><p className="text-xs text-fg-subtle">参考にした発信者（型だけを参考にし、文章は写しません）</p>
+            <ul className="space-y-0.5 text-xs">{c.accounts.map((a, i) => <li key={i}><a href={a.source_url} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline">{a.name}</a>（{a.platform}）：{a.strengths}</li>)}</ul>
+          </div>
+        </div>
+      </details>
+    </Card>
   );
 }

@@ -12,10 +12,11 @@ import { runAgentTask } from "@/app/actions";
 import { hasApiKey } from "@/lib/ai/llm";
 import { getTask, failStaleRuns } from "@/lib/ai/runner";
 import { DEFAULT_THEME } from "@/lib/ai/tasks/market-research";
+import { DEFAULT_COMPETITOR_THEME } from "@/lib/ai/tasks/competitor-research";
 import "@/lib/ai/tasks/index";
 
-const TASKS_OF: Record<string, string[]> = { ceo: ["ceo.meeting"], research: ["research.ideas"], marketing: ["marketing.drafts"] };
-const RESULT_LINK: Record<string, [string, string]> = { "ceo.meeting": ["/reports", "経営会議を見る"], "research.ideas": ["/business", "事業開発で見る"], "marketing.drafts": ["/marketing", "下書きを見る"] };
+const TASKS_OF: Record<string, string[]> = { ceo: ["ceo.meeting"], research: ["research.ideas", "research.competitors"], marketing: ["marketing.drafts"] };
+const RESULT_LINK: Record<string, [string, string]> = { "ceo.meeting": ["/reports", "経営会議を見る"], "research.ideas": ["/business", "事業開発で見る"], "research.competitors": ["/marketing#playbook", "手本帳を見る"], "product.component": ["/products", "商品管理で見る"], "marketing.drafts": ["/marketing", "下書きを見る"] };
 
 export default async function AgentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: FlashParams }) {
   const { id } = await params;
@@ -55,10 +56,10 @@ export default async function AgentDetailPage({ params, searchParams }: { params
               <form key={t.name} action={runAgentTask} className="space-y-2 rounded-md border border-line p-3">
                 <input type="hidden" name="task" value={t.name} />
                 <p className="text-sm font-medium">{t.label}</p>
-                {t.name === "research.ideas" && (
+                {(t.name === "research.ideas" || t.name === "research.competitors") && (
                   <div>
-                    <label htmlFor="theme">調べるテーマ（空欄なら下の例で調べます）</label>
-                    <textarea id="theme" name="theme" rows={2} maxLength={300} placeholder={DEFAULT_THEME} />
+                    <label htmlFor={`theme-${t.name}`}>調べるテーマ（空欄なら下の例で調べます）</label>
+                    <textarea id={`theme-${t.name}`} name="theme" rows={2} maxLength={300} placeholder={t.name === "research.ideas" ? DEFAULT_THEME : DEFAULT_COMPETITOR_THEME} />
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-3">
@@ -66,6 +67,7 @@ export default async function AgentDetailPage({ params, searchParams }: { params
                   <span className="text-xs text-fg-subtle">
                     費用の上限 約{yen(t.estimateJpy(settings))}（推計。実際はこれより少ない見込み）
                     {t.name === "research.ideas" && "・Web検索は最大5回"}
+                    {t.name === "research.competitors" && "・Web検索は最大6回"}
                   </span>
                 </div>
               </form>

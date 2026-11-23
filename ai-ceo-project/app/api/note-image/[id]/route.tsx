@@ -4,11 +4,14 @@ import { get } from "@/lib/database/db";
 import { isAuthenticated } from "@/lib/security/auth";
 import { parseExtra } from "@/lib/marketing/note-format";
 import { loadJpFont } from "@/lib/marketing/font";
+import { verifyImage } from "@/lib/social/image-sign";
+import { PNG } from "pngjs";
+import jpeg from "jpeg-js";
 
 /**
- * note 用の画像（見出し画像 1280×670、図解 1280×720）。ログインしている代表者だけが見られる。
- *   /api/note-image/12?kind=header
- *   /api/note-image/12?kind=fig&n=1
+ * 投稿用の画像。ログインしている代表者、または期限つきの署名付きリンク（Instagram 投稿時に Meta が取りに来る）だけが見られる。
+ *   note：     /api/note-image/12?kind=header（1280×670） /api/note-image/12?kind=fig&n=1（1280×720）
+ *   Instagram：/api/note-image/15?kind=slide&n=1（1080×1350）  &format=jpg で JPEG（Instagram は JPEG のみ）
  */
 export const dynamic = "force-dynamic";
 
@@ -21,18 +24,51 @@ const MUTED = "#a7b1c6";
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id < 1) return new Response("Not found", { status: 404 });
-  if (!(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
+  const url = new URL(req.url);
+  const q = url.searchParams;
+  const kind = q.get("kind") === "fig" ? "fig" : q.get("kind") === "slide" ? "slide" : "header";
+  const signed = q.has("sig") && verifyImage(id, kind, Number(q.get("n") ?? 0), Number(q.get("exp")), q.get("sig") ?? "");
+  if (!signed && !(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
   const db = await getDb();
   const post = await get<{ title: string; extra: string | null; platform: string }>(
     db,
     "SELECT title, extra, platform FROM content_posts WHERE id = ? AND data_kind = 'actual'",
     [id],
   );
-  if (!post || post.platform !== "note") return new Response("Not found", { status: 404 });
+  if (!post || (post.platform !== "note" && post.platform !== "instagram")) return new Response("Not found", { status: 404 });
+  if ((kind === "slide") !== (post.platform === "instagram")) return new Response("Not found", { status: 404 });
   const extra = parseExtra(post.extra);
-  const url = new URL(req.url);
-  const kind = url.searchParams.get("kind") === "fig" ? "fig" : "header";
-  const download = url.searchParams.get("download") === "1";
+  const download = q.get("download") === "1";
+  const asJpeg = q.get("format") === "jpg";
+
+  if (kind === "slide") {
+    const slides = extra.slides ?? [];
+    const n = Math.max(1, Number(q.get("n") ?? 1));
+    const sl = slides[n - 1];
+    if (!sl) return new Response("Not found", { status: 404 });
+    const total = slides.length;
+    const fonts = await fontsFor(`${sl.heading}${sl.text}${n}/${total}HIDE｜AI CEO PROJECT保存して見返す`);
+    const cover = n === 1;
+    const hs = [...sl.heading].length <= 14 ? 76 : [...sl.heading].length <= 24 ? 64 : 52;
+    const res = image(
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: NAVY, padding: "88px 84px 72px", justifyContent: cover ? "center" : "flex-start", gap: 40 }}>
+        {!cover && <div style={{ display: "flex", color: GOLD, fontSize: 34, fontWeight: 700 }}>{`${String(n - 1).padStart(2, "0")}`}</div>}
+        {cover && <div style={{ display: "flex", width: 64, height: 6, background: GOLD }} />}
+        <div style={{ display: "flex", color: WHITE, fontSize: cover ? hs + 8 : hs - 8, fontWeight: 700, lineHeight: 1.35 }}>{sl.heading}</div>
+        {sl.text && <div style={{ display: "flex", color: cover ? MUTED : WHITE, fontSize: cover ? 38 : 42, lineHeight: 1.65 }}>{sl.text}</div>}
+        <div style={{ display: "flex", flexGrow: 1 }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `2px solid ${GOLD}`, paddingTop: 24 }}>
+          <div style={{ color: WHITE, fontSize: 28, fontWeight: 700 }}>HIDE｜AI CEO PROJECT</div>
+          <div style={{ color: GOLD, fontSize: 28 }}>{`${n}/${total}`}</div>
+        </div>
+      </div>,
+      1080,
+      1350,
+      fonts,
+      download ? `instagram-${id}-${n}.${asJpeg ? "jpg" : "png"}` : null,
+    );
+    return asJpeg ? toJpeg(res, download ? `instagram-${id}-${n}.jpg` : null) : res;
+  }
   const title = post.title.replace(/^note[①-⑩\d]*[：:]\s*/, "");
 
   if (kind === "header") {
@@ -111,4 +147,17 @@ function image(el: React.ReactElement, width: number, height: number, fonts: Awa
       },
     },
   );
+}
+
+/** PNG を JPEG に変換する（Instagram は JPEG しか受け付けない） */
+async function toJpeg(res: Response, filename: string | null): Promise<Response> {
+  const png = PNG.sync.read(Buffer.from(await res.arrayBuffer()));
+  const out = jpeg.encode({ data: png.data, width: png.width, height: png.height }, 90);
+  return new Response(new Uint8Array(out.data), {
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Cache-Control": "private, no-store",
+      ...(filename ? { "Content-Disposition": `attachment; filename="${filename}"` } : {}),
+    },
+  });
 }

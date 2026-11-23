@@ -5,7 +5,8 @@
  */
 
 export type NoteFigure = { title: string; points: string[] };
-export type NoteExtra = { header_subtitle?: string; figures?: NoteFigure[] };
+export type Slide = { heading: string; text: string };
+export type NoteExtra = { header_subtitle?: string; figures?: NoteFigure[]; slides?: Slide[] };
 
 export function parseExtra(json: string | null | undefined): NoteExtra {
   if (!json) return {};
