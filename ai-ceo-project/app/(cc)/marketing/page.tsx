@@ -15,6 +15,8 @@ import {
   updateInquiry,
 } from "@/app/actions";
 import { CopyButton } from "@/components/common/CopyButton";
+import { RichCopyButton } from "@/components/common/RichCopyButton";
+import { markdownToHtml, markdownToPlain, parseExtra } from "@/lib/marketing/note-format";
 import { DEFAULT_POST_TIME } from "@/lib/automation/publisher";
 import { xWeightedLength } from "@/lib/social/x";
 import { hasApiKey } from "@/lib/ai/llm";
@@ -185,15 +187,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                                   <Button name="then" value="schedule">{autoX ? "保存して予約（自動投稿）" : "保存して予約"}</Button>
                                 )}
                                 <Button variant="ghost">保存だけ</Button>
-                                {!autoX && <CopyButton text={c.body} />}
-                                {c.platform === "note" && (
-                                  <a href="https://note.com/notes/new" target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-md border border-navy-700 px-3 py-1.5 text-sm text-gold hover:border-gold-dim">
-                                    note で書く
-                                  </a>
-                                )}
+                                {!autoX && c.platform !== "note" && <CopyButton text={c.body} />}
                               </div>
                             </form>
-                          ) : (
+                          ) : null}
+                          {c.platform === "note" && c.body && (
+                            <NoteKit id={c.id} title={c.title} body={c.body} extra={c.extra} />
+                          )}
+                          {editable ? null : (
                             <p className="mt-2 whitespace-pre-line rounded bg-navy-800 p-3 text-sm leading-7 select-all">{c.body}</p>
                           )}
                         </details>
@@ -347,5 +348,50 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
         </Card>
       </div>
     </>
+  );
+}
+
+/** note の記事用：書式つきコピー・見出し画像・図解画像・note を開く */
+function NoteKit({ id, title, body, extra }: { id: number; title: string; body: string; extra: string | null }) {
+  const ex = parseExtra(extra);
+  const figures = ex.figures ?? [];
+  const img = (q: string) => `/api/note-image/${id}?${q}`;
+  return (
+    <div className="mt-3 space-y-3 rounded-md border border-gold-dim/50 bg-navy-950/40 p-3">
+      <p className="text-xs font-medium text-gold">note に投稿する手順</p>
+      <ol className="list-decimal space-y-1 pl-5 text-xs text-fg-muted">
+        <li>「書式つきでコピー」を押して、note の本文に貼る（見出し・太字・箇条書きが残ります）</li>
+        <li>見出し画像を保存して、note の「見出し画像」に設定する</li>
+        <li>本文の「▼ここに図◯の画像を入れる」の場所に、図解画像を入れて、その行は消す</li>
+        <li>note の公開設定で日時を選んで予約投稿 → ここで「投稿した」を押す</li>
+      </ol>
+      <div className="flex flex-wrap gap-2">
+        <RichCopyButton html={markdownToHtml(body)} plain={markdownToPlain(body)} />
+        <a href="https://note.com/notes/new" target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-md border border-navy-700 px-3 py-1.5 text-sm text-gold hover:border-gold-dim">
+          note で書く
+        </a>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <figure className="space-y-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={img("kind=header")} alt={`見出し画像：${title}`} loading="lazy" className="w-full rounded border border-line" />
+          <figcaption className="flex items-center justify-between text-[11px] text-fg-subtle">
+            見出し画像（1280×670）
+            <a href={img("kind=header&download=1")} className="text-gold hover:underline">保存</a>
+          </figcaption>
+        </figure>
+        {figures.map((f, i) => (
+          <figure key={i} className="space-y-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={img(`kind=fig&n=${i + 1}`)} alt={`図${i + 1}：${f.title}`} loading="lazy" className="w-full rounded border border-line" />
+            <figcaption className="flex items-center justify-between text-[11px] text-fg-subtle">
+              図{i + 1}：{f.title}
+              <a href={img(`kind=fig&n=${i + 1}&download=1`)} className="text-gold hover:underline">保存</a>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      <p className="text-[11px] text-fg-subtle">iPhone では、画像を長押しして「写真に保存」でも保存できます。{figures.length === 0 && "この記事には図解がありません（AIに下書きを頼むと、図解つきの記事を作ります）。"}</p>
+    </div>
   );
 }

@@ -144,7 +144,14 @@ try {
   check((await x1().textContent()).includes("X に自動投稿"), "X の投稿には「X に自動投稿」と表示される");
   check((await page.locator("li:has-text('note①') summary").count()) === 1, "note の下書きがある");
   await page.locator("li:has-text('note①') summary").click();
-  check((await page.locator("li:has-text('note①') button:has-text('本文をコピー')").count()) === 1 && (await page.locator("li:has-text('note①') a:has-text('note で書く')").count()) === 1, "note は「本文をコピー」「note で書く」で手で投稿する");
+  check((await page.locator("li:has-text('note①') button:has-text('書式つきでコピー')").count()) === 1 && (await page.locator("li:has-text('note①') a:has-text('note で書く')").count()) === 1, "note は「書式つきでコピー」「note で書く」で手で投稿する");
+  const headerSrc = await page.locator("li:has-text('note①') img[alt^='見出し画像']").getAttribute("src");
+  const imgRes = await page.request.get(`${BASE}${headerSrc}`);
+  const png = await imgRes.body();
+  check(imgRes.status() === 200 && imgRes.headers()["content-type"] === "image/png" && png.length > 5000, `note の見出し画像が作られる（${png.length} bytes）`);
+  fs.writeFileSync(path.join(shots, "note-header.png"), png);
+  const anon = await (await browser.newContext()).request.get(`${BASE}${headerSrc}`, { maxRedirects: 0 });
+  check(anon.status() === 307 || anon.status() === 401, "ログインしていないと note の画像は見られない");
   await page.goto(`${BASE}/settings`);
   const st = await page.textContent("body");
   check(st.includes("X の自動投稿") && st.includes("未設定（Netlify の環境変数 X_API_KEY"), "設定画面に X の自動投稿と合鍵の状態が出る");

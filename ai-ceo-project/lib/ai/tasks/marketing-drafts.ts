@@ -26,6 +26,8 @@ const PostSchema = z.object({
   day_offset: z.number().int().min(1).max(14),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   fact_basis: z.string(),
+  header_subtitle: z.string(),
+  figures: z.array(z.object({ title: z.string(), points: z.array(z.string()) })),
 });
 export const DraftsSchema = z.object({ posts: z.array(PostSchema).min(1).max(8) });
 
@@ -40,7 +42,7 @@ export const DRAFTS_JSON_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["platform", "title", "body", "day_offset", "time", "fact_basis"],
+        required: ["platform", "title", "body", "day_offset", "time", "fact_basis", "header_subtitle", "figures"],
         properties: {
           platform: { type: "string", enum: ["x", "note"] },
           title: str,
@@ -48,6 +50,16 @@ export const DRAFTS_JSON_SCHEMA = {
           day_offset: { type: "integer" },
           time: str,
           fact_basis: str,
+          header_subtitle: str,
+          figures: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["title", "points"],
+              properties: { title: str, points: { type: "array", items: str } },
+            },
+          },
         },
       },
     },
@@ -69,7 +81,12 @@ export function marketingSystemPrompt(): string {
     "- 費用・利益の金額は「管理画面に記録された分」でしかない。expenses_recorded が false（請求書の記録がない）のときは、費用や営業利益の金額を投稿に書かない（記録漏れで実際より少なく見えるため）。",
     "- 「開始◯日目」のような日数は、投稿される日（day_offset 後）の日数で書く。分からなければ日数を書かない。",
     "- X：日本語で130字以内。URLは入れない（料金が高く、リンクはプロフィールに置く）。ハッシュタグは0〜1個。1本ずつ切り口を変える（同じ文章の使い回し禁止）。",
-    "- note：タイトルと本文（見出し付き、1,500〜2,500字）。Xの文章を伸ばしただけにしない。",
+    "- note：タイトルと本文（1,500〜2,500字）。Xの文章を伸ばしただけにしない。スマホで読まれる前提で、見た目で読みやすくする：",
+    "  - 本文は次の書き方だけを使う：## 見出し／### 小見出し／**太字**（1段落に1か所まで）／- 箇条書き／1. 番号／> 引用（印象に残る一文）／--- 区切り線",
+    "  - 冒頭3行で「誰の・何の話か」と結論を書く。見出しは3〜5個。1段落は3行以内。",
+    "  - 図解を2〜3枚入れる。figures に {title（15字以内）, points（3〜4個、各30字以内）} を書き、本文の入れたい場所に [図1] [図2] のように1行で書く。図の中身も実データだけ。",
+    "  - header_subtitle：見出し画像に入れる一言（25字以内）。",
+    "- X の投稿では header_subtitle は空文字、figures は空配列にする。",
     "- 代表者の実感・体験が入ると良くなる箇所には【ここにひとこと：〜】と空欄を残してよい（Xは5本中2本まで）。空欄が残った投稿は代表者が書き換えるまで投稿されない。",
     "- 投稿の日時：day_offset は今日から何日後か（1〜7）、time は日本時間の HH:MM（Xは 7:00〜22:00 の間で、同じ日は2時間以上あける）。",
     "- fact_basis に、その投稿が根拠にした実データを短く書く。",
@@ -117,7 +134,7 @@ export const marketingDraftsTask: TaskDef = {
     let flagged = 0;
     const rows = drafts.posts.map((p) => {
       const notes: string[] = [];
-      const nums = findUnsupportedNumbers([p.title, p.body], user);
+      const nums = findUnsupportedNumbers([p.title, p.body, p.header_subtitle, ...p.figures.flatMap((f) => [f.title, ...f.points])], user);
       if (nums.length) notes.push(`元データにない数字：${nums.join("、")}`);
       if (p.platform === "x") {
         const problem = checkXText(p.body);
@@ -126,9 +143,22 @@ export const marketingDraftsTask: TaskDef = {
       }
       if (notes.length) flagged++;
       return {
-        sql: `INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, post_time, review_note, source, data_kind)
-              VALUES ('ai-ceo-project', ?, 'pending_approval', ?, ?, ?, ?, ?, 'ai-marketing', 'actual')`,
-        args: [p.platform, p.title.slice(0, 200), p.body.slice(0, 20000), addDays(today, p.day_offset), p.time, [`根拠：${p.fact_basis}`, ...notes].join("\n").slice(0, 1000)],
+        sql: `INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, post_time, review_note, extra, source, data_kind)
+              VALUES ('ai-ceo-project', ?, 'pending_approval', ?, ?, ?, ?, ?, ?, 'ai-marketing', 'actual')`,
+        args: [
+          p.platform,
+          p.title.slice(0, 200),
+          p.body.slice(0, 20000),
+          addDays(today, p.day_offset),
+          p.time,
+          [`根拠：${p.fact_basis}`, ...notes].join("\n").slice(0, 1000),
+          p.platform === "note"
+            ? JSON.stringify({
+                header_subtitle: p.header_subtitle.slice(0, 40),
+                figures: p.figures.slice(0, 3).map((f) => ({ title: f.title.slice(0, 30), points: f.points.slice(0, 5).map((x) => x.slice(0, 60)) })),
+              })
+            : null,
+        ],
       };
     });
     await batch(db, [...rows, repo.auditStmt("ai:marketing", "drafts.created", "ai-ceo-project", { count: rows.length, flagged })]);

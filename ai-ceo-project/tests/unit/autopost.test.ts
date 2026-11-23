@@ -132,10 +132,10 @@ test("マーケティングAI：X と note の下書きを承認待ちで登録�
   await syncAgentConnection(db, true);
   const out = {
     posts: [
-      { platform: "x", title: "X①", body: "AI社員を7人つくった。売上はまだ0円。", day_offset: 1, time: "08:00", fact_basis: "AI社員7名・売上0円" },
-      { platform: "x", title: "X②", body: "【ここにひとこと：始めた理由】", day_offset: 1, time: "12:00", fact_basis: "なし" },
-      { platform: "x", title: "X③", body: "月商77万円を達成！ https://note.com/x", day_offset: 2, time: "08:00", fact_basis: "なし" },
-      { platform: "note", title: "note①", body: "## はじめに\n本文", day_offset: 3, time: "20:00", fact_basis: "開始日" },
+      { platform: "x", title: "X①", body: "AI社員を7人つくった。売上はまだ0円。", day_offset: 1, time: "08:00", fact_basis: "AI社員7名・売上0円", header_subtitle: "", figures: [] },
+      { platform: "x", title: "X②", body: "【ここにひとこと：始めた理由】", day_offset: 1, time: "12:00", fact_basis: "なし", header_subtitle: "", figures: [] },
+      { platform: "x", title: "X③", body: "月商77万円を達成！ https://note.com/x", day_offset: 2, time: "08:00", fact_basis: "なし", header_subtitle: "", figures: [] },
+      { platform: "note", title: "note①", body: "## はじめに\n本文\n[図1]", day_offset: 3, time: "20:00", fact_basis: "開始日", header_subtitle: "売上0円からの記録", figures: [{ title: "AI社員7人", points: ["CEO", "市場調査", "財務"] }] },
     ],
   };
   const call: LlmCall = async (p) => {
@@ -153,7 +153,10 @@ test("マーケティングAI：X と note の下書きを承認待ちで登録�
   assert.match(x3.review_note!, /77万円/); // 元データにない数字
   assert.match(x3.review_note!, /URL/);
   assert.match(ai.find((x) => x.title === "X②")!.review_note!, /【 】/);
-  assert.equal(ai.find((x) => x.title === "note①")!.post_time, "20:00");
+  const note1 = ai.find((x) => x.title === "note①")!;
+  assert.equal(note1.post_time, "20:00");
+  assert.deepEqual(JSON.parse(note1.extra!), { header_subtitle: "売上0円からの記録", figures: [{ title: "AI社員7人", points: ["CEO", "市場調査", "財務"] }] });
+  assert.equal(ai.find((x) => x.title === "X①")!.extra, null);
   assert.equal(jstStamp(new Date("2026-11-25T23:30:00Z")), "2026-11-26 08:30");
 });
 

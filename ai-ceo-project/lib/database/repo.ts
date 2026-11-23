@@ -288,6 +288,7 @@ export type ContentRow = {
   scheduled_at: string | null;
   post_time: string | null;
   review_note: string | null;
+  extra: string | null;
   posted_at: string | null;
   external_id: string | null;
   url: string | null;

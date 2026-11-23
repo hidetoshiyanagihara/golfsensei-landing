@@ -344,4 +344,12 @@ CREATE INDEX idx_content_date ON content_posts(posted_at, scheduled_at);
 CREATE INDEX idx_content_status ON content_posts(status, platform);
 `,
   },
+  {
+    version: 5,
+    name: "content_extra",
+    sql: `
+-- note の見出し画像・図解などの追加情報（JSON）
+ALTER TABLE content_posts ADD COLUMN extra TEXT;
+`,
+  },
 ];
