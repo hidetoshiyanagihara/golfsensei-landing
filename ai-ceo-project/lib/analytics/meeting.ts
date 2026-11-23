@@ -75,8 +75,13 @@ export async function buildMeetingReport(db: DB, now = new Date()): Promise<Meet
     `粗利益 ${yen(o.pnl.grossProfit)}、運営費 ${yen(o.pnl.operatingExpenses)}、営業利益 ${yen(o.pnl.operatingProfit)}（実績）。`,
   );
   revenue.push(`月間予算 ${yen(o.budget.capJpy)} のうち ${yen(o.budget.usedJpy)} を使用、残り ${yen(o.budget.remainingJpy)}。`);
-  if (o.pnl.operatingExpenses === 0)
-    revenue.push("注意：今月の費用が1件も記録されていません。API・ツールの請求額を財務画面で記録すると、利益が正確になります。");
+  const manualExpenses = (await repo.expensesInMonth(db, o.month, v)).length;
+  if (manualExpenses === 0)
+    revenue.push(
+      o.agentCostJpy > 0
+        ? `注意：今月の費用は AI社員の推計（${yen(o.agentCostJpy)}）しか記録されていません。X のクレジット・Claude API の請求額などを財務画面で記録しないと、費用と利益が実際より良く見えます。`
+        : "注意：今月の費用が1件も記録されていません。API・ツールの請求額を財務画面で記録すると、利益が正確になります。",
+    );
 
   // 問題点 → 改善案 → 行動
   const onSale = products.filter((p) => p.sales_status === "on_sale");

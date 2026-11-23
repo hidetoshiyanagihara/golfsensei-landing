@@ -409,8 +409,11 @@ export async function updateContent(fd: FormData): Promise<void> {
     }
     await batch(db, [
       {
-        sql: "UPDATE content_posts SET title = ?, body = ?, scheduled_at = ?, post_time = ?, status = ?, error = NULL WHERE id = ?",
-        args: [str(fd, "title", { max: 200, required: true }), body, scheduled || null, postTime(fd), nextStatus, id],
+        // 【 】を書き換えたら、その注意書きは消す
+        sql: `UPDATE content_posts SET title = ?, body = ?, scheduled_at = ?, post_time = ?, status = ?, error = NULL,
+                review_note = CASE WHEN ? THEN replace(replace(review_note, char(10) || '【 】を書き換えると投稿できます', ''), '【 】を書き換えると投稿できます', '') ELSE review_note END
+              WHERE id = ?`,
+        args: [str(fd, "title", { max: 200, required: true }), body, scheduled || null, postTime(fd), nextStatus, /[【】]/.test(body) ? 0 : 1, id],
       },
       repo.auditStmt("owner", thenSchedule ? "content.edited_scheduled" : "content.edited", `content:${id}`),
     ]);

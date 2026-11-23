@@ -66,6 +66,8 @@ export function marketingSystemPrompt(): string {
     ...[...COMMON_AGENT_RULES, ...me.rules].map((r) => `- ${r}`),
     "- 数字・出来事は、入力の「実データ」に書かれているものだけを使う。入力にない成果・反響・数字を作らない。",
     "- 本名（柳原）や家族・住所などのプライベートは書かない。発信名は HIDE。",
+    "- 費用・利益の金額は「管理画面に記録された分」でしかない。expenses_recorded が false（請求書の記録がない）のときは、費用や営業利益の金額を投稿に書かない（記録漏れで実際より少なく見えるため）。",
+    "- 「開始◯日目」のような日数は、投稿される日（day_offset 後）の日数で書く。分からなければ日数を書かない。",
     "- X：日本語で130字以内。URLは入れない（料金が高く、リンクはプロフィールに置く）。ハッシュタグは0〜1個。1本ずつ切り口を変える（同じ文章の使い回し禁止）。",
     "- note：タイトルと本文（見出し付き、1,500〜2,500字）。Xの文章を伸ばしただけにしない。",
     "- 代表者の実感・体験が入ると良くなる箇所には【ここにひとこと：〜】と空欄を残してよい（Xは5本中2本まで）。空欄が残った投稿は代表者が書き換えるまで投稿されない。",
@@ -85,8 +87,11 @@ export const marketingDraftsTask: TaskDef = {
     const base = await buildMeetingReport(db);
     const recent = await repo.listContent(db, repo.ACTUAL_ONLY, { business: "ai-ceo-project", limit: 30 });
     const products = await repo.listProducts(db, repo.ACTUAL_ONLY);
+    const expensesRecorded = (await repo.expensesInMonth(db, jstDate().slice(0, 7), repo.ACTUAL_ONLY)).length > 0;
     const input = {
       today: jstDate(),
+      project_start_date: "2026-11-21",
+      expenses_recorded: expensesRecorded,
       facts: base.sections,
       products: products.map((p) => ({ name: p.name, price_jpy: p.price_jpy, tentative: !!p.price_is_tentative, production: p.production_status, qa: p.qa_status, sales: p.sales_status, channel: p.sales_channel })),
       recent_posts: recent.map((r) => ({ platform: r.platform, status: r.status, title: r.title, body: r.body.slice(0, 300) })),
