@@ -5,8 +5,7 @@
  */
 
 export type NoteFigure = { title: string; points: string[] };
-export type NoteDraftState = { status: "requested" | "saving" | "saved" | "error" | "cancelled"; at?: string; url?: string; message?: string };
-export type NoteExtra = { header_subtitle?: string; figures?: NoteFigure[]; note_draft?: NoteDraftState };
+export type NoteExtra = { header_subtitle?: string; figures?: NoteFigure[] };
 
 export function parseExtra(json: string | null | undefined): NoteExtra {
   if (!json) return {};

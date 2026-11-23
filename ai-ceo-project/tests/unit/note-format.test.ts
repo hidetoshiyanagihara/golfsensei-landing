@@ -29,16 +29,3 @@ test("書式なしの文章・追加情報の読み込み", () => {
   assert.deepEqual(parseExtra("{"), {});
   assert.deepEqual(parseExtra('{"figures":[{"title":"t","points":["a"]}]}').figures, [{ title: "t", points: ["a"] }]);
 });
-
-test("note 画像の署名付きリンク：正しい署名・期限内だけ通す", async () => {
-  process.env.TURSO_AUTH_TOKEN = "t".repeat(40);
-  const { signNoteImage, verifyNoteImage } = await import("../../lib/marketing/note-image-sign");
-  const q = new URLSearchParams(signNoteImage(5, "header", 0, 600, 1_000_000_000)!);
-  const exp = Number(q.get("exp"));
-  const sig = q.get("sig")!;
-  assert.equal(verifyNoteImage(5, "header", 0, exp, sig, 1_000_000_000), true);
-  assert.equal(verifyNoteImage(6, "header", 0, exp, sig, 1_000_000_000), false); // 別の記事
-  assert.equal(verifyNoteImage(5, "fig", 0, exp, sig, 1_000_000_000), false); // 別の画像
-  assert.equal(verifyNoteImage(5, "header", 0, exp, sig, (exp + 1) * 1000), false); // 期限切れ
-  assert.equal(verifyNoteImage(5, "header", 0, exp, "x", 1_000_000_000), false);
-});

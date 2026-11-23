@@ -4,7 +4,6 @@ import { get } from "@/lib/database/db";
 import { isAuthenticated } from "@/lib/security/auth";
 import { parseExtra } from "@/lib/marketing/note-format";
 import { loadJpFont } from "@/lib/marketing/font";
-import { verifyNoteImage } from "@/lib/marketing/note-image-sign";
 
 /**
  * note 用の画像（見出し画像 1280×670、図解 1280×720）。ログインしている代表者だけが見られる。
@@ -22,10 +21,7 @@ const MUTED = "#a7b1c6";
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id < 1) return new Response("Not found", { status: 404 });
-  // ログインしている代表者、または期限つきの署名付きリンク（note に下書きを保存するロボット用）
-  const q = new URL(req.url).searchParams;
-  const signed = q.has("sig") && verifyNoteImage(id, q.get("kind") === "fig" ? "fig" : "header", Number(q.get("n") ?? 0), Number(q.get("exp")), q.get("sig") ?? "");
-  if (!signed && !(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
+  if (!(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
   const db = await getDb();
   const post = await get<{ title: string; extra: string | null; platform: string }>(
     db,
