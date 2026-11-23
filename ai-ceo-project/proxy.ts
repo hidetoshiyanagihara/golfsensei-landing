@@ -6,8 +6,6 @@ import { SESSION_COOKIE, resolveSessionSecret, verifySession } from "./lib/secur
  * 各ページと Server Action でも requireAuth() で再確認する。
  */
 export async function proxy(req: NextRequest) {
-  // note 用画像の署名付きリンクは、画像を作る側で署名を確かめる
-  if (req.nextUrl.pathname.startsWith("/api/note-image/") && req.nextUrl.searchParams.has("sig")) return NextResponse.next();
   const ok = await verifySession(req.cookies.get(SESSION_COOKIE)?.value, resolveSessionSecret());
   if (!ok) {
     const url = req.nextUrl.clone();

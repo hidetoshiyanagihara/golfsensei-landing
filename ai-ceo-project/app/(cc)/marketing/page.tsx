@@ -9,7 +9,6 @@ import {
   deleteRecord,
   importAutopostNow,
   markPostedManually,
-  requestNoteDraft,
   runAgentTask,
   transitionContent,
   updateContent,
@@ -193,7 +192,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                             </form>
                           ) : null}
                           {c.platform === "note" && c.body && (
-                            <NoteKit id={c.id} title={c.title} body={c.body} extra={c.extra} status={c.status} />
+                            <NoteKit id={c.id} title={c.title} body={c.body} extra={c.extra} />
                           )}
                           {editable ? null : (
                             <p className="mt-2 whitespace-pre-line rounded bg-navy-800 p-3 text-sm leading-7 select-all">{c.body}</p>
@@ -353,37 +352,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
 }
 
 /** note の記事用：書式つきコピー・見出し画像・図解画像・note を開く */
-function NoteKit({ id, title, body, extra, status }: { id: number; title: string; body: string; extra: string | null; status: string }) {
+function NoteKit({ id, title, body, extra }: { id: number; title: string; body: string; extra: string | null }) {
   const ex = parseExtra(extra);
-  const d = ex.note_draft;
-  const canRequest = status === "approved" || status === "scheduled";
   const figures = ex.figures ?? [];
   const img = (q: string) => `/api/note-image/${id}?${q}`;
   return (
     <div className="mt-3 space-y-3 rounded-md border border-gold-dim/50 bg-navy-950/40 p-3">
-      <div className="rounded border border-line p-2 text-xs">
-        <p className="font-medium">ロボットで note の下書きに保存</p>
-        {d?.status === "saved" ? (
-          <p className="mt-1 text-good">
-            保存しました（{d.at?.slice(0, 16).replace("T", " ")}）{d.url && <> → <a href={d.url} target="_blank" rel="noopener noreferrer" className="underline">note の下書きを開く</a></>}
-            {d.message && <span className="block text-fg-subtle">{d.message}</span>}
-          </p>
-        ) : d?.status === "requested" || d?.status === "saving" ? (
-          <p className="mt-1 text-info">頼んであります。1時間以内に保存されます。</p>
-        ) : d?.status === "error" ? (
-          <p className="mt-1 text-bad">保存できませんでした：{d.message}</p>
-        ) : (
-          <p className="mt-1 text-fg-subtle">承認すると頼めます。タイトル・書式つきの本文・見出し画像を入れて、note の「下書き」に保存します（公開はしません）。</p>
-        )}
-        <form action={requestNoteDraft} className="mt-2 flex gap-2">
-          <input type="hidden" name="id" value={id} />
-          {d?.status === "requested" ? (
-            <Button name="cancel" value="1" variant="ghost">取り消す</Button>
-          ) : (
-            <Button variant="ghost" disabled={!canRequest}>{d?.status === "saved" || d?.status === "error" ? "もう一度頼む" : "note に下書き保存を頼む"}</Button>
-          )}
-        </form>
-      </div>
       <p className="text-xs font-medium text-gold">note に投稿する手順</p>
       <ol className="list-decimal space-y-1 pl-5 text-xs text-fg-muted">
         <li>「書式つきでコピー」を押して、note の本文に貼る（見出し・太字・箇条書きが残ります）</li>

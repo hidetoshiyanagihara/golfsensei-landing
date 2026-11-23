@@ -635,25 +635,3 @@ export async function checkXAccount(): Promise<void> {
   });
 }
 
-/** ロボットに「note に下書き保存」を頼む（GitHub Actions が1時間ごとに確認して保存する） */
-export async function requestNoteDraft(fd: FormData): Promise<void> {
-  return act("/marketing", async (db) => {
-    const id = int(fd, "id", { min: 1 })!;
-    const cancel = str(fd, "cancel") === "1";
-    const row = await get<{ platform: string; status: string; extra: string | null; body: string }>(
-      db,
-      "SELECT platform, status, extra, body FROM content_posts WHERE id = ? AND data_kind = 'actual'",
-      [id],
-    );
-    if (!row || row.platform !== "note") throw new InputError("note の記事が見つかりません");
-    if (!cancel && !["approved", "scheduled"].includes(row.status)) throw new InputError("承認してから頼んでください");
-    if (!cancel && /[【】]/.test(row.body)) throw new InputError("【 】が残っています。書き換えてから頼んでください");
-    const extra = row.extra ? JSON.parse(row.extra) : {};
-    extra.note_draft = cancel ? { status: "cancelled", at: new Date().toISOString() } : { status: "requested", at: new Date().toISOString() };
-    await batch(db, [
-      { sql: "UPDATE content_posts SET extra = ? WHERE id = ?", args: [JSON.stringify(extra), id] },
-      repo.auditStmt("owner", cancel ? "note.draft_cancelled" : "note.draft_requested", `content:${id}`),
-    ]);
-    return cancel ? "取り消しました" : "頼みました。1時間以内にロボットが note の下書きに保存します";
-  });
-}
