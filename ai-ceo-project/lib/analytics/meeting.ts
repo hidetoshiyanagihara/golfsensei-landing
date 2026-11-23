@@ -1,4 +1,4 @@
-import type { DB } from "../database/db";
+import { get, type DB } from "../database/db";
 import * as repo from "../database/repo";
 import { buildOverview } from "./overview";
 import { yen } from "../finance/calc";
@@ -57,7 +57,13 @@ export async function buildMeetingReport(db: DB, now = new Date()): Promise<Meet
     .filter(([, s]) => s.posted + s.failed > 0)
     .map(([p, s]) => `${PLATFORM_LABEL[p] ?? p} 成功${s.posted}・失敗${s.failed}`)
     .join("／");
-  situation.push(`今月の投稿（取り込み済みの実績）：${platformLines || "記録なし"}。`);
+  situation.push(`今月の投稿（AXION SALES の自動投稿の取り込み分を含む全アカウントの合計）：${platformLines || "記録なし"}。`);
+  const hide = await get<{ posted: number; queued: number }>(
+    db,
+    `SELECT COALESCE(SUM(status = 'posted'), 0) AS posted, COALESCE(SUM(status IN ('pending_approval','approved','scheduled')), 0) AS queued
+     FROM content_posts WHERE business_id = 'ai-ceo-project' AND data_kind = 'actual'`,
+  );
+  situation.push(`AI CEO PROJECT（HIDE）の投稿：投稿済み ${Number(hide?.posted ?? 0)}件、承認待ち・予約中 ${Number(hide?.queued ?? 0)}件。`);
 
   // 売上・利益
   if (o.pnl.grossSales === 0) revenue.push(`今月の売上は 0円（実績）。販売はまだ発生していません。`);
@@ -69,8 +75,13 @@ export async function buildMeetingReport(db: DB, now = new Date()): Promise<Meet
     `粗利益 ${yen(o.pnl.grossProfit)}、運営費 ${yen(o.pnl.operatingExpenses)}、営業利益 ${yen(o.pnl.operatingProfit)}（実績）。`,
   );
   revenue.push(`月間予算 ${yen(o.budget.capJpy)} のうち ${yen(o.budget.usedJpy)} を使用、残り ${yen(o.budget.remainingJpy)}。`);
-  if (o.pnl.operatingExpenses === 0)
-    revenue.push("注意：今月の費用が1件も記録されていません。API・ツールの請求額を財務画面で記録すると、利益が正確になります。");
+  const manualExpenses = (await repo.expensesInMonth(db, o.month, v)).length;
+  if (manualExpenses === 0)
+    revenue.push(
+      o.agentCostJpy > 0
+        ? `注意：今月の費用は AI社員の推計（${yen(o.agentCostJpy)}）しか記録されていません。X のクレジット・Claude API の請求額などを財務画面で記録しないと、費用と利益が実際より良く見えます。`
+        : "注意：今月の費用が1件も記録されていません。API・ツールの請求額を財務画面で記録すると、利益が正確になります。",
+    );
 
   // 問題点 → 改善案 → 行動
   const onSale = products.filter((p) => p.sales_status === "on_sale");
@@ -145,6 +156,7 @@ export async function buildMeetingReport(db: DB, now = new Date()): Promise<Meet
   if (problems.length === 0) problems.push("ルールで検出された問題はありません。");
   if (improvements.length === 0) improvements.push("現状の取り組みを継続する。");
 
+  const aiIdeas = ideas.filter((i) => i.origin === "ai");
   const nextBusinesses = ideas
     .filter((i) => i.approval_status !== "rejected")
     .slice(0, 5)
@@ -160,7 +172,9 @@ export async function buildMeetingReport(db: DB, now = new Date()): Promise<Meet
     sections: {
       situation,
       revenue,
-      market: ["市場調査AIが未接続のため、市場の変化は未調査です（PHASE 2 で接続）。"],
+      market: aiIdeas.length
+        ? [`市場調査AIの調査結果：事業アイデア ${aiIdeas.length}件（承認待ち ${aiIdeas.filter((i) => i.approval_status === "pending").length}件）。詳細は事業開発画面。`]
+        : [connected > 0 ? "市場調査AIはまだ実行していないため、市場の変化は未調査です。" : "市場調査AIが未接続のため、市場の変化は未調査です。"],
       problems,
       improvements,
       nextBusinesses: nextBusinesses.length ? nextBusinesses : ["候補なし"],

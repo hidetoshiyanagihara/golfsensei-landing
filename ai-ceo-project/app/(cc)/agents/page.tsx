@@ -5,6 +5,7 @@ import { MODEL_PRICING_USD_PER_MTOK } from "@/lib/ai/models";
 import { yen } from "@/lib/finance/calc";
 import { formatDateTimeJst, jstMonth } from "@/lib/time";
 import { Card, Notice, PageHeader, StatusPill, TableWrap, td, th } from "@/components/common/ui";
+import { hasApiKey } from "@/lib/ai/llm";
 
 export const metadata = { title: "AI社員管理" };
 
@@ -21,9 +22,13 @@ export default async function AgentsPage() {
     <>
       <PageHeader title="AI社員管理" en="AI EMPLOYEES" description="AI社員の担当業務・稼働状況・実行履歴・利用料金" />
       <div className="mb-5">
-        <Notice tone="warn">
-          AI社員は全員「未接続」です（PHASE 1）。PHASE 2 で Anthropic API に接続し、最初は代表者がボタンを押したときだけ実行します。予算の上限に達すると自動で停止します。
-        </Notice>
+        {hasApiKey() ? (
+          <Notice>
+            Claude API に接続済みです。いま仕事を頼めるのは <Link href="/agents/ceo" className="text-gold underline">AI CEO（経営会議）</Link> と <Link href="/agents/research" className="text-gold underline">市場調査AI（事業アイデアの調査）</Link>。他のAI社員の仕事は順番に追加します。どの仕事も代表者がボタンを押したときだけ動き、予算の上限に達すると自動で止まります。
+          </Notice>
+        ) : (
+          <Notice tone="warn">Claude API のキーが未設定のため、AI社員は「未接続」です（Netlify の環境変数 ANTHROPIC_API_KEY を設定すると接続されます）。</Notice>
+        )}
       </div>
 
       <Card>

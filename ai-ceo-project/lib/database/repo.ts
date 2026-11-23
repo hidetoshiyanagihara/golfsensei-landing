@@ -169,6 +169,9 @@ export function getAgent(db: DB, id: string): Promise<AgentRow | undefined> {
 export type AgentRunRow = {
   id: number;
   agent_id: string;
+  task: string;
+  web_searches: number;
+  estimate_jpy: number;
   started_at: string;
   finished_at: string | null;
   status: string;
@@ -283,6 +286,9 @@ export type ContentRow = {
   title: string;
   body: string;
   scheduled_at: string | null;
+  post_time: string | null;
+  review_note: string | null;
+  extra: string | null;
   posted_at: string | null;
   external_id: string | null;
   url: string | null;

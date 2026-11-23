@@ -14,13 +14,19 @@ import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/finance/cal
 import { buildMeetingReport, saveMeeting } from "@/lib/analytics/meeting";
 import { importAutopostFromGitHub, AUTOPOST_SOURCE } from "@/lib/importers/autopost";
 import { ACCOUNTS } from "@/lib/marketing/launch-kit";
+import { checkXText } from "@/lib/automation/publisher";
+import { whoAmI, xCredentialsFromEnv } from "@/lib/social/x";
 import { isYmd, jstDate } from "@/lib/time";
+import { executeRun, queueRun } from "@/lib/ai/runner";
+import { BACKGROUND_PATH, onNetlify, signDispatch } from "@/lib/ai/dispatch";
+import "@/lib/ai/tasks/index";
 
 // ---------- 入力チェック ----------
 class InputError extends Error {}
 
 function str(fd: FormData, key: string, { max = 2000, required = false } = {}): string {
-  const v = String(fd.get(key) ?? "").trim();
+  // ブラウザのフォームは改行を CR+LF（2文字）で送るため、1文字（LF）にそろえる（X の文字数がずれないように）
+  const v = String(fd.get(key) ?? "").replace(/\r\n?/g, "\n").trim();
   if (required && !v) throw new InputError(`「${key}」を入力してください`);
   if (v.length > max) throw new InputError(`「${key}」は${max}文字以内で入力してください`);
   return v;
@@ -320,10 +326,11 @@ export async function createDraft(fd: FormData): Promise<void> {
     const business = oneOf(str(fd, "business") || "ai-ceo-project", ["ai-ceo-project", "ai-business-lab", "axion-sales", "copipe-ai"] as const, "アカウント");
     const scheduled = str(fd, "scheduled_at");
     if (scheduled && !isYmd(scheduled)) throw new InputError("予定日の形式が正しくありません");
+    const time = postTime(fd);
     await batch(db, [
       {
-        sql: "INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, source, data_kind) VALUES (?, ?, 'draft', ?, ?, ?, 'manual', 'actual')",
-        args: [business, platform, str(fd, "title", { max: 200, required: true }), str(fd, "body", { max: 20000 }), scheduled || null],
+        sql: "INSERT INTO content_posts (business_id, platform, status, title, body, scheduled_at, post_time, source, data_kind) VALUES (?, ?, 'draft', ?, ?, ?, ?, 'manual', 'actual')",
+        args: [business, platform, str(fd, "title", { max: 200, required: true }), str(fd, "body", { max: 20000 }), scheduled || null, time],
       },
       repo.auditStmt("owner", "content.draft_created", platform),
     ]);
@@ -335,19 +342,96 @@ export async function transitionContent(fd: FormData): Promise<void> {
   return act("/marketing", async (db) => {
     const id = int(fd, "id", { min: 1 })!;
     const to = str(fd, "to") as ContentStatus;
-    const row = await get<{ status: ContentStatus; scheduled_at: string | null }>(
+    const row = await get<{ status: ContentStatus; scheduled_at: string | null; platform: string; business_id: string | null; body: string }>(
       db,
-      "SELECT status, scheduled_at FROM content_posts WHERE id = ? AND data_kind = 'actual'",
+      "SELECT status, scheduled_at, platform, business_id, body FROM content_posts WHERE id = ? AND data_kind = 'actual'",
       [id],
     );
     if (!row) throw new InputError("投稿が見つかりません");
     if (!canTransitionContent(row.status, to)) throw new InputError("この状態には変更できません（承認を飛ばすことはできません）");
     if (to === "scheduled" && !row.scheduled_at) throw new InputError("予定日が入っていない投稿は予約にできません");
+    const autoX = row.platform === "x" && row.business_id === "ai-ceo-project";
+    if (to === "scheduled" && autoX) {
+      const problem = checkXText(row.body);
+      if (problem) throw new InputError(`予約できません：${problem}`);
+    }
     await batch(db, [
       { sql: "UPDATE content_posts SET status = ? WHERE id = ?", args: [to, id] },
       repo.auditStmt("owner", "content.status", `content:${id}`, { from: row.status, to }),
     ]);
-    return to === "scheduled" ? "予約済みにしました（自動投稿は未接続のため、予定日に手動で投稿してください）" : "状態を更新しました";
+    if (to === "scheduled") return autoX ? "予約しました。予定の時刻になったら X に自動で投稿します" : "予約済みにしました（この投稿先は自動投稿しないため、予定日に手で投稿してください）";
+    return "状態を更新しました";
+  });
+}
+
+function postTime(fd: FormData): string | null {
+  const t = str(fd, "post_time");
+  if (!t) return null;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) throw new InputError("時刻の形式が正しくありません（例 08:00）");
+  return t;
+}
+
+function autoXRow(r: { platform: string; business_id: string | null }): boolean {
+  return r.platform === "x" && r.business_id === "ai-ceo-project";
+}
+
+export async function updateContent(fd: FormData): Promise<void> {
+  return act("/marketing", async (db) => {
+    const id = int(fd, "id", { min: 1 })!;
+    const row = await get<{ status: string; platform: string; business_id: string | null }>(
+      db,
+      "SELECT status, platform, business_id FROM content_posts WHERE id = ? AND data_kind = 'actual'",
+      [id],
+    );
+    if (!row) throw new InputError("投稿が見つかりません");
+    if (!["draft", "pending_approval", "approved", "scheduled", "failed"].includes(row.status)) throw new InputError("投稿済みのものは編集できません");
+    const body = str(fd, "body", { max: 20000 });
+    const scheduled = str(fd, "scheduled_at");
+    if (scheduled && !isYmd(scheduled)) throw new InputError("予定日の形式が正しくありません");
+    // 予約中のXを書き換えたら、投稿前の確認をもう一度通す
+    if (row.status === "scheduled" && autoXRow(row)) {
+      const problem = checkXText(body);
+      if (problem) throw new InputError(`保存できません：${problem}`);
+    }
+    // 失敗したものを直したら、承認済みに戻す（もう一度「予約」を押すと投稿される）
+    let nextStatus = row.status === "failed" ? "approved" : row.status;
+    // 「保存して予約」：承認済み（または予約済み）のものだけ。承認は飛ばさない
+    const thenSchedule = str(fd, "then") === "schedule";
+    const autoX = row.platform === "x" && row.business_id === "ai-ceo-project";
+    if (thenSchedule) {
+      if (nextStatus !== "approved" && nextStatus !== "scheduled") throw new InputError("承認してから予約してください");
+      if (!scheduled) throw new InputError("予定日を入れてください");
+      if (autoX) {
+        const problem = checkXText(body);
+        if (problem) throw new InputError(`予約できません（本文は保存していません）：${problem}`);
+      }
+      nextStatus = "scheduled";
+    }
+    await batch(db, [
+      {
+        // 【 】を書き換えたら、その注意書きは消す
+        sql: `UPDATE content_posts SET title = ?, body = ?, scheduled_at = ?, post_time = ?, status = ?, error = NULL,
+                review_note = CASE WHEN ? THEN replace(replace(review_note, char(10) || '【 】を書き換えると投稿できます', ''), '【 】を書き換えると投稿できます', '') ELSE review_note END
+              WHERE id = ?`,
+        args: [str(fd, "title", { max: 200, required: true }), body, scheduled || null, postTime(fd), nextStatus, /[【】]/.test(body) ? 0 : 1, id],
+      },
+      repo.auditStmt("owner", thenSchedule ? "content.edited_scheduled" : "content.edited", `content:${id}`),
+    ]);
+    if (thenSchedule) return autoX ? "保存して予約しました。予定の時刻に X へ自動で投稿します" : "保存して予約しました（この投稿先は手で投稿してください）";
+    return "保存しました";
+  });
+}
+
+export async function setXAutopost(fd: FormData): Promise<void> {
+  return act("/settings", async (db) => {
+    const on = str(fd, "on") === "true";
+    const limit = int(fd, "x_daily_limit", { min: 1, max: 10, optional: true });
+    await batch(db, [
+      repo.setSettingStmt("x_autopost_enabled", on ? "true" : "false"),
+      ...(limit ? [repo.setSettingStmt("x_daily_limit", String(limit))] : []),
+      repo.auditStmt("owner", "x.autopost_toggled", "", { on, limit }),
+    ]);
+    return on ? "X の自動投稿をONにしました（承認して予約した投稿だけが、予定の時刻に投稿されます）" : "X の自動投稿をOFFにしました";
   });
 }
 
@@ -483,5 +567,93 @@ export async function setAutomation(fd: FormData): Promise<void> {
     const on = str(fd, "on") === "true";
     await batch(db, [repo.setSettingStmt("automation_enabled", on ? "true" : "false"), repo.auditStmt("owner", "automation.toggled", "", on ? "ON" : "OFF")]);
     return on ? "自動実行をONにしました（AI社員が未接続のため、現在は何も実行されません）" : "自動実行をOFFにしました";
+  });
+}
+
+// ---------- AI社員の実行 ----------
+const RUNNABLE: Record<string, string> = { "ceo.meeting": "ceo", "research.ideas": "research", "marketing.drafts": "marketing", "system.ping": "ceo" };
+
+/** 受付けた仕事を裏側（Netlify のバックグラウンド関数）に渡す。パソコンではその場で実行する */
+async function dispatchRun(db: DB, runId: number): Promise<void> {
+  if (!onNetlify()) {
+    await executeRun(db, runId);
+    return;
+  }
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  try {
+    const r = await fetch(`${proto}://${host}${BACKGROUND_PATH}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(await signDispatch(runId)),
+      signal: AbortSignal.timeout(10_000),
+      redirect: "manual", // 転送（ログイン画面など）を成功と勘違いしない
+    });
+    // バックグラウンド関数は受け付けると 202 を返す。それ以外は失敗
+    if (r.status !== 202) throw new Error(`HTTP ${r.status}`);
+  } catch (e) {
+    await batch(db, [
+      {
+        sql: "UPDATE agent_runs SET status = 'error', finished_at = ?, error = ? WHERE id = ? AND status = 'queued'",
+        args: [new Date().toISOString(), `裏側の実行を開始できませんでした（${e instanceof Error ? e.message : "不明"}）`, runId],
+      },
+    ]);
+    throw new InputError("裏側の実行を開始できませんでした。時間をおいてもう一度押してください");
+  }
+}
+
+export async function runAgentTask(fd: FormData): Promise<void> {
+  const task = String(fd.get("task") ?? "");
+  const agentId = RUNNABLE[task];
+  if (!agentId) redirect("/agents");
+  return act(`/agents/${agentId}`, async (db) => {
+    const params: Record<string, unknown> = {};
+    if (task === "research.ideas") params.theme = str(fd, "theme", { max: 300 });
+    if (task === "system.ping") params.seconds = int(fd, "seconds", { min: 0, max: 120, optional: true }) ?? 0;
+    const q = await queueRun(db, task, params, "manual");
+    if (!q.ok) throw new InputError(q.reason);
+    await dispatchRun(db, q.runId);
+    return onNetlify()
+      ? `受付けました（#${q.runId}）。終わるまで数十秒〜数分かかります。この画面は自動で更新されます`
+      : `実行しました（#${q.runId}）`;
+  });
+}
+
+/** X の合鍵がどのアカウントのものかを確認する（投稿はしない。X API の読み取り1回分の費用） */
+export async function checkXAccount(): Promise<void> {
+  return act("/settings", async (db) => {
+    const cred = xCredentialsFromEnv();
+    if (!cred) throw new InputError("X の合鍵が設定されていません");
+    const r = await whoAmI(cred);
+    if (!r.ok) {
+      await batch(db, [repo.auditStmt("owner", "x.verify_failed", "", r.error)]);
+      throw new InputError(`確認できませんでした：${r.error}`);
+    }
+    await batch(db, [repo.setSettingStmt("x_account", `@${r.username}（${r.name}）`), repo.auditStmt("owner", "x.verified", r.username)]);
+    return `X の合鍵は @${r.username}（${r.name}）のものです`;
+  });
+}
+
+/** ロボットに「note に下書き保存」を頼む（GitHub Actions が1時間ごとに確認して保存する） */
+export async function requestNoteDraft(fd: FormData): Promise<void> {
+  return act("/marketing", async (db) => {
+    const id = int(fd, "id", { min: 1 })!;
+    const cancel = str(fd, "cancel") === "1";
+    const row = await get<{ platform: string; status: string; extra: string | null; body: string }>(
+      db,
+      "SELECT platform, status, extra, body FROM content_posts WHERE id = ? AND data_kind = 'actual'",
+      [id],
+    );
+    if (!row || row.platform !== "note") throw new InputError("note の記事が見つかりません");
+    if (!cancel && !["approved", "scheduled"].includes(row.status)) throw new InputError("承認してから頼んでください");
+    if (!cancel && /[【】]/.test(row.body)) throw new InputError("【 】が残っています。書き換えてから頼んでください");
+    const extra = row.extra ? JSON.parse(row.extra) : {};
+    extra.note_draft = cancel ? { status: "cancelled", at: new Date().toISOString() } : { status: "requested", at: new Date().toISOString() };
+    await batch(db, [
+      { sql: "UPDATE content_posts SET extra = ? WHERE id = ?", args: [JSON.stringify(extra), id] },
+      repo.auditStmt("owner", cancel ? "note.draft_cancelled" : "note.draft_requested", `content:${id}`),
+    ]);
+    return cancel ? "取り消しました" : "頼みました。1時間以内にロボットが note の下書きに保存します";
   });
 }

@@ -130,3 +130,16 @@ test("経営会議（ルールベース）：実データのみで作り、行�
   assert.equal((await repo.openTasks(db)).length, n); // 同じタスクは重複して作らない
   assert.ok(await repo.getReport(db, id));
 });
+
+test("開設キットを直すと、まだ下書きのものだけ新しい文章になる（発信名 HIDE）", async () => {
+  const db = await mem();
+  const x1 = "launch-kit:x-1";
+  await run(db, "UPDATE content_posts SET body = '古い文章（柳原）' WHERE source_ref = ?", [x1]);
+  await run(db, "UPDATE content_posts SET body = '承認済みの文章', status = 'approved' WHERE source_ref = 'launch-kit:x-2'");
+  await seedBase(db);
+  const rows = await repo.listContent(db, repo.ACTUAL_ONLY, { business: "ai-ceo-project" });
+  assert.ok(rows.find((r) => r.title.startsWith("X①"))!.body.includes("HIDEです"));
+  assert.equal(rows.find((r) => r.title.startsWith("X②"))!.body, "承認済みの文章"); // 手を付けたものは変えない
+  for (const p of PROFILES) assert.ok(!p.name.includes("柳原") && !p.bio.includes("柳原"));
+  assert.ok(LAUNCH_DRAFTS.every((d) => !d.body.includes("柳原")));
+});

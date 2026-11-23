@@ -270,4 +270,86 @@ CREATE TABLE login_attempts (
 UPDATE products SET sales_channel = 'note（有料記事）' WHERE sales_channel = 'note（予定）';
 `,
   },
+  {
+    version: 3,
+    name: "agent_run_queue",
+    sql: `
+-- AIの実行を「受付 → 実行中 → 結果」で管理する（時間のかかる処理は裏側で動かすため）
+CREATE TABLE agent_runs_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent_id TEXT NOT NULL REFERENCES agents(id),
+  task TEXT NOT NULL DEFAULT '',
+  params TEXT NOT NULL DEFAULT '{}',
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('queued','running','success','error','skipped','blocked_budget')),
+  trigger TEXT NOT NULL DEFAULT 'manual',
+  summary TEXT NOT NULL DEFAULT '',
+  ai_output TEXT,
+  execution_result TEXT,
+  model TEXT,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  web_searches INTEGER NOT NULL DEFAULT 0,
+  estimate_jpy INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  cost_jpy INTEGER NOT NULL DEFAULT 0,
+  error TEXT
+);
+INSERT INTO agent_runs_new (id, agent_id, started_at, finished_at, status, trigger, summary, ai_output, execution_result, model,
+  input_tokens, output_tokens, cost_usd, cost_jpy, error)
+  SELECT id, agent_id, started_at, finished_at, status, trigger, summary, ai_output, execution_result, model,
+  input_tokens, output_tokens, cost_usd, cost_jpy, error FROM agent_runs;
+DROP TABLE agent_runs;
+ALTER TABLE agent_runs_new RENAME TO agent_runs;
+CREATE INDEX idx_agent_runs_agent ON agent_runs(agent_id, started_at);
+CREATE INDEX idx_agent_runs_status ON agent_runs(status);
+`,
+  },
+  {
+    version: 4,
+    name: "content_autopost",
+    sql: `
+-- 投稿の予約時刻・自動投稿中の状態・確認メモを追加する
+CREATE TABLE content_posts_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id TEXT REFERENCES businesses(id),
+  platform TEXT NOT NULL CHECK (platform IN ('x','instagram','youtube','note','linkedin','other')),
+  status TEXT NOT NULL CHECK (status IN
+    ('draft','pending_approval','approved','scheduled','posting','posted','failed','skipped')),
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  scheduled_at TEXT,
+  post_time TEXT,
+  posted_at TEXT,
+  external_id TEXT,
+  url TEXT,
+  views INTEGER,
+  engagements INTEGER,
+  follower_delta INTEGER,
+  error TEXT,
+  review_note TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  source_ref TEXT UNIQUE,
+  ${DK},
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO content_posts_new (id, business_id, platform, status, title, body, scheduled_at, posted_at, external_id, url, views,
+  engagements, follower_delta, error, source, source_ref, data_kind, created_at)
+  SELECT id, business_id, platform, status, title, body, scheduled_at, posted_at, external_id, url, views,
+  engagements, follower_delta, error, source, source_ref, data_kind, created_at FROM content_posts;
+DROP TABLE content_posts;
+ALTER TABLE content_posts_new RENAME TO content_posts;
+CREATE INDEX idx_content_date ON content_posts(posted_at, scheduled_at);
+CREATE INDEX idx_content_status ON content_posts(status, platform);
+`,
+  },
+  {
+    version: 5,
+    name: "content_extra",
+    sql: `
+-- note の見出し画像・図解などの追加情報（JSON）
+ALTER TABLE content_posts ADD COLUMN extra TEXT;
+`,
+  },
 ];

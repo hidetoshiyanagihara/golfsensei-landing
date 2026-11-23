@@ -130,15 +130,50 @@ try {
   await act(page, () => page.click("form:has(#m-value) button[type=submit]"));
   check((await page.textContent("details:has-text('X')")).includes("開設済み"), "フォロワー数（0でも可）を記録すると「開設済み」になる");
 
+  console.log("X の予約（自動投稿）");
+  await page.goto(`${BASE}/marketing`);
+  const x1 = () => page.locator("li:has-text('X①：はじめまして')");
+  await act(page, () => x1().locator("button[value=pending_approval]").click());
+  await act(page, () => x1().locator("button[value=approved]").click());
+  await act(page, () => x1().locator("button[value=scheduled]").click());
+  check((await page.textContent("body")).includes("予約できません") && (await x1().textContent()).includes("承認済み"), "【 】が残っている X 投稿は予約できない");
+  await x1().locator("summary").click();
+  await x1().locator("textarea[name=body]").fill("はじめまして、HIDEです。人間1人とAI社員で事業を回せるか、本気で試します。売上は0円から、数字も失敗もそのまま書いていきます。");
+  await act(page, () => x1().locator("form:has(textarea[name=body]) button[value=schedule]").click());
+  check((await page.textContent("body")).includes("自動で投稿します") && (await x1().textContent()).includes("予約済み"), "書き換えると予約でき、自動投稿の予定になる");
+  check((await x1().textContent()).includes("X に自動投稿"), "X の投稿には「X に自動投稿」と表示される");
+  check((await page.locator("li:has-text('note①') summary").count()) === 1, "note の下書きがある");
+  await page.locator("li:has-text('note①') summary").click();
+  check((await page.locator("li:has-text('note①') button:has-text('書式つきでコピー')").count()) === 1 && (await page.locator("li:has-text('note①') a:has-text('note で書く')").count()) === 1, "note は「書式つきでコピー」「note で書く」で手で投稿する");
+  const headerSrc = await page.locator("li:has-text('note①') img[alt^='見出し画像']").getAttribute("src");
+  const imgRes = await page.request.get(`${BASE}${headerSrc}`);
+  const png = await imgRes.body();
+  check(imgRes.status() === 200 && imgRes.headers()["content-type"] === "image/png" && png.length > 5000, `note の見出し画像が作られる（${png.length} bytes）`);
+  fs.writeFileSync(path.join(shots, "note-header.png"), png);
+  const anon = await (await browser.newContext()).request.get(`${BASE}${headerSrc}`, { maxRedirects: 0 });
+  check(anon.status() === 307 || anon.status() === 401, "ログインしていないと note の画像は見られない");
+  await page.goto(`${BASE}/settings`);
+  const st = await page.textContent("body");
+  check(st.includes("X の自動投稿") && st.includes("未設定（Netlify の環境変数 X_API_KEY"), "設定画面に X の自動投稿と合鍵の状態が出る");
+
   console.log("経営会議");
   await page.goto(`${BASE}/reports`);
-  await page.click("text=経営会議を実行");
+  await page.click("text=ルールで集計");
   await page.waitForURL(/\/reports\/\d+/);
   const rep = await page.textContent("body");
   check(rep.includes("1. 現状分析") && rep.includes("7. 翌日の行動計画"), "7項目の経営会議レポートが作られる");
   check(rep.includes("市場調査AIが未接続"), "未調査の項目は未調査と正直に書かれる");
   check(rep.includes("新アカウント（note・Instagram・YouTube）が未開設"), "未開設の新アカウントが問題点に挙がる（開設済みのXは除く）");
   await page.screenshot({ path: path.join(shots, "meeting-desktop.png"), fullPage: true });
+
+  console.log("AI社員（APIキーなしの状態）");
+  await page.goto(`${BASE}/reports`);
+  check(await page.locator("button:has-text('AI CEO に会議を頼む')").isDisabled(), "APIキーがないときは「AI CEO に会議を頼む」を押せない");
+  await page.goto(`${BASE}/agents/research`);
+  const ra = await page.textContent("body");
+  check(ra.includes("仕事を頼む") && ra.includes("費用の上限") && ra.includes("Web検索は最大5回"), "市場調査AIの画面に、頼める仕事と費用の上限が出る");
+  check(await page.locator("form:has(input[value='research.ideas']) button").isDisabled(), "APIキーがないときは市場調査を実行できない");
+  check(ra.includes("未接続") || ra.includes("APIのキーが未設定"), "APIキーがないことが表示される");
 
   console.log("サンプル表示");
   await page.goto(`${BASE}/dashboard`);

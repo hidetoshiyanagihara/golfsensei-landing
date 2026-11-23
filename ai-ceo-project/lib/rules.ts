@@ -27,7 +27,7 @@ export function canStartSelling(p: ProductState): { ok: boolean; reason?: string
   return { ok: true };
 }
 
-export type ContentStatus = "draft" | "pending_approval" | "approved" | "scheduled" | "posted" | "failed" | "skipped";
+export type ContentStatus = "draft" | "pending_approval" | "approved" | "scheduled" | "posting" | "posted" | "failed" | "skipped";
 
 /**
  * 投稿のステータス遷移。承認を飛ばして予約・投稿済みにはできない。
@@ -38,6 +38,7 @@ const CONTENT_TRANSITIONS: Record<ContentStatus, ContentStatus[]> = {
   pending_approval: ["approved", "draft", "skipped"],
   approved: ["scheduled", "draft", "skipped"],
   scheduled: ["approved", "skipped"],
+  posting: [],
   posted: [],
   failed: ["draft"],
   skipped: ["draft"],

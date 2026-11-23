@@ -71,7 +71,14 @@ const g = globalThis as unknown as { __ccDb?: Promise<DB> };
 
 export function getDb(): Promise<DB> {
   if (!g.__ccDb) {
-    g.__ccDb = openDb().catch((e) => {
+    g.__ccDb = openDb()
+      .then(async (db) => {
+        // APIキーの有無に合わせて AI社員の「未接続／待機中」を切り替える
+        const { syncAgentConnection } = await import("../ai/runner");
+        await syncAgentConnection(db);
+        return db;
+      })
+      .catch((e) => {
       g.__ccDb = undefined; // 失敗したら次のリクエストでやり直す
       throw e;
     });
