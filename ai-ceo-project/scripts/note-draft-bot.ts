@@ -169,6 +169,8 @@ async function main() {
   }
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ locale: "ja-JP", timezoneId: "Asia/Tokyo", viewport: { width: 1280, height: 900 } });
+  // tsx（esbuild）が関数に付ける __name をブラウザ側でも使えるようにする（page.evaluate のエラー対策）
+  await ctx.addInitScript({ content: "window.__name = (f) => f;" });
   const page = await ctx.newPage();
   try {
     await login(page);
