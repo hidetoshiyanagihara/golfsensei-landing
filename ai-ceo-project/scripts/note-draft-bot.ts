@@ -58,7 +58,8 @@ async function login(page: Page) {
   await page.goto("https://note.com/login", { waitUntil: "domcontentloaded" });
   await page.locator("input[name=login]").fill(process.env.NOTE_EMAIL ?? "");
   await page.locator("input[name=password]").fill(process.env.NOTE_PASSWORD ?? "");
-  await page.getByRole("button", { name: "ログイン" }).click();
+  // Google・X・Apple でのログインボタンもあるため、メールでのログイン（送信ボタン）を押す
+  await page.locator("button[type=submit]").filter({ hasText: "ログイン" }).first().click();
   await page.waitForURL((u: URL) => !u.pathname.startsWith("/login"), { timeout: 30000 }).catch(() => {});
   if (new URL(page.url()).pathname.startsWith("/login")) {
     await describe(page, "login-failed");
