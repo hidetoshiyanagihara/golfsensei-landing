@@ -3,7 +3,8 @@
 # 中身は ai-ceo-project/scripts/youtube-shorts.ts。止めたいとき：Actions → HIDE YouTube shorts → 右上「…」→ Disable workflow
 #
 # 必要な Secrets：TURSO_DATABASE_URL / TURSO_AUTH_TOKEN（管理画面のデータベース）、
-#                 YT_CLIENT_ID / YT_CLIENT_SECRET（AXION と共用の Google OAuth クライアント）、HIDE_YT_REFRESH_TOKEN（HIDE のチャンネル）
+#                 YT_CLIENT_ID / YT_CLIENT_SECRET（AXION と共用の Google OAuth クライアント）
+# HIDE のチャンネルは「HIDE YouTube connect」でつなぐ（合鍵は暗号化してデータベースに保存）
 # 最初は限定公開で試したいとき：Variables に HIDE_YT_PRIVACY = unlisted
 name: HIDE YouTube shorts
 
@@ -28,12 +29,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      HAS_KEYS: ${{ secrets.HIDE_YT_REFRESH_TOKEN != '' && secrets.TURSO_AUTH_TOKEN != '' && secrets.TURSO_DATABASE_URL != '' }}
+      HAS_KEYS: ${{ secrets.YT_CLIENT_ID != '' && secrets.TURSO_AUTH_TOKEN != '' && secrets.TURSO_DATABASE_URL != '' }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || '0' }}
     steps:
       - name: 合鍵の確認
         run: |
-          if [ "$HAS_KEYS" != "true" ]; then echo "HIDE_YT_REFRESH_TOKEN / TURSO_DATABASE_URL / TURSO_AUTH_TOKEN が未設定のためスキップします"; fi
+          if [ "$HAS_KEYS" != "true" ]; then echo "YT_CLIENT_ID / TURSO_DATABASE_URL / TURSO_AUTH_TOKEN が未設定のためスキップします"; fi
       - uses: actions/checkout@v4
         if: ${{ env.HAS_KEYS == 'true' }}
       - uses: actions/setup-node@v4

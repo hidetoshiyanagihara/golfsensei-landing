@@ -1,0 +1,52 @@
+# HIDE の YouTube チャンネルをつなぐ（最初の1回だけ。チャンネルを変えたいときも同じ手順）。
+# 1回目：「Run workflow」を code 空のまま実行 → 実行結果の下の Artifacts「youtube-connect-link」を開き、リンクから HIDE のチャンネルで許可する
+# 2回目：許可のあとに出た OAuth Playground の URL を丸ごと code に貼って実行 → つながったチャンネル名が表示される
+# 合鍵（リフレッシュトークン）は YT_CLIENT_SECRET で暗号化してデータベースに保存する（ログには出さない）。
+name: HIDE YouTube connect
+
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: "2回目だけ：許可のあとの URL（または code）を丸ごと貼る。1回目は空のまま"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  connect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: コードを隠す
+        env:
+          CODE: ${{ inputs.code }}
+        run: |
+          if [ -n "$CODE" ]; then echo "::add-mask::$CODE"; fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        working-directory: ai-ceo-project
+        run: npm ci --no-audit --no-fund
+      - name: つなぐ
+        working-directory: ai-ceo-project
+        env:
+          CODE: ${{ inputs.code }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          OUT_HTML: ${{ runner.temp }}/connect.html
+        run: npx tsx scripts/youtube-connect.ts
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.code == '' }}
+        with:
+          name: youtube-connect-link
+          path: ${{ runner.temp }}/connect.html
+          retention-days: 1
