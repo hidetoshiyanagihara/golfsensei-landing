@@ -153,10 +153,14 @@ export function applyEdits(body: string, edits: { old: string; new: string }[]):
 
 /** 途中で失敗しても、それまでにかかった費用を記録できるようにする */
 export class UsageError extends Error {
+  /** 途中で止まったときの、それまでで最も点の高い版（ある場合） */
+  partial?: { best: QaBest; rounds: QaRound[] };
   constructor(message: string, public usage: UsageTotals, public model: string) {
     super(message);
   }
 }
+
+export type QaBest = { body: string; total: number; byKey: Record<CriterionKey, number>; round: number; summary: string };
 
 export type QaRound = { round: number; total: number; byKey: Record<CriterionKey, number>; issues: string[]; summary: string; applied?: number };
 
@@ -165,16 +169,16 @@ export async function qaLoop(
   call: LlmCall,
   doc: { title: string; body: string; product: string; components: string[] },
   maxRounds = MAX_ROUNDS_DEFAULT,
-): Promise<{ best: { body: string; total: number; byKey: Record<CriterionKey, number>; round: number; summary: string }; rounds: QaRound[]; usage: UsageTotals; model: string }> {
+): Promise<{ best: QaBest; rounds: QaRound[]; usage: UsageTotals; model: string }> {
   const usage: UsageTotals = { inputTokens: 0, outputTokens: 0, webSearches: 0 };
   let model = DEFAULT_MODEL;
-  const text = (m: Awaited<ReturnType<LlmCall>>, allowCut = false) => {
+  const text = (m: Awaited<ReturnType<LlmCall>>, allowCut = false, what = "") => {
     const u = usageOf(m);
     usage.inputTokens += u.inputTokens;
     usage.outputTokens += u.outputTokens;
     model = m.model;
     if (m.stop_reason === "refusal") throw new UsageError("AIが回答を断りました（refusal）", usage, model);
-    if (m.stop_reason === "max_tokens" && !allowCut) throw new UsageError("出力が長すぎて途中で切れました（max_tokens）", usage, model);
+    if (m.stop_reason === "max_tokens" && !allowCut) throw new UsageError(`${what}の出力が長すぎて途中で切れました（max_tokens）`, usage, model);
     return m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim();
   };
   const json = <T,>(raw: string, schema: z.ZodType<T>, what: string): T => {
@@ -186,7 +190,7 @@ export async function qaLoop(
   };
   const ctx = `商品：${doc.product}\n構成品：${doc.components.map((c, i) => `${i + 1}. ${c}`).join(" / ")}\nこの原稿：「${doc.title}」`;
   let body = doc.body;
-  let best: { body: string; total: number; byKey: Record<CriterionKey, number>; round: number; summary: string } | null = null;
+  let best: QaBest | null = null;
   const rounds: QaRound[] = [];
   let prevIssues: string[] = [];
   let scenario = "";
@@ -198,7 +202,7 @@ export async function qaLoop(
         text(
           await call({
             model: DEFAULT_MODEL,
-            max_tokens: 12000,
+            max_tokens: 16000,
             system: system("prep"),
             output_config: { effort: "medium", format: { type: "json_schema", schema: PREP_SCHEMA } },
             messages: [
@@ -208,6 +212,8 @@ export async function qaLoop(
               },
             ],
           }),
+          false,
+          "試用の準備",
         ),
         PrepSchema,
         "試用の準備",
@@ -229,7 +235,7 @@ export async function qaLoop(
         text(
           await call({
             model: DEFAULT_MODEL,
-            max_tokens: 12000,
+            max_tokens: 20000,
             system: system("review"),
             output_config: { effort: "high", format: { type: "json_schema", schema: REVIEW_JSON_SCHEMA } },
             messages: [
@@ -239,6 +245,8 @@ export async function qaLoop(
               },
             ],
           }),
+          false,
+          "採点",
         ),
         ReviewSchema,
         "採点",
@@ -257,7 +265,7 @@ export async function qaLoop(
         text(
           await call({
             model: DEFAULT_MODEL,
-            max_tokens: 16000,
+            max_tokens: 20000,
             system: system("revise"),
             output_config: { effort: "medium", format: { type: "json_schema", schema: EDITS_SCHEMA } },
             messages: [
@@ -267,6 +275,8 @@ export async function qaLoop(
               },
             ],
           }),
+          false,
+          "修正",
         ),
         EditsSchema,
         "修正",
@@ -278,8 +288,9 @@ export async function qaLoop(
       prevIssues = issues;
     }
   } catch (e) {
-    if (e instanceof UsageError) throw e;
-    throw new UsageError(e instanceof Error ? e.message : String(e), usage, model);
+    const err = e instanceof UsageError ? e : new UsageError(e instanceof Error ? e.message : String(e), usage, model);
+    if (best && !err.partial) err.partial = { best, rounds };
+    throw err;
   }
   return { best: best!, rounds, usage, model };
 }
@@ -312,20 +323,33 @@ export const productQaTask: TaskDef = {
     const doc = await get<{ title: string; body: string }>(db, "SELECT title, body FROM product_docs WHERE product_id = ? AND component_index = ?", [productId, index]);
     if (!doc) throw new Error("この構成品の下書きがまだありません");
 
-    const { best, rounds, usage, model } = await qaLoop(call, { title: doc.title, body: doc.body, product: product.name, components }, maxRounds);
     const today = new Date().toISOString().slice(0, 10);
-    const note = reviewNote(best, rounds, today);
-    const changed = best.body !== doc.body;
-    await batch(db, [
-      {
-        sql: `UPDATE product_docs SET body = ?, review_note = ?, version = version + ?, status = 'draft', updated_at = datetime('now')
-              WHERE product_id = ? AND component_index = ?`,
-        args: [best.body, note, changed ? 1 : 0, productId, index],
-      },
-      repo.setSettingStmt(`qa_score:${productId}:${index}`, JSON.stringify({ total: best.total, byKey: best.byKey, at: today })),
-      repo.auditStmt("ai:product", "product.qa_component", `product:${productId}`, { index, total: best.total, rounds: rounds.map((r) => r.total) }),
-    ]);
-    await applyChecklist(db, productId, components.length);
+    const save = async (best: QaBest, rounds: QaRound[], stopped = "") => {
+      const changed = best.body !== doc.body;
+      const note = reviewNote(best, rounds, today) + (stopped ? `\n※この回は途中で止まりました（${stopped}）。それまでで最も点の高い版を保存しています。` : "");
+      await batch(db, [
+        {
+          sql: `UPDATE product_docs SET body = ?, review_note = ?, version = version + ?, status = 'draft', updated_at = datetime('now')
+                WHERE product_id = ? AND component_index = ?`,
+          args: [best.body, note, changed ? 1 : 0, productId, index],
+        },
+        repo.setSettingStmt(`qa_score:${productId}:${index}`, JSON.stringify({ total: best.total, byKey: best.byKey, at: today })),
+        repo.auditStmt("ai:product", "product.qa_component", `product:${productId}`, { index, total: best.total, rounds: rounds.map((r) => r.total), stopped: stopped || undefined }),
+      ]);
+      await applyChecklist(db, productId, components.length);
+      return changed;
+    };
+
+    let result: Awaited<ReturnType<typeof qaLoop>>;
+    try {
+      result = await qaLoop(call, { title: doc.title, body: doc.body, product: product.name, components }, maxRounds);
+    } catch (e) {
+      // 途中で止まっても、それまでに点が上がった版は捨てない（費用は runner が記録する）
+      if (e instanceof UsageError && e.partial && e.partial.best.body !== doc.body) await save(e.partial.best, e.partial.rounds, e.message);
+      throw e;
+    }
+    const { best, rounds, usage, model } = result;
+    const changed = await save(best, rounds);
     return {
       aiOutput: JSON.stringify(rounds).slice(0, 8000),
       executionResult: `「${doc.title}」の品質検査：${best.total}点（${rounds.map((r) => r.total).join("→")}）${changed ? "・直した版を保存" : ""}`,

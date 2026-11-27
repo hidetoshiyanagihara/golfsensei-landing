@@ -134,3 +134,19 @@ test("品質検査：途中で失敗しても、それまでの費用を AI社�
   assert.equal(row!.input_tokens, 4000); // 準備1回＋実行2回＋採点1回
   assert.ok(row!.cost_jpy > 0);
 });
+
+test("品質検査：途中で止まっても、それまでに点が上がった版は保存する", async () => {
+  const db = await openDb(":memory:");
+  await syncAgentConnection(db, true);
+  const ins = await run(db, "INSERT INTO products (name, components, data_kind) VALUES ('x', ?, 'actual')", [JSON.stringify([{ name: "議事録", status: "producing" }])]);
+  await run(db, "INSERT INTO product_docs (product_id, component_index, title, body) VALUES (?, 0, '議事録', ?)", [ins.lastId, goodDoc("v1")]);
+  const issue = { criterion: "clarity", where: "手順", problem: "迷う", fix: "分ける" };
+  const { call } = fakeCall([review({ ...full, clarity: 10 }, [issue]), review({ ...full, clarity: 16 }, [issue]), "これはJSONではない"], [tag("v1", "v2"), tag("v2", "v3")]);
+  const q = await queueRun(db, "product.qa", { productId: ins.lastId, index: 0, rounds: 4 });
+  const r = await executeRun(db, (q as { runId: number }).runId, call);
+  assert.equal(r.ok, false);
+  const doc = await get<{ body: string; review_note: string; version: number }>(db, "SELECT body, review_note, version FROM product_docs WHERE product_id = ?", [ins.lastId]);
+  assert.ok(doc!.body.includes("v2")); // 2回目（96点）の版
+  assert.match(doc!.review_note, /途中で止まりました/);
+  assert.equal(doc!.version, 2);
+});
