@@ -189,6 +189,7 @@ export async function qaLoop(
   let best: { body: string; total: number; byKey: Record<CriterionKey, number>; round: number; summary: string } | null = null;
   const rounds: QaRound[] = [];
   let prevIssues: string[] = [];
+  let scenario = "";
 
   try {
     for (let round = 1; round <= maxRounds; round++) {
@@ -200,13 +201,19 @@ export async function qaLoop(
             max_tokens: 12000,
             system: system("prep"),
             output_config: { effort: "medium", format: { type: "json_schema", schema: PREP_SCHEMA } },
-            messages: [{ role: "user", content: `${ctx}\n\n# テンプレート\n${body}\n\n試しに使う準備をしてください。` }],
+            messages: [
+              {
+                role: "user",
+                content: `${ctx}\n\n# テンプレート\n${body}\n\n${scenario ? `前回と同じ架空の商談で試してください（直した所の効果を比べるため）：\n${scenario}\n\n` : ""}試しに使う準備をしてください。`,
+              },
+            ],
           }),
         ),
         PrepSchema,
         "試用の準備",
       );
       // 2. 試用：埋めたプロンプトを、そのまま Claude に貼って実際に実行する
+      if (!scenario) scenario = prep.scenario.slice(0, 3000);
       const runs: string[] = [];
       for (const pr of prep.prompts.slice(0, 4)) {
         const out = text(await call({ model: DEFAULT_MODEL, max_tokens: 4000, messages: [{ role: "user", content: pr.filled.slice(0, 12000) }] }), true);
