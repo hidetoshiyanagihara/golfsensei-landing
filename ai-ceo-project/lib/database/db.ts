@@ -73,9 +73,13 @@ export function getDb(): Promise<DB> {
   if (!g.__ccDb) {
     g.__ccDb = openDb()
       .then(async (db) => {
-        // APIキーの有無に合わせて AI社員の「未接続／待機中」を切り替える
-        const { syncAgentConnection } = await import("../ai/runner");
-        await syncAgentConnection(db);
+        // APIキーの有無に合わせて AI社員の「未接続／待機中」を切り替える。
+        // GitHub Actions のスクリプト（YouTube ショートなど）は APIキーを持たないので切り替えない
+        // （切り替えると、本番の AI社員が全員「未接続」になってしまう）
+        if (process.env.GITHUB_ACTIONS !== "true" && process.env.SKIP_AGENT_SYNC !== "1") {
+          const { syncAgentConnection } = await import("../ai/runner");
+          await syncAgentConnection(db);
+        }
         return db;
       })
       .catch((e) => {
