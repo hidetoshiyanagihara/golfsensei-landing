@@ -1,0 +1,38 @@
+# AI CEO PROJECT：自動点検（AIは使わない・費用0円）。
+# 自動投稿の見回りの停止、予約の遅れ、承認待ちの下書き、投稿の失敗、Anthropic の残高不足、予算（70%・85%）、AI社員の停止、
+# バックアップの停止を調べ、管理画面の「次にやること」に【自動点検】として載せる。直ったものは自動で完了にする。
+# 中身は ai-ceo-project/scripts/health-check.ts
+name: AI CEO health check
+
+on:
+  schedule:
+    - cron: "47 */3 * * *"   # 3時間ごと（GitHubの混雑で遅れることがあります）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-ceo-health
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        working-directory: ai-ceo-project
+        run: npm ci --no-audit --no-fund
+      - name: 点検
+        working-directory: ai-ceo-project
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: npx tsx scripts/health-check.ts
