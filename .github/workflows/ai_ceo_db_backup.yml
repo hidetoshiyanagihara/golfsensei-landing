@@ -1,0 +1,51 @@
+# AI CEO PROJECT：データベースの毎日のバックアップ（暗号化）と復旧テスト。
+# 中身は ai-ceo-project/scripts/db-backup.ts。バックアップは Artifacts に30日残す（暗号化済み。開くにはデータベースの合鍵が必要）。
+# 復旧のしかたは ai-ceo-project/docs/OPERATIONS.md
+name: AI CEO DB backup
+
+on:
+  schedule:
+    - cron: "23 18 * * *"   # 毎日 日本時間 3:23（GitHubの混雑で遅れることがあります）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-ceo-db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        working-directory: ai-ceo-project
+        run: npm ci --no-audit --no-fund
+      - name: バックアップと復旧テスト
+        working-directory: ai-ceo-project
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          OUT: ${{ runner.temp }}/ai-ceo-backup.ccbk
+        run: npx tsx scripts/db-backup.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-ceo-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/ai-ceo-backup.ccbk
+          retention-days: 30
+          if-no-files-found: error
+      - name: 自動点検（ついでに）
+        if: always()
+        working-directory: ai-ceo-project
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: npx tsx scripts/health-check.ts
