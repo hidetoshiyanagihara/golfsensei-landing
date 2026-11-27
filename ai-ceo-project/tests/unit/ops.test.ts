@@ -41,6 +41,9 @@ test("自動点検：見回りの停止・予約の遅れ・予算・残高不�
   assert.match(titles, /残高が足りません/);
   assert.match(titles, /AI API の月間上限の80%/);
   assert.doesNotMatch(titles, /バックアップ/);
+  // チャージしたあとに AI の仕事が成功したら、残高不足は直ったとみなす
+  await run(db, "INSERT INTO agent_runs (agent_id, task, params, started_at, status, trigger, summary, cost_jpy) VALUES ('ceo', 'ceo.meeting', '{}', ?, 'success', 'manual', 'x', 10)", [new Date(now.getTime() + 60_000).toISOString()]);
+  assert.doesNotMatch((await healthIssues(db, now)).map((i) => i.title).join("\n"), /残高が足りません/);
 
   assert.equal((await syncHealthTasks(db, issues)).added, issues.length);
   assert.equal((await syncHealthTasks(db, issues)).added, 0); // 重ねない

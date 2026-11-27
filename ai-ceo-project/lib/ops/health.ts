@@ -75,15 +75,22 @@ export async function healthIssues(db: DB, now = new Date()): Promise<HealthIssu
   if (pending) issues.push({ title: `24時間以内に予定の下書きが${pending}件、承認待ちです`, detail: "承認して予約しないと投稿されません。" });
 
   // 5. 投稿の失敗（直近7日）
-  const failed = Number(
-    (await get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM content_posts WHERE status = 'failed' AND data_kind = 'actual' AND business_id = 'ai-ceo-project'"))?.n ?? 0,
+  const failed = await all<{ id: number; platform: string; title: string; error: string | null }>(
+    db,
+    "SELECT id, platform, title, error FROM content_posts WHERE status = 'failed' AND data_kind = 'actual' AND business_id = 'ai-ceo-project' ORDER BY id",
   );
-  if (failed) issues.push({ title: `失敗した投稿が${failed}件あります`, detail: "コンテンツ画面でエラー内容を確認し、直して予約し直すか、見送りにしてください。" });
+  if (failed.length)
+    issues.push({
+      title: `失敗した投稿が${failed.length}件あります`,
+      detail: `${failed.slice(0, 3).map((f) => `#${f.id}（${f.platform}）「${f.title.slice(0, 30)}」：${(f.error ?? "").slice(0, 120)}`).join(" ／ ")}。直して予約し直すか、見送りにしてください。`,
+    });
 
   // 6. Anthropic の残高不足（直近24時間）
+  // （チャージしたあとに AI の仕事が1回でも成功していれば、直ったとみなす）
   const credit = await get<{ n: number }>(
     db,
-    "SELECT COUNT(*) AS n FROM agent_runs WHERE status = 'error' AND error LIKE '%credit balance%' AND started_at >= ?",
+    `SELECT COUNT(*) AS n FROM agent_runs e WHERE e.status = 'error' AND e.error LIKE '%credit balance%' AND e.started_at >= ?
+       AND NOT EXISTS (SELECT 1 FROM agent_runs s WHERE s.status = 'success' AND s.cost_jpy > 0 AND s.started_at > e.started_at)`,
     [new Date(now.getTime() - 24 * 3600_000).toISOString()],
   );
   if (Number(credit?.n ?? 0))
@@ -117,12 +124,14 @@ export async function healthIssues(db: DB, now = new Date()): Promise<HealthIssu
 
 /** 点検の結果を「次にやること」に反映する（同じ件名は重ねない・直ったものは完了にする） */
 export async function syncHealthTasks(db: DB, issues: HealthIssue[]): Promise<{ added: number; closed: number }> {
-  const open = await all<{ id: number; title: string }>(db, "SELECT id, title FROM tasks WHERE source = 'health' AND status IN ('todo','doing')");
+  const open = await all<{ id: number; title: string; detail: string }>(db, "SELECT id, title, detail FROM tasks WHERE source = 'health' AND status IN ('todo','doing')");
   const want = new Map(issues.map((i) => [`${HEALTH_PREFIX}${i.title}`.slice(0, 200), i.detail]));
   const have = new Set(open.map((t) => t.title));
   const stmts = [
     ...[...want].filter(([t]) => !have.has(t)).map(([t, d]) => ({ sql: "INSERT INTO tasks (title, detail, owner, source) VALUES (?, ?, 'owner', 'health')", args: [t, d] })),
     ...open.filter((t) => !want.has(t.title)).map((t) => ({ sql: "UPDATE tasks SET status = 'done' WHERE id = ?", args: [t.id] })),
+    // 件名が同じで中身（金額・件名の一覧など）が変わったものは、説明だけ新しくする
+    ...open.filter((t) => want.has(t.title) && want.get(t.title) !== t.detail).map((t) => ({ sql: "UPDATE tasks SET detail = ? WHERE id = ?", args: [want.get(t.title)!, t.id] })),
   ];
   const added = [...want.keys()].filter((t) => !have.has(t)).length, closed = open.filter((t) => !want.has(t.title)).length;
   if (stmts.length) await batch(db, [...stmts, repo.auditStmt("system", "health.check", "", { added, closed, open: want.size })]);
