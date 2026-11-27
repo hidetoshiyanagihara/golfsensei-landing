@@ -61,7 +61,7 @@ export async function failStaleRuns(db: DB, nowIso = new Date().toISOString()): 
 }
 
 /** 今月の使用額（予約中の見積もりも含める＝同時に何本も走らせて上限を超えないように） */
-async function monthUsage(db: DB, agentId: string) {
+export async function monthUsage(db: DB, agentId: string) {
   const month = jstMonth();
   const [expenses, runsAll, runsAgent, reserved] = await Promise.all([
     repo.expensesInMonth(db, month, repo.ACTUAL_ONLY),
