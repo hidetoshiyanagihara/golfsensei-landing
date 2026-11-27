@@ -1,0 +1,39 @@
+# AI CEO PROJECT：AI社員ごとの月間上限を変える（代表者の指示で手動実行）。
+# 中身は ai-ceo-project/scripts/agent-cap.ts。AI API の月間上限より大きくはできない。変更は管理画面の操作ログに残る。
+name: AI CEO agent cap
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_id:
+        description: "AI社員の番号（ceo / research / product / marketing / sales / support / finance）"
+        required: true
+      cap_jpy:
+        description: "新しい月間上限（円）"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  cap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        working-directory: ai-ceo-project
+        run: npm ci --no-audit --no-fund
+      - name: 上限を変える
+        working-directory: ai-ceo-project
+        env:
+          AGENT_ID: ${{ inputs.agent_id }}
+          CAP_JPY: ${{ inputs.cap_jpy }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: npx tsx scripts/agent-cap.ts
