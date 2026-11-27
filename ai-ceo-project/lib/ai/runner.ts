@@ -181,8 +181,16 @@ export async function executeRun(db: DB, runId: number, call: LlmCall = anthropi
   } catch (e) {
     const msg = describeError(e);
     const now = new Date().toISOString();
+    // 途中で失敗しても、それまでにかかった費用は記録する（記録漏れで費用が少なく見えないように）
+    const partial = e as { usage?: UsageTotals; model?: string };
+    const pUsd = task.usesAi && partial.usage && partial.model ? costFromUsage(partial.model, partial.usage) : 0;
+    const pJpy = usdToJpy(pUsd, repo.num(settings, "usd_jpy", 155));
     await batch(db, [
-      { sql: "UPDATE agent_runs SET status = 'error', finished_at = ?, error = ? WHERE id = ?", args: [now, msg, runId] },
+      {
+        sql: `UPDATE agent_runs SET status = 'error', finished_at = ?, error = ?, model = COALESCE(?, model), input_tokens = ?, output_tokens = ?,
+                web_searches = ?, cost_usd = ?, cost_jpy = ? WHERE id = ?`,
+        args: [now, msg, partial.model ?? null, partial.usage?.inputTokens ?? 0, partial.usage?.outputTokens ?? 0, partial.usage?.webSearches ?? 0, pUsd, pJpy, runId],
+      },
       { sql: "UPDATE agents SET status = CASE WHEN status = 'paused' THEN 'paused' ELSE 'error' END, last_run_at = ? WHERE id = ?", args: [now, row.agent_id] },
       repo.auditStmt("system", "agent.failed", row.agent_id, { task: row.task, error: msg }),
     ]);
