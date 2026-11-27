@@ -1,0 +1,48 @@
+# AI CEO PROJECT：代表者が承認した事業アイデアを「商品」として登録する（手動実行）。
+# 中身は ai-ceo-project/scripts/product-from-idea.ts。同じアイデアの商品がすでにあれば何もしない。
+name: AI CEO product from idea
+
+on:
+  workflow_dispatch:
+    inputs:
+      idea_id:
+        description: "事業アイデアの番号（承認済みのもの）"
+        required: true
+      name:
+        description: "商品名（空ならアイデア名）"
+        required: false
+        default: ""
+      components:
+        description: "構成品を | で区切って"
+        required: true
+      price:
+        description: "価格（円・仮）"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        working-directory: ai-ceo-project
+        run: npm ci --no-audit --no-fund
+      - name: 商品を登録
+        working-directory: ai-ceo-project
+        env:
+          IDEA_ID: ${{ inputs.idea_id }}
+          NAME: ${{ inputs.name }}
+          COMPONENTS: ${{ inputs.components }}
+          PRICE: ${{ inputs.price }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: npx tsx scripts/product-from-idea.ts
