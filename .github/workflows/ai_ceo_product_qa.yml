@@ -1,0 +1,50 @@
+# AI CEO PROJECT：商品の品質検査（手動実行）。構成品ごとに「試用→採点→改訂」をくり返し、100点を目指す。
+# 中身は ai-ceo-project/scripts/product-qa.ts。費用は管理画面の AI社員の記録に残り、予算の上限を超えるときは実行しない。
+# 最終の「合格」と「販売の承認」は代表者が管理画面で行う。
+name: AI CEO product QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      product_id:
+        description: "商品の番号"
+        required: true
+      rounds:
+        description: "くり返す回数の上限（1〜6）"
+        default: "4"
+      indexes:
+        description: "構成品の番号（1始まり・カンマ区切り）。空なら全部"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-ceo-product-qa
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        working-directory: ai-ceo-project
+        run: npm ci --no-audit --no-fund
+      - name: 品質検査
+        working-directory: ai-ceo-project
+        env:
+          PRODUCT_ID: ${{ inputs.product_id }}
+          ROUNDS: ${{ inputs.rounds }}
+          INDEXES: ${{ inputs.indexes }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npx tsx scripts/product-qa.ts
