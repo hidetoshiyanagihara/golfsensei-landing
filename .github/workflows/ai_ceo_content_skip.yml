@@ -1,0 +1,35 @@
+# AI CEO PROJECT：投稿を「見送り」にする（代表者の指示で手動実行）。管理画面で操作できない状態（失敗など）のもの用。
+# 中身は ai-ceo-project/scripts/content-skip.ts。操作ログに残る。
+name: AI CEO content skip
+
+on:
+  workflow_dispatch:
+    inputs:
+      content_id:
+        description: "投稿の番号"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  skip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ai-ceo-project/package-lock.json
+      - name: 準備
+        working-directory: ai-ceo-project
+        run: npm ci --no-audit --no-fund
+      - name: 見送りにする
+        working-directory: ai-ceo-project
+        env:
+          CONTENT_ID: ${{ inputs.content_id }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: npx tsx scripts/content-skip.ts
