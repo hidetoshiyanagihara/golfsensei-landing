@@ -4,7 +4,7 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
 import { openDb, get, run } from "../../lib/database/db";
 import * as repo from "../../lib/database/repo";
 import type { LlmCall } from "../../lib/ai/llm";
-import { qaLoop, mechanicalIssues, totalScore, CRITERIA } from "../../lib/ai/tasks/product-qa";
+import { qaLoop, mechanicalIssues, totalScore, applyEdits, CRITERIA } from "../../lib/ai/tasks/product-qa";
 import { queueRun, executeRun, syncAgentConnection } from "../../lib/ai/runner";
 import "../../lib/ai/tasks/index";
 
@@ -32,35 +32,40 @@ function goodDoc(tag: string): string {
 const full = Object.fromEntries(CRITERIA.map((c) => [c.key, c.max]));
 const review = (scores: Record<string, number>, issues: { criterion: string; where: string; problem: string; fix: string }[] = []) => JSON.stringify({ scores, issues, summary: "所見" });
 
-function fakeCall(reviews: string[], revisions: string[]): { call: LlmCall; calls: string[] } {
+function fakeCall(reviews: string[], revisions: { old: string; new: string }[][]): { call: LlmCall; calls: string[] } {
   const calls: string[] = [];
   let r = 0, v = 0;
   const call: LlmCall = async (p) => {
-    const sys = String(p.system);
-    if (sys.includes("試しに使います")) { calls.push("trial"); return msg("試用の記録：手順3で迷った"); }
+    const sys = p.system ? String(p.system) : "";
+    if (sys.includes("準備をします")) {
+      calls.push("prep");
+      return msg(JSON.stringify({ scenario: "架空の商談", confusions: [{ where: "手順3", problem: "迷った" }], prompts: [{ label: "①", filled: "埋めたプロンプト1" }, { label: "②", filled: "埋めたプロンプト2" }] }));
+    }
+    if (!sys) { calls.push("run"); return msg("Claude の実際の出力"); }
     if (sys.includes("品質検査の担当")) { calls.push("review"); return msg(reviews[r++]); }
     calls.push("revise");
-    return msg(revisions[v++]);
+    return msg(JSON.stringify({ edits: revisions[v++] ?? [] }));
   };
   return { call, calls };
 }
+const tag = (from: string, to: string) => [{ old: `# テンプレート ${from}`, new: `# テンプレート ${to}` }];
 
 test("品質検査：試用→採点→改訂をくり返し、100点になったら止める", async () => {
   const issue = { criterion: "clarity", where: "手順3", problem: "迷う", fix: "1つの作業に分ける" };
-  const { call, calls } = fakeCall([review({ ...full, clarity: 12 }, [issue]), review(full)], [goodDoc("v2")]);
+  const { call, calls } = fakeCall([review({ ...full, clarity: 12 }, [issue]), review(full)], [tag("v1", "v2")]);
   const r = await qaLoop(call, { title: "議事録", body: goodDoc("v1"), product: "商品", components: ["議事録"] });
-  assert.deepEqual(calls, ["trial", "review", "revise", "trial", "review"]);
+  assert.deepEqual(calls, ["prep", "run", "run", "review", "revise", "prep", "run", "run", "review"]);
   assert.deepEqual(r.rounds.map((x) => x.total), [92, 100]);
   assert.equal(r.best.total, 100);
   assert.ok(r.best.body.includes("v2"));
-  assert.equal(r.usage.inputTokens, 5000);
+  assert.equal(r.usage.inputTokens, 9000);
 });
 
 test("品質検査：直して点が下がったら、前の版を残す。上がらなければ打ち切る", async () => {
   const issue = { criterion: "usable", where: "プロンプト1", problem: "結果が長い", fix: "字数を指定" };
   const { call } = fakeCall(
     [review({ ...full, usable: 20 }, [issue]), review({ ...full, usable: 10 }, [issue]), review({ ...full, usable: 15 }, [issue])],
-    [goodDoc("v2"), goodDoc("v3")],
+    [tag("v1", "v2"), tag("v2", "v3")],
   );
   const r = await qaLoop(call, { title: "議事録", body: goodDoc("v1"), product: "商品", components: ["議事録"] }, 6);
   assert.deepEqual(r.rounds.map((x) => x.total), [95, 85, 90]); // 3回目が1回目を超えないので打ち切り
@@ -90,7 +95,7 @@ test("品質検査：AI社員の仕事として記録し、全部の構成品が
   );
   const pid = ins.lastId;
   await run(db, "INSERT INTO product_docs (product_id, component_index, title, body) VALUES (?, 0, '議事録', ?)", [pid, goodDoc("v1")]);
-  const { call } = fakeCall([review({ ...full, solves: 10 }, [{ criterion: "solves", where: "全体", problem: "次の行動が弱い", fix: "追記" }]), review(full)], [goodDoc("v2")]);
+  const { call } = fakeCall([review({ ...full, solves: 10 }, [{ criterion: "solves", where: "全体", problem: "次の行動が弱い", fix: "追記" }]), review(full)], [tag("v1", "v2")]);
   const q = await queueRun(db, "product.qa", { productId: pid, index: 0, rounds: 4 });
   assert.ok(q.ok);
   const r = await executeRun(db, (q as { runId: number }).runId, call);
@@ -108,4 +113,24 @@ test("品質検査：AI社員の仕事として記録し、全部の構成品が
   const runRow = await get<{ status: string; cost_jpy: number }>(db, "SELECT status, cost_jpy FROM agent_runs WHERE id = ?", [(q as { runId: number }).runId]);
   assert.equal(runRow!.status, "success");
   assert.ok(runRow!.cost_jpy > 0);
+});
+
+test("品質検査：書き換えは、原稿に1回だけ現れる所だけ当てる", () => {
+  const r = applyEdits("AAA BBB AAA CCC", [{ old: "AAA", new: "x" }, { old: "BBB", new: "y" }, { old: "ZZZ", new: "z" }, { old: "CCC", new: "CCC" }]);
+  assert.deepEqual(r, { body: "AAA y AAA CCC", applied: 1, skipped: 3 });
+});
+
+test("品質検査：途中で失敗しても、それまでの費用を AI社員の記録に残す", async () => {
+  const db = await openDb(":memory:");
+  await syncAgentConnection(db, true);
+  const ins = await run(db, "INSERT INTO products (name, components, data_kind) VALUES ('x', ?, 'actual')", [JSON.stringify([{ name: "議事録", status: "producing" }])]);
+  await run(db, "INSERT INTO product_docs (product_id, component_index, title, body) VALUES (?, 0, '議事録', ?)", [ins.lastId, goodDoc("v1")]);
+  const { call } = fakeCall(["これはJSONではない"], []);
+  const q = await queueRun(db, "product.qa", { productId: ins.lastId, index: 0 });
+  const r = await executeRun(db, (q as { runId: number }).runId, call);
+  assert.equal(r.ok, false);
+  const row = await get<{ status: string; cost_jpy: number; input_tokens: number }>(db, "SELECT status, cost_jpy, input_tokens FROM agent_runs WHERE id = ?", [(q as { runId: number }).runId]);
+  assert.equal(row!.status, "error");
+  assert.equal(row!.input_tokens, 4000); // 準備1回＋実行2回＋採点1回
+  assert.ok(row!.cost_jpy > 0);
 });
