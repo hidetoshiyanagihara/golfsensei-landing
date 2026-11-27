@@ -54,7 +54,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
   const platform = PL[sp.platform ?? ""] ? sp.platform : undefined;
   const [queue, posts, metrics, inquiries, newAccountFollowers] = await Promise.all([
-    repo.listContent(db, view, { statuses: ["draft", "pending_approval", "approved", "scheduled"], limit: 100, oldestFirst: true }),
+    repo.listContent(db, view, { statuses: ["draft", "pending_approval", "approved", "scheduled", "failed"], limit: 100, oldestFirst: true }),
     repo.listContent(db, view, { status, platform, limit: 100 }),
     repo.recentMetrics(db, view, 20),
     repo.listInquiries(db, view),
@@ -144,7 +144,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                   const slides = c.platform === "instagram" ? parseExtra(c.extra).slides ?? [] : [];
                   const when = c.scheduled_at ? `${c.scheduled_at} ${c.post_time ?? DEFAULT_POST_TIME}` : "未定";
                   const xLen = c.platform === "x" ? Math.ceil(xWeightedLength(c.body) / 2) : null;
-                  const editable = c.data_kind === "actual" && ["draft", "pending_approval", "approved", "scheduled"].includes(c.status);
+                  const editable = c.data_kind === "actual" && ["draft", "pending_approval", "approved", "scheduled", "failed"].includes(c.status);
                   return (
                     <>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -158,6 +158,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: SP
                             {c.data_kind === "sample" && <DataBadge kind="sample" />}
                           </div>
                           <p className="mt-1 font-medium">{c.title}</p>
+                          {c.status === "failed" && c.error && <p className="mt-1 text-xs text-bad">失敗の理由：{c.error}（直して「保存して予約」を押すと、もう一度投稿します）</p>}
                           <p className="mt-0.5 text-[11px] text-fg-subtle">
                             予定：{when}／{auto ? <span className="text-gold">{autoX ? "X" : "Instagram"} に自動投稿</span> : "手で投稿"}
                             {xLen !== null && <span className={xLen > 140 ? "text-bad" : ""}>／{xLen}字</span>}

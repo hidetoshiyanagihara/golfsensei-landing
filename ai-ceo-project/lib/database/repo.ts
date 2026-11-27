@@ -435,7 +435,7 @@ export type TaskRow = {
   created_at: string;
 };
 export function openTasks(db: DB, limit = 50): Promise<TaskRow[]> {
-  return all<TaskRow>(db, "SELECT * FROM tasks WHERE status IN ('todo','doing') ORDER BY (due_date IS NULL), due_date, id LIMIT ?", [limit]);
+  return all<TaskRow>(db, "SELECT * FROM tasks WHERE status IN ('todo','doing') ORDER BY (source = 'health') DESC, (due_date IS NULL), due_date, id LIMIT ?", [limit]);
 }
 
 export type ReportRow = { id: number; kind: string; period: string; generated_by: string; content: string; created_at: string };
